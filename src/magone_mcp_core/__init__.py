@@ -4,12 +4,14 @@ The SDK owns the protocol. This owns the things a connector catalogue needs and
 the SDK has no opinion about:
 
 - `Budget`          - a bound on what a single tool may return
+- `validate_url`    - one SSRF check instead of three that disagree
 - `redact`          - logging that cannot leak a credential by accident
 - `readonly`        - a deployment that cannot be talked into a write
 - `provenance`      - a marker for text from outside the trust boundary
 """
 
 from .budget import Budget, BudgetExceeded, apply_budget, budget_call_result
+from .net import InvalidURL, SSRFBlocked, is_blocked_address, validate_url
 from .provenance import mark_result, wrap
 from .readonly import ReadOnlyViolation, is_read_tool, read_only_enabled
 from .redact import redact_mapping, scrub_text, upstream_error
@@ -17,15 +19,19 @@ from .redact import redact_mapping, scrub_text, upstream_error
 __all__ = [
     "Budget",
     "BudgetExceeded",
+    "InvalidURL",
     "ReadOnlyViolation",
+    "SSRFBlocked",
     "apply_budget",
     "budget_call_result",
+    "is_blocked_address",
     "is_read_tool",
     "mark_result",
     "read_only_enabled",
     "redact_mapping",
     "scrub_text",
     "upstream_error",
+    "validate_url",
     "wrap",
 ]
 
