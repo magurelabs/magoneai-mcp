@@ -1,0 +1,64 @@
+[project]
+name = "magone-mcp-core"
+version = "0.1.0"
+description = "A thin layer over the official MCP Python SDK for building connectors"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+keywords = ["mcp", "model-context-protocol", "connector"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+  # Pinned to the 2.x line deliberately. `pip install mcp` now resolves to 2.x,
+  # and 1.x has a different module layout (FastMCP rather than MCPServer), so
+  # an unpinned dependency would resolve differently depending on when it ran.
+  "mcp>=2.2.0,<3",
+  "httpx>=0.27",
+  "structlog>=24.1",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "ruff==0.16.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/magurelabs/magoneai-mcp"
+Source = "https://github.com/magurelabs/magoneai-mcp"
+Issues = "https://github.com/magurelabs/magoneai-mcp/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/magone_mcp_core"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = [
+  # Assert is how tests assert; the linter should not fight pytest.
+  "S101",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S603 is subprocess-with-untrusted-input. A gate test has to run the gate as
+# the gate runs in CI, and the argv is `[sys.executable, <constant path>]`
+# with no interpolation, so there is no untrusted input to check.
+"tests/**" = ["S105", "S106", "S603"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
