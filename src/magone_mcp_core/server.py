@@ -1,0 +1,632 @@
+"""Building a connector server on the official SDK.
+
+Thin on purpose. The SDK owns the protocol, the transport, revision negotiation
+and every conformance obligation; this adds the things a connector catalogue
+needs and the SDK has no opinion about: a declared input schema, an outbound
+budget, a read-only mode, and a bind that refuses to expose an unauthenticated
+server.
+
+What this deliberately does **not** do is wrap the SDK's types or hide its API.
+An outside contributor should be able to read the SDK's documentation and have
+it apply. Every escape hatch stays open: `server.mcp` is the real `MCPServer`,
+and `custom_route` is available for the non-MCP endpoints a downstream
+deployment still has to serve.
+"""
+
+import os
+from collections.abc import Callable
+from typing import Any
+
+import structlog
+from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
+
+from .budget import Budget, budget_call_result
+from .readonly import assert_callable, is_read_tool, read_only_enabled
+from .schema import register_tool
+from .selection import DEFAULT_GROUP, assert_enabled, enabled_tool_names, narrow_listing
+
+LOOPBACK = frozenset({"127.0.0.1", "::1", "localhost"})
+
+VALID_MODES = ("platform", "hosted", "local")
+
+
+def _request_headers(ctx: Any) -> dict:
+    """The inbound HTTP headers, or nothing.
+
+    Reached defensively on purpose. `ctx` is absent when a tool is called
+    outside a request (a test, a direct import), and the transport may not
+    attach an HTTP request at all. A tool that needs credentials and cannot
+    find them should fail in its own words about the credential it wanted, not
+    with an AttributeError from the framework.
+    """
+    try:
+        request = ctx.request_context.request  # type: ignore[union-attr]
+        return dict(request.headers) if request is not None else {}
+    except (AttributeError, ValueError, LookupError):
+        return {}
+
+
+def _run_on_shutdown(app: Any, hooks: list[Callable[[], Any]], logger: Any) -> Any:
+    """Wrap an ASGI app so `hooks` run before it reports shutdown complete.
+
+    Intercepts the lifespan protocol rather than registering a Starlette
+    handler, because an application built with a lifespan (the SDK's is)
+    ignores `on_shutdown` handlers. A hook that fails is logged and the rest
+    still run: one stuck pool must not keep the others open.
+    """
+    if not hooks:
+        return app
+
+    async def wrapped(scope: dict, receive: Callable, send: Callable) -> None:
+        if scope.get("type") != "lifespan":
+            await app(scope, receive, send)
+            return
+
+        async def send_after_hooks(message: dict) -> None:
+            if message.get("type") == "lifespan.shutdown.complete":
+                for hook in hooks:
+                    try:
+                        outcome = hook()
+                        if hasattr(outcome, "__await__"):
+                            await outcome
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("shutdown_hook_failed", error_type=type(exc).__name__)
+            await send(message)
+
+        await app(scope, receive, send_after_hooks)
+
+    return wrapped
+
+
+class ConnectorServer:
+    """A connector, with the framework guarantees applied to every tool."""
+
+    def __init__(
+        self,
+        name: str,
+        version: str = "0.1.0",
+        description: str = "",
+        *,
+        token_verifier: Any = None,
+        resource_server_url: str | None = None,
+        issuer_url: str | None = None,
+        required_scopes: list[str] | None = None,
+        budget: Budget | None = None,
+        env: dict[str, str] | None = None,
+    ) -> None:
+        self.name = name
+        self.version = version
+        # Two things, deliberately not one. `_env` is a snapshot, which is
+        # right for values read once at start-up (mode, bind host, budget).
+        # `_injected_env` is None unless a caller supplied an environment, and
+        # the read-only checks pass THAT: None makes them fall back to live
+        # `os.environ`, preserving the guarantee that the flag is read per call
+        # rather than captured at construction.
+        #
+        # Collapsing them broke that guarantee: enforcement started reading a
+        # snapshot, so flipping MCP_READ_ONLY needed a restart. Keeping them
+        # separate is what lets an injected env be enforced AND an ambient one
+        # stay live.
+        self._injected_env = dict(env) if env is not None else None
+        self._env = self._injected_env if self._injected_env is not None else dict(os.environ)
+        from .logging_setup import install_log_redaction
+
+        # Before anything logs: redaction on structlog and on the stdlib
+        # loggers the SDK and uvicorn use, once per process.
+        install_log_redaction()
+        self.logger = structlog.get_logger(f"mcp.{name}")
+        self.budget = budget or Budget.from_env(self._env)
+        self.mode = self._resolve_mode()
+        self._annotations: dict[str, ToolAnnotations | None] = {}
+        # Every tool's permission group, which is what the two selection
+        # headers are resolved against. Kept beside the annotations rather
+        # than inside them: a group is an authorization fact and an
+        # annotation is a hint to a model, and the SDK validates the latter.
+        self._permission_groups: dict[str, str] = {}
+        self._required_scopes: dict[str, list[str]] = {}
+        self._shutdown_hooks: list[Callable[[], Any]] = []
+
+        self._token_verifier = token_verifier
+        # The SDK refuses a token verifier without auth settings, so the seam
+        # could not be used at all. With one, the SDK does the resource-server
+        # half itself: bearer check, audience (`validate_token_resource`),
+        # expiry, the RFC 9728 metadata route and the 401 challenge.
+        auth = None
+        if token_verifier is not None:
+            from mcp.server.auth.settings import AuthSettings
+
+            resource = resource_server_url or self._env.get("MCP_RESOURCE_URL")
+            issuer = issuer_url or self._env.get("MCP_AUTH_ISSUER_URL")
+            if not resource or not issuer:
+                raise ValueError(
+                    "a token verifier needs the server's own resource URL and the "
+                    "authorization server's issuer URL (MCP_RESOURCE_URL, MCP_AUTH_ISSUER_URL)"
+                )
+            auth = AuthSettings(
+                issuer_url=issuer,
+                resource_server_url=resource,
+                required_scopes=required_scopes,
+                validate_token_resource=True,
+            )
+        self.mcp = MCPServer(
+            name=name,
+            version=version,
+            description=description,
+            token_verifier=token_verifier,
+            auth=auth,
+        )
+        self._install_read_only_listing()
+        self._install_tool_selection_listing()
+        self._install_health_route()
+
+    def _read_only(self) -> bool:
+        """Read-only if EITHER the injected environment or the live one says so.
+
+        Two requirements meet here and both are right.
+
+        A caller that passes `env={"MCP_READ_ONLY": "1"}` must have it
+        enforced; enforcement previously consulted only `os.environ`, so such a
+        server logged `read_only=True` and allowed every write.
+
+        A caller that passes an env for some OTHER reason, `{"MCP_MODE":
+        "local"}`, must not thereby freeze the flag: it is read per call so
+        flipping it does not need a restart.
+
+        Satisfying one alone breaks the other, so either source enabling it
+        wins. That is also the right default for a safety control: the failure
+        of an OR is refusing a write that could have been allowed, and the
+        failure of an AND is allowing one that should not have been.
+        """
+        return read_only_enabled(self._injected_env) or read_only_enabled()
+
+    def _install_read_only_listing(self) -> None:
+        """Hide non-read tools from `tools/list` when the deployment is read-only.
+
+        The call check in `_apply_guarantees` is the control: it refuses a
+        write whatever the client believes, including one that cached the tool
+        list earlier or guessed a name. This is the convenience half, and it
+        was missing.
+
+        Worth being blunt about why it is here. The README stated that
+        read-only mode filters `tools/list` **and** refuses on `tools/call`.
+        Only the second was wired. A documented control that is not
+        implemented is worse than an absent one, because someone reads the
+        sentence and stops looking.
+
+        Evaluated per call rather than at construction, so flipping
+        MCP_READ_ONLY does not need a restart to take effect, and so a test
+        can set it with monkeypatch.
+        """
+        original = self.mcp.list_tools
+
+        async def list_tools_filtered() -> list:
+            tools = await original()
+            if not self._read_only():
+                return tools
+            return [t for t in tools if is_read_tool(self._annotations.get(t.name))]
+
+        self.mcp.list_tools = list_tools_filtered  # type: ignore[method-assign]
+
+    def _install_tool_selection_listing(self) -> None:
+        """Narrow `tools/list` to what this connection selected.
+
+        The refusal in `_apply_guarantees` is the control, for the same reason
+        it is in read-only mode: a client that cached an earlier listing, or
+        that guessed a name, must still be refused. This is the convenience
+        half, and a listing that advertises a tool the next call refuses is a
+        bad way to tell anyone about a selection.
+
+        Installed as SDK middleware because the selection lives in the request
+        headers and `MCPServer.list_tools()` takes no request. Middleware is
+        the only seam that sees both. The SDK calls that list semi-public and
+        reserves the right to change it in a 2.x minor, so
+        `test_tool_selection.py` asserts the narrowing over a real socket: if
+        the seam moves, a test fails here rather than a filter going quietly
+        missing in production.
+        """
+        from mcp.server.context import CallNext, HandlerResult, ServerRequestContext
+
+        connector = self
+
+        async def narrow_to_selection(
+            ctx: ServerRequestContext, call_next: CallNext
+        ) -> HandlerResult:
+            result = await call_next(ctx)
+            if ctx.method != "tools/list":
+                return result
+            headers = getattr(getattr(ctx, "request", None), "headers", None)
+            allowed = enabled_tool_names(headers, connector._permission_groups)
+            narrowed, listed, registered = narrow_listing(result, allowed)
+            if listed != registered:
+                connector.logger.info("tools_list_narrowed", listed=listed, registered=registered)
+            return narrowed
+
+        self.mcp.middleware.append(narrow_to_selection)
+
+    def _install_health_route(self) -> None:
+        """`GET /healthz`: is this process up and serving its tools.
+
+        For a container HEALTHCHECK and a Kubernetes probe, which need a cheap
+        answer that does not speak MCP. It is not how the platform learns the
+        catalogue: the platform discovers a server by calling it over MCP
+        (`server/discover`, `tools/list`), which is also the better liveness
+        test, since it exercises the path a tool call takes.
+
+        Deliberately says nothing a caller could use: no mode, no environment,
+        no credentials, only the name, version and tool count a `tools/list`
+        would reveal anyway. Outside the MCP endpoint's Host check, because a
+        probe arrives by pod IP.
+        """
+        from starlette.responses import JSONResponse
+
+        @self.mcp.custom_route("/healthz", methods=["GET"])
+        async def healthz(request: Any) -> JSONResponse:
+            tools = await self.mcp.list_tools()
+            return JSONResponse(
+                {"status": "ok", "name": self.name, "version": self.version, "tools": len(tools)}
+            )
+
+    # -- configuration ----------------------------------------------------
+
+    def _resolve_mode(self) -> str:
+        """Which deployment mode this server is running in.
+
+        Defaults to `platform`, and an unrecognised value falls back to
+        `platform` rather than to the weakest mode. A typo in this variable
+        must not be the thing that disables authentication, which is exactly
+        what happened in v1 where the default and the fallback were both the
+        unauthenticated mode.
+        """
+        raw = str(self._env.get("MCP_MODE", "platform")).strip().lower()
+        if raw not in VALID_MODES:
+            self.logger.warning("unknown_mcp_mode", requested=raw, using="platform")
+            return "platform"
+        return raw
+
+    def effective_bind_host(self, host: str) -> str:
+        """Keep an unauthenticated server on loopback.
+
+        `local` mode has no token verifier, so every request it serves is
+        unauthenticated. Binding that to every interface is how a developer
+        machine ends up serving tools to whoever can route to it.
+
+        Clamped rather than refused: connectors are started by scripts that
+        pass 0.0.0.0 because that is what a container needs, and refusing
+        would break the local workflow to protect a case the override already
+        covers.
+        """
+        if self.mode != "local":
+            return host
+        if host.strip().lower() in LOOPBACK:
+            return host
+        if str(self._env.get("MCP_ALLOW_INSECURE_BIND", "")).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            self.logger.warning("local_mode_exposed_beyond_loopback", host=host)
+            return host
+        self.logger.error(
+            "local_bind_clamped_to_loopback",
+            requested=host,
+            effective="127.0.0.1",
+            msg="local mode is unauthenticated; set MCP_ALLOW_INSECURE_BIND=1 to override",
+        )
+        return "127.0.0.1"
+
+    # -- tools ------------------------------------------------------------
+
+    def tool(
+        self,
+        *,
+        name: str,
+        description: str,
+        annotations: ToolAnnotations | None = None,
+        title: str | None = None,
+        untrusted_fields: tuple = (),
+        source: str | None = None,
+        credential_headers: tuple | list = (),
+        permission_group: str = DEFAULT_GROUP,
+        required_scopes: tuple | list = (),
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Register a tool.
+
+        `annotations` is required in practice: the tool-contract linter fails a
+        tool without them, and `readOnlyHint` is what the read-only mode keys
+        on. It is optional in the signature only so the linter can report a
+        missing one as a lint failure with a useful message rather than a
+        TypeError at import time.
+
+        `credential_headers` names the request headers this tool is allowed to
+        receive, which is a security statement rather than a convenience: a
+        Zoom tool has no business seeing a Microsoft refresh token that happens
+        to be on the same request. An undeclared header is not passed, so a
+        tool that declares none gets only the platform context.
+
+        `permission_group` and `required_scopes` are what a connection selects
+        by. The platform groups a connector's tools for selection, sends the
+        selection back as `X-MCP-Enabled-Groups` (or names the tools outright),
+        and asks the user only for the scopes the selected tools need. A group
+        that stays a comment narrows nothing: the port left all 263 of them as
+        generated comments, so every connection was served every tool.
+
+        A handler taking a `credentials` parameter has it **supplied by the
+        framework** and removed from the client-facing signature. It is not an
+        argument a caller sends, it never appears in the advertised schema, and
+        before this existed the mismatch between the two made every tool in the
+        catalogue fail on every call.
+        """
+
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+            wrapped = self._apply_guarantees(
+                fn,
+                tool_name=name,
+                annotations=annotations,
+                untrusted_fields=untrusted_fields,
+                source=source or self.name,
+                credential_headers=tuple(credential_headers),
+            )
+            register_tool(
+                self.mcp,
+                wrapped,
+                name=name,
+                description=description,
+                annotations=annotations,
+                title=title,
+                meta={
+                    # Namespaced, as the specification asks of `_meta`. The
+                    # platform reads the selection surface from its own
+                    # manifest; this is so a tool's group is visible to anyone
+                    # holding only the server.
+                    "io.magone/permission_group": permission_group,
+                    "io.magone/required_scopes": list(required_scopes),
+                },
+            )
+            self._annotations[name] = annotations
+            self._permission_groups[name] = permission_group
+            self._required_scopes[name] = list(required_scopes)
+            return fn
+
+        return decorator
+
+    def _apply_guarantees(
+        self,
+        fn: Callable[..., Any],
+        *,
+        tool_name: str,
+        annotations: ToolAnnotations | None,
+        untrusted_fields: tuple,
+        source: str,
+        credential_headers: tuple = (),
+    ) -> Callable[..., Any]:
+        """Wrap a handler so the framework's promises hold for every tool."""
+        import functools
+        import inspect
+
+        from mcp.server.mcpserver import Context
+        from mcp.server.mcpserver.exceptions import ToolError
+
+        from .credentials import build as build_credentials
+        from .provenance import mark_result
+        from .redact import argument_keys
+        from .results import PASS_THROUGH_EXCEPTIONS, client_message, to_call_result
+        from .schema import declared_output_schema, declared_schema
+
+        budget = self.budget
+        logger = self.logger
+        credentials_path = self._env.get("MCP_CREDENTIALS_PATH")
+
+        # `eval_str=True` matters and is not a refinement. `guarded` is defined
+        # in this module, so its `__globals__` is this module's namespace. Hand
+        # pydantic a signature whose annotations are still strings and it
+        # resolves them here, where the connector's `Optional`, `Dict` and its
+        # own types do not exist:
+        #
+        #   PydanticUserError: `create_eventArguments` is not fully defined;
+        #   you should define `Optional`
+        #
+        # Resolving against `fn`'s own globals first turns them into objects,
+        # which carry their meaning with them. A connector that cannot resolve
+        # its own annotations falls back to the raw signature rather than
+        # failing to register: it is already counted by the port-status budget.
+        try:
+            signature = inspect.signature(fn, eval_str=True)
+        except (NameError, TypeError, AttributeError):
+            signature = inspect.signature(fn)
+        takes_credentials = "credentials" in signature.parameters
+        passes_ctx = "ctx" in signature.parameters
+        declares_output = declared_output_schema(fn) is not None
+
+        @functools.wraps(fn)
+        async def guarded(*args: Any, ctx: Context | None = None, **kwargs: Any) -> Any:
+            # The call check, not the listing filter, is the control.
+            if self._read_only():
+                assert_callable(tool_name, annotations, {"MCP_READ_ONLY": "1"})
+            # Same reasoning, one layer out: a tool outside this connection's
+            # selection is not callable, whatever a stale `tools/list` said.
+            assert_enabled(tool_name, _request_headers(ctx), self._permission_groups)
+            # Arguments by key only: values are user content, and sometimes a
+            # credential passed as an ordinary parameter.
+            logger.info("tool_call", tool=tool_name, argument_keys=list(argument_keys(kwargs)))
+            if takes_credentials:
+                # Supplied here, never by the caller. The handler signature
+                # asks for it because that is how the whole catalogue is
+                # written; the wire contract does not mention it because a
+                # client does not send it.
+                kwargs["credentials"] = build_credentials(
+                    _request_headers(ctx),
+                    credential_headers,
+                    file_path=credentials_path,
+                )
+            if passes_ctx:
+                # The handler asked for the request context by the SDK's own
+                # name for it. `guarded` has to name the parameter `ctx` to
+                # receive it, which also swallowed it: a tool written from the
+                # SDK documentation (`ctx: Context`) was called without it.
+                kwargs["ctx"] = ctx
+            try:
+                result = await fn(*args, **kwargs)
+            except PASS_THROUGH_EXCEPTIONS as exc:
+                # The SDK reports any exception that is not a ToolError as a
+                # bare "Error executing tool X", so the message a handler wrote
+                # for the model ("Jira answered 403: the connection lacks the
+                # write:jira-work scope") never arrived. v1 passed these three
+                # through for exactly that reason (its `_SAFE_EXCEPTIONS`);
+                # anything else stays masked.
+                logger.warning(
+                    "tool_execution_failed", tool=tool_name, error_type=type(exc).__name__
+                )
+                raise ToolError(client_message(exc)) from exc
+            if untrusted_fields:
+                result = mark_result(result, source=source, fields=untrusted_fields)
+            # Shape first, then budget what will actually be sent. A refusal
+            # is a failure and an extra content block has to survive (v1
+            # behaviours, see `results.py`); the budget then cuts the text a
+            # client receives, keeping `isError` and any attachment.
+            shaped = to_call_result(result, structured=declares_output)
+            return budget_call_result(shaped, budget)
+
+        # Two edits to the signature the SDK validates against.
+        #
+        # `credentials` is hidden. `Tool.from_function` builds its argument
+        # model from the signature, and swapping `tool.parameters` afterwards
+        # changes only what is advertised. Leaving the parameter visible
+        # therefore makes the advertised schema and the validated model
+        # disagree, and every call fails with "credentials  Field required" -
+        # which is exactly what the whole catalogue did before this.
+        #
+        # `ctx` is added, annotated, because that is how the SDK knows to
+        # inject the request context the headers come from. Unconditionally,
+        # not just for a handler that asked for credentials: the selection
+        # check reads those headers too, and a control that depends on a
+        # handler's own signature is not a control. A tool taking no
+        # credentials got no ctx, so no headers, so every selection read as
+        # "unrestricted" and the refusal never fired.
+        visible = [p for n, p in signature.parameters.items() if n != "credentials"]
+        if "ctx" not in signature.parameters:
+            ctx_param = inspect.Parameter(
+                "ctx",
+                inspect.Parameter.KEYWORD_ONLY,
+                default=None,
+                annotation=Context,
+            )
+            # Before any `**kwargs`, not after it. A keyword-only parameter
+            # following a variadic keyword is not a valid signature, and
+            # appending blindly stopped a connector importing at all.
+            var_keyword = next(
+                (i for i, p in enumerate(visible) if p.kind is inspect.Parameter.VAR_KEYWORD),
+                len(visible),
+            )
+            visible.insert(var_keyword, ctx_param)
+        guarded.__signature__ = signature.replace(parameters=visible)  # type: ignore[attr-defined]
+        # Built from the resolved signature for the same reason, so no
+        # string survives to be evaluated in the wrong namespace.
+        annotations_map = {
+            p.name: p.annotation for p in visible if p.annotation is not inspect.Parameter.empty
+        }
+        annotations_map["ctx"] = Context
+        if signature.return_annotation is not inspect.Signature.empty:
+            annotations_map["return"] = signature.return_annotation
+        guarded.__annotations__ = annotations_map
+
+        # The schema declaration lives on the original function; carry it
+        # across or register_tool would fall back to type-hint derivation and
+        # silently change the wire contract.
+        schema = declared_schema(fn)
+        if schema is not None:
+            from .schema import _SCHEMA_ATTR
+
+            setattr(guarded, _SCHEMA_ATTR, schema)
+        output_schema = declared_output_schema(fn)
+        if output_schema is not None:
+            from .schema import _OUTPUT_ATTR
+
+            setattr(guarded, _OUTPUT_ATTR, output_schema)
+        return guarded
+
+    def annotations_for(self, name: str) -> ToolAnnotations | None:
+        return self._annotations.get(name)
+
+    # -- running ----------------------------------------------------------
+
+    def on_shutdown(self, fn: Callable[[], Any]) -> Callable[[], Any]:
+        """Run `fn` when the served application shuts down.
+
+        For resources a connector holds across calls, such as database pools.
+        v1 closed those in `@app.on_event("shutdown")`; the port had no
+        equivalent, so a restart abandoned every open pool. Runs from the ASGI
+        lifespan rather than the SDK's server lifespan, which is tied to a
+        session and would fire far more often than once.
+        """
+        self._shutdown_hooks.append(fn)
+        return fn
+
+    def custom_route(self, path: str, methods: list[str]) -> Callable:
+        """Mount a non-MCP HTTP route.
+
+        Needed by any deployment that must keep serving its own non-MCP
+        endpoints (an upload route, say) beside the MCP app. Exposed here so
+        that requirement is visible rather than discovered later.
+        """
+        return self.mcp.custom_route(path, methods)
+
+    def app(self) -> Any:
+        """The ASGI application."""
+        app = self.mcp.streamable_http_app()
+        service_token = str(self._env.get("MCP_SERVICE_TOKEN", "")).strip()
+        if service_token and self.mode == "platform":
+            from .auth import require_service_token
+
+            app = require_service_token(app, service_token)
+        return _run_on_shutdown(app, self._shutdown_hooks, self.logger)
+
+    def authentication_problem(self) -> str | None:
+        """Why this server would serve unauthenticated, or None if it would not.
+
+        `local` is unauthenticated by design and kept on loopback by
+        `effective_bind_host`. `platform` needs the service token (v1's check)
+        or a token verifier; `hosted` needs a token verifier. Either may be
+        waived only explicitly, with MCP_ALLOW_UNAUTHENTICATED=1.
+        """
+        if self.mode == "local":
+            return None
+        if str(self._env.get("MCP_ALLOW_UNAUTHENTICATED", "")).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        ):
+            return None
+        if self._token_verifier is not None:
+            return None
+        if self.mode == "platform" and str(self._env.get("MCP_SERVICE_TOKEN", "")).strip():
+            return None
+        if self.mode == "platform":
+            return "platform mode needs MCP_SERVICE_TOKEN (or a token verifier)"
+        return "hosted mode needs a token verifier"
+
+    def run(self, host: str = "0.0.0.0", port: int = 8000) -> None:  # noqa: S104
+        import uvicorn
+
+        problem = self.authentication_problem()
+        if problem:
+            # Refused at start-up, not discovered as an open endpoint later. v1
+            # answered 503 per call for the same misconfiguration; a process
+            # that will not start is louder and cannot be half-deployed.
+            self.logger.error("refusing_to_start_unauthenticated", reason=problem)
+            raise SystemExit(
+                f"{self.name}: {problem}. Set MCP_ALLOW_UNAUTHENTICATED=1 only if "
+                "something in front of this server authenticates every caller."
+            )
+        host = self.effective_bind_host(host)
+        self.logger.info(
+            "starting",
+            server=self.name,
+            version=self.version,
+            mode=self.mode,
+            host=host,
+            port=port,
+            read_only=self._read_only(),
+            max_result_chars=self.budget.max_result_chars,
+        )
+        uvicorn.run(self.app(), host=host, port=port)
