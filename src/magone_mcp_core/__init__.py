@@ -9,6 +9,7 @@ the SDK has no opinion about:
 - `redact`          - logging that cannot leak a credential by accident
 - `readonly`        - a deployment that cannot be talked into a write
 - `provenance`      - a marker for text from outside the trust boundary
+- `content`         - move bytes without holding storage credentials
 """
 
 from .auth import (
@@ -20,6 +21,18 @@ from .auth import (
     validate_audience,
 )
 from .budget import Budget, BudgetExceeded, apply_budget, budget_call_result
+from .content import (
+    ContentHandle,
+    ContentHandleError,
+    ContentHandleService,
+    Direction,
+    HandleExpired,
+    HandleRedeemed,
+    HandleState,
+    PresignedMinter,
+    PresignedUrlSigner,
+    safe_display_name,
+)
 from .net import InvalidURL, SSRFBlocked, is_blocked_address, validate_url
 from .provenance import mark_result, wrap
 from .readonly import ReadOnlyViolation, is_read_tool, read_only_enabled
@@ -30,6 +43,16 @@ __all__ = [
     "AuthError",
     "Budget",
     "BudgetExceeded",
+    "ContentHandle",
+    "ContentHandleError",
+    "ContentHandleService",
+    "Direction",
+    "HandleExpired",
+    "HandleRedeemed",
+    "HandleState",
+    "PresignedMinter",
+    "PresignedUrlSigner",
+    "safe_display_name",
     "InvalidURL",
     "LocalAuthContextFactory",
     "PlatformTokenVerifier",
