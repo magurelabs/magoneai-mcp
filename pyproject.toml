@@ -45,6 +45,10 @@ packages = ["src/magone_mcp_core"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+# Ported connector code is generated, and its bodies are carried across from v1
+# unchanged on purpose: reformatting them would defeat the property that makes
+# the port reviewable, which is that the body is the body.
+extend-exclude = ["connectors"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "S"]
@@ -61,4 +65,15 @@ ignore = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+# `tests/` is the framework suite. `connectors/` holds each connector's own
+# tests, ported from the pre-port catalogue; they are listed explicitly rather
+# than relying on rootdir discovery so that running plain `pytest` covers both.
+testpaths = ["tests", "connectors"]
+markers = [
+  "requires_connectors: needs the connector third-party dependencies installed, not just the framework's",
+]
+# `connectors` is a namespace package resolved from the repository root, and a
+# test living inside one is collected with its own package on sys.path rather
+# than the root. Without this, `from connectors.zoom.server import ...` fails
+# at collection with ModuleNotFoundError.
+pythonpath = ["."]
