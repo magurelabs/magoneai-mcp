@@ -30,6 +30,35 @@ dev = [
   "ruff==0.16.1",
 ]
 
+# Per-connector dependencies.
+#
+# `magone-mcp-core` itself deliberately depends on almost nothing: the SDK, an
+# HTTP client and a logger. A connector that talks to Oracle should not drag
+# `oracledb` into an install that only wanted to search the web.
+#
+# So each connector needing a third-party library declares it here, and a
+# source checkout installs it by name:
+#
+#     pip install -e ".[web_search]"
+#     pip install -e ".[database,outlook_email]"
+#
+# The wheel itself ships only `magone_mcp_core`; connectors run from a
+# checkout of this repository.
+#
+# Version floors are carried across from the pre-port per-server
+# `requirements.txt` files rather than chosen fresh, so an install resolves to
+# something the connector has actually run against.
+#
+# Found by installing the package into an empty virtualenv and starting each
+# connector: only 10 of 23 came up, and `web_search` failed on `trafilatura`
+# with nothing anywhere declaring it.
+outlook_email = [
+  "python-docx>=1.1.0",
+  "openpyxl>=3.1.0",
+  "pypdf>=6.0.0",
+  "rapidfuzz>=3.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/magurelabs/magoneai-mcp"
 Source = "https://github.com/magurelabs/magoneai-mcp"
