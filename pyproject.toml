@@ -52,6 +52,7 @@ dev = [
 # Found by installing the package into an empty virtualenv and starting each
 # connector: only 10 of 23 came up, and `web_search` failed on `trafilatura`
 # with nothing anywhere declaring it.
+cloudflare_r2 = ["aioboto3>=13.0.0", "botocore"]
 database = [
   "aioboto3>=13.0.0",
   "aiomysql>=0.2.0",
@@ -63,6 +64,7 @@ database = [
   "pyodbc>=5.3.0",
   "SQLAlchemy",
 ]
+otp_verification = ["asyncpg>=0.29.0"]
 outlook_email = [
   "python-docx>=1.1.0",
   "openpyxl>=3.1.0",
@@ -70,6 +72,7 @@ outlook_email = [
   "rapidfuzz>=3.0.0",
 ]
 trino = ["trino>=0.328.0"]
+web_search = ["trafilatura>=1.8.0"]
 
 [project.urls]
 Homepage = "https://github.com/magurelabs/magoneai-mcp"
