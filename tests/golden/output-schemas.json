@@ -1,0 +1,1494 @@
+{
+  "cloudflare_r2/upload_file": {
+    "description": "The stored object's shareable URL and metadata.",
+    "properties": {
+      "bucket": {
+        "type": "string"
+      },
+      "content_type": {
+        "type": "string"
+      },
+      "expires_in": {
+        "description": "Presigned URL lifetime in seconds, or null when the URL is public.",
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "file_id": {
+        "description": "Source workflow file id, when uploaded via upload_file_by_id.",
+        "type": "string"
+      },
+      "is_public": {
+        "description": "True for a permanent public URL, False for a time-limited presigned URL.",
+        "type": "boolean"
+      },
+      "key": {
+        "description": "Object key within the bucket.",
+        "type": "string"
+      },
+      "size_bytes": {
+        "type": "integer"
+      },
+      "url": {
+        "description": "Public or presigned download URL.",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "cloudflare_r2/upload_from_url": {
+    "description": "The stored object's shareable URL and metadata.",
+    "properties": {
+      "bucket": {
+        "type": "string"
+      },
+      "content_type": {
+        "type": "string"
+      },
+      "expires_in": {
+        "description": "Presigned URL lifetime in seconds, or null when the URL is public.",
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "file_id": {
+        "description": "Source workflow file id, when uploaded via upload_file_by_id.",
+        "type": "string"
+      },
+      "is_public": {
+        "description": "True for a permanent public URL, False for a time-limited presigned URL.",
+        "type": "boolean"
+      },
+      "key": {
+        "description": "Object key within the bucket.",
+        "type": "string"
+      },
+      "size_bytes": {
+        "type": "integer"
+      },
+      "url": {
+        "description": "Public or presigned download URL.",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "database/db_insert": {
+    "properties": {
+      "ids": {
+        "description": "IDs of inserted records",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "inserted_count": {
+        "description": "Number of records inserted",
+        "type": "integer"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "database/db_query": {
+    "properties": {
+      "row_count": {
+        "description": "Number of rows returned",
+        "type": "integer"
+      },
+      "rows": {
+        "description": "Query result rows",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "truncated": {
+        "description": "True if results were truncated by row limit",
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "database/db_search": {
+    "properties": {
+      "row_count": {
+        "description": "Number of matching records",
+        "type": "integer"
+      },
+      "rows": {
+        "description": "Matching records",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "database/db_update": {
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "updated_count": {
+        "description": "Number of records updated",
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/create_envelope": {
+    "properties": {
+      "envelope_id": {
+        "description": "Created envelope's id",
+        "type": "string"
+      },
+      "status": {
+        "description": "Resulting envelope status",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/create_envelope_from_template": {
+    "properties": {
+      "envelope_id": {
+        "description": "Created envelope's id",
+        "type": "string"
+      },
+      "status": {
+        "description": "Resulting envelope status",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/get_account_details": {
+    "properties": {
+      "account": {
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/get_document": {
+    "properties": {
+      "content_type": {
+        "description": "MIME type of the returned file",
+        "type": "string"
+      },
+      "document_base64": {
+        "description": "Base64-encoded document",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/get_envelope_status": {
+    "properties": {
+      "envelope_id": {
+        "description": "Envelope id",
+        "type": "string"
+      },
+      "recipients": {
+        "description": "Recipient statuses",
+        "type": "array"
+      },
+      "status": {
+        "description": "Envelope status",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/get_signing_url": {
+    "properties": {
+      "signing_url": {
+        "description": "One-time embedded signing URL",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/get_user_details": {
+    "properties": {
+      "user": {
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/list_envelopes": {
+    "properties": {
+      "envelopes": {
+        "description": "Matching envelopes (this page)",
+        "type": "array"
+      },
+      "has_more": {
+        "description": "True if more results exist beyond this page",
+        "type": "boolean"
+      },
+      "total": {
+        "description": "Count in this page",
+        "type": "integer"
+      },
+      "total_available": {
+        "description": "Total matching envelopes across all pages",
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/list_groups": {
+    "properties": {
+      "groups": {
+        "description": "Account groups",
+        "type": "array"
+      },
+      "total": {
+        "description": "Total count returned",
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/list_products": {
+    "properties": {
+      "billing_plan": {
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/list_templates": {
+    "properties": {
+      "has_more": {
+        "description": "True if more results exist beyond this page",
+        "type": "boolean"
+      },
+      "templates": {
+        "description": "Available templates (this page)",
+        "type": "array"
+      },
+      "total": {
+        "description": "Count in this page",
+        "type": "integer"
+      },
+      "total_available": {
+        "description": "Total templates across all pages",
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/search_documents": {
+    "properties": {
+      "envelopes": {
+        "description": "Matching envelopes (this page)",
+        "type": "array"
+      },
+      "has_more": {
+        "description": "True if more results exist beyond this page",
+        "type": "boolean"
+      },
+      "total": {
+        "description": "Count in this page",
+        "type": "integer"
+      },
+      "total_available": {
+        "description": "Total matching envelopes across all pages",
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/send_envelope": {
+    "properties": {
+      "envelope_id": {
+        "description": "Envelope id",
+        "type": "string"
+      },
+      "status": {
+        "description": "Resulting envelope status",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "docusign/void_envelope": {
+    "properties": {
+      "envelope_id": {
+        "description": "Envelope id",
+        "type": "string"
+      },
+      "status": {
+        "description": "Resulting envelope status",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "google_calendar/google_calendar_create_event": {
+    "properties": {
+      "htmlLink": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "type": "object"
+  },
+  "google_calendar/google_calendar_delete_event": {
+    "properties": {
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "google_calendar/google_calendar_list_calendars": {
+    "properties": {
+      "items": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "items"
+    ],
+    "type": "object"
+  },
+  "google_calendar/google_calendar_list_events": {
+    "properties": {
+      "items": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "items"
+    ],
+    "type": "object"
+  },
+  "google_calendar/google_calendar_update_event": {
+    "properties": {
+      "htmlLink": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "type": "object"
+  },
+  "google_drive/google_drive_get_file_content": {
+    "properties": {
+      "content": {
+        "description": "Exported textual content. Populated automatically for Google Docs/Sheets/Slides.",
+        "type": "string"
+      },
+      "content_note": {
+        "description": "Human-readable note about why content may be empty (e.g. binary file).",
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "mimeType": {
+        "type": "string"
+      },
+      "modifiedTime": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "size": {
+        "type": "string"
+      },
+      "webViewLink": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "mimeType"
+    ],
+    "type": "object"
+  },
+  "google_drive/google_drive_get_file_metadata": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "mimeType": {
+        "type": "string"
+      },
+      "modifiedTime": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "size": {
+        "type": "string"
+      },
+      "webViewLink": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name",
+      "mimeType"
+    ],
+    "type": "object"
+  },
+  "google_drive/google_drive_search_files": {
+    "properties": {
+      "files": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "mimeType": {
+              "type": "string"
+            },
+            "modifiedTime": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "webViewLink": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "mimeType"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "files"
+    ],
+    "type": "object"
+  },
+  "google_gmail/google_gmail_get_message": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "payload": {
+        "type": "object"
+      },
+      "snippet": {
+        "type": "string"
+      },
+      "threadId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "threadId"
+    ],
+    "type": "object"
+  },
+  "google_gmail/google_gmail_list_messages": {
+    "properties": {
+      "messages": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "threadId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "resultSizeEstimate": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "messages"
+    ],
+    "type": "object"
+  },
+  "google_gmail/google_gmail_send_message": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "labelIds": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "threadId": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "threadId"
+    ],
+    "type": "object"
+  },
+  "linear/create_comment": {
+    "properties": {
+      "comment": {
+        "description": "The created comment: id, body, url, created_at",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linear/create_issue": {
+    "properties": {
+      "issue": {
+        "description": "The created issue (normalized), including identifier and url",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linear/create_project": {
+    "properties": {
+      "project": {
+        "description": "The created project (normalized), including url",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linear/get_issue": {
+    "properties": {
+      "comments": {
+        "description": "Comments oldest-first: body, author, created_at, url",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "issue": {
+        "description": "Normalized issue",
+        "type": "object"
+      },
+      "sub_issues": {
+        "description": "Child issues: identifier, title, state, assignee",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linear/get_viewer": {
+    "properties": {
+      "email": {
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "organization": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_comments": {
+    "properties": {
+      "comments": {
+        "description": "Comments oldest-first: body, author, created_at, url",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "count": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_issue_statuses": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "statuses": {
+        "description": "States in board order with: id, name, type (triage/backlog/unstarted/started/completed/canceled)",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_issues": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "issues": {
+        "description": "Issues with: id, identifier, title, description, state, state_type, priority, priority_label, assignee, team, project, labels, due_date, url, created_at, updated_at",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "next_cursor": {
+        "description": "Pass as `cursor` to fetch the next page; null when done",
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_labels": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "labels": {
+        "description": "Labels with: id, name, color, team (null = workspace-level)",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_projects": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "projects": {
+        "description": "Projects with: id, name, description, state, progress, lead, teams, start_date, target_date, url",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_teams": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "teams": {
+        "description": "Teams with: id, key, name, description, issue_count",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linear/list_users": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "users": {
+        "description": "Users with: id, name, email, active",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linear/update_issue": {
+    "properties": {
+      "issue": {
+        "description": "The updated issue (normalized)",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linear/update_project": {
+    "properties": {
+      "project": {
+        "description": "The updated project (normalized)",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "microsoft_sharepoint/sharepoint_download_file": {
+    "properties": {
+      "content_base64": {
+        "type": "string"
+      },
+      "content_hash_sha256": {
+        "type": "string"
+      },
+      "last_modified_at": {
+        "type": "string"
+      },
+      "mime_type": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "size": {
+        "type": "integer"
+      },
+      "too_large": {
+        "type": "boolean"
+      },
+      "web_url": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "too_large"
+    ],
+    "type": "object"
+  },
+  "microsoft_sharepoint/sharepoint_get_drive_item": {
+    "description": "DriveItem JSON from Microsoft Graph (passthrough).",
+    "type": "object"
+  },
+  "microsoft_sharepoint/sharepoint_get_site": {
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "webUrl": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "type": "object"
+  },
+  "microsoft_sharepoint/sharepoint_list_children": {
+    "properties": {
+      "items": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "items"
+    ],
+    "type": "object"
+  },
+  "microsoft_sharepoint/sharepoint_list_folder": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "files": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "truncated": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "files",
+      "count",
+      "truncated"
+    ],
+    "type": "object"
+  },
+  "microsoft_sharepoint/sharepoint_site_libraries": {
+    "properties": {
+      "drives": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "drives"
+    ],
+    "type": "object"
+  },
+  "otp_verification/check_verification_status": {
+    "properties": {
+      "error": {
+        "type": "string"
+      },
+      "has_verified": {
+        "type": "boolean"
+      },
+      "last_verified_at": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "verified_count": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "otp_verification/generate_otp": {
+    "properties": {
+      "attempts_remaining": {
+        "type": "integer"
+      },
+      "code": {
+        "type": "string"
+      },
+      "error": {
+        "type": "string"
+      },
+      "expires_in_minutes": {
+        "type": "integer"
+      },
+      "is_resend": {
+        "type": "boolean"
+      },
+      "message": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "otp_verification/verify_otp": {
+    "properties": {
+      "attempts_remaining": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "metadata": {
+        "type": "object"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "verified": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "outlook_email/get_email_thread": {
+    "properties": {
+      "conversation_id": {
+        "description": "Thread ID (same for all emails in this conversation)",
+        "type": "string"
+      },
+      "message_count": {
+        "description": "Number of messages in thread",
+        "type": "integer"
+      },
+      "messages": {
+        "items": {
+          "properties": {
+            "body": {
+              "description": "Plain-text body (HTML stripped)",
+              "type": "string"
+            },
+            "date": {
+              "description": "Date (YYYY-MM-DD HH:MM)",
+              "type": "string"
+            },
+            "from": {
+              "description": "Sender as 'Name <email>'",
+              "type": "string"
+            },
+            "has_attachments": {
+              "type": "boolean"
+            },
+            "id": {
+              "description": "Email ID",
+              "type": "string"
+            },
+            "is_read": {
+              "type": "boolean"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "to": {
+              "description": "Recipients comma-separated",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "subject": {
+        "description": "Thread subject line",
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "outlook_email/list_emails": {
+    "properties": {
+      "count": {
+        "description": "Number of emails returned",
+        "type": "integer"
+      },
+      "emails": {
+        "items": {
+          "properties": {
+            "cc": {
+              "description": "CC recipients comma-separated",
+              "type": "string"
+            },
+            "date": {
+              "description": "Received date (YYYY-MM-DD HH:MM)",
+              "type": "string"
+            },
+            "from": {
+              "description": "Sender as 'Name <email>'",
+              "type": "string"
+            },
+            "has_attachments": {
+              "type": "boolean"
+            },
+            "id": {
+              "description": "Email ID (use in get_email, get_email_thread, reply_email)",
+              "type": "string"
+            },
+            "importance": {
+              "type": "string"
+            },
+            "is_read": {
+              "type": "boolean"
+            },
+            "snippet": {
+              "description": "Body preview (first 150 chars)",
+              "type": "string"
+            },
+            "subject": {
+              "type": "string"
+            },
+            "to": {
+              "description": "Recipients comma-separated",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "folder": {
+        "type": "string"
+      },
+      "has_more": {
+        "description": "True if more emails available",
+        "type": "boolean"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "outlook_email/mark_emails": {
+    "properties": {
+      "failed": {
+        "description": "Failed email IDs with errors",
+        "type": "array"
+      },
+      "is_read": {
+        "type": "boolean"
+      },
+      "marked_count": {
+        "description": "Number of emails marked",
+        "type": "integer"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "outlook_email/reply_email": {
+    "properties": {
+      "attachments": {
+        "description": "What was actually attached. Absent means nothing was.",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "email_id": {
+        "description": "ID of the email replied to",
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "message_id": {
+        "description": "Immutable id of the sent reply (attachment path only)",
+        "type": "string"
+      },
+      "reply_all": {
+        "type": "boolean"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "trino/trino_list_catalogs": {
+    "properties": {
+      "catalogs": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "count": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "trino/trino_list_schemas": {
+    "properties": {
+      "catalog": {
+        "type": "string"
+      },
+      "count": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "schemas": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "trino/trino_list_tables": {
+    "properties": {
+      "catalog": {
+        "type": "string"
+      },
+      "count": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "schema": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "tables": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "trino/trino_query": {
+    "properties": {
+      "error": {
+        "type": "string"
+      },
+      "renamed_columns": {
+        "description": "Columns given a _1, _2 \u2026 suffix because the query returned the same name more than once",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "row_count": {
+        "description": "Number of rows returned",
+        "type": "integer"
+      },
+      "rows": {
+        "description": "Query result rows",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "truncated": {
+        "description": "True if results were cut short by the row or size limit",
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "trino/trino_table_schema": {
+    "properties": {
+      "catalog": {
+        "type": "string"
+      },
+      "columns": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "error": {
+        "type": "string"
+      },
+      "schema": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "table": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "twitter_intel/get_account_tweets": {
+    "properties": {
+      "accounts": {
+        "description": "Handle (lowercase) -> list of that account's tweets, newest first",
+        "type": "object"
+      },
+      "accounts_with_no_tweets": {
+        "type": "array"
+      },
+      "total_results": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "twitter_intel/get_tweet_thread": {
+    "properties": {
+      "replies": {
+        "description": "Replies, newest first",
+        "type": "array"
+      },
+      "total_replies": {
+        "type": "integer"
+      },
+      "tweet": {
+        "description": "The requested tweet",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "twitter_intel/search_ai_trends": {
+    "properties": {
+      "query": {
+        "type": "string"
+      },
+      "total_results": {
+        "type": "integer"
+      },
+      "tweets": {
+        "description": "Tweets sorted by likes, highest first",
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "twitter_intel/search_tweets": {
+    "properties": {
+      "query": {
+        "description": "The final query sent to the API",
+        "type": "string"
+      },
+      "total_results": {
+        "type": "integer"
+      },
+      "tweets": {
+        "description": "Normalized tweets, newest first",
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "web_search/perplexity_search": {
+    "properties": {
+      "query": {},
+      "results": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "total_results": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "web_search/scrape_url": {
+    "properties": {
+      "char_count": {
+        "type": "integer"
+      },
+      "content": {
+        "type": "string"
+      },
+      "final_url": {
+        "type": "string"
+      },
+      "links": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "markdown": {
+        "type": "string"
+      },
+      "status_code": {
+        "type": "integer"
+      },
+      "title": {
+        "type": "string"
+      },
+      "url": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "web_search/search_web": {
+    "description": "Web search results",
+    "properties": {
+      "note": {
+        "type": "string"
+      },
+      "provider": {
+        "type": "string"
+      },
+      "query": {
+        "type": "string"
+      },
+      "results": {
+        "type": "array"
+      },
+      "total_results": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "web_search/serper_search": {
+    "properties": {
+      "credits_used": {
+        "type": "integer"
+      },
+      "knowledge_graph": {
+        "type": "object"
+      },
+      "organic": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "people_also_ask": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "query": {
+        "type": "string"
+      },
+      "related_searches": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "zoom/create_meeting": {
+    "properties": {
+      "duration": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "join_url": {
+        "type": "string"
+      },
+      "meeting_id": {
+        "type": "integer"
+      },
+      "password": {
+        "type": "string"
+      },
+      "start_time": {
+        "type": "string"
+      },
+      "start_url": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "topic": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "zoom/delete_meeting": {
+    "properties": {
+      "error": {
+        "type": "string"
+      },
+      "meeting_id": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "zoom/get_meeting": {
+    "properties": {
+      "agenda": {
+        "type": "string"
+      },
+      "duration": {
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "join_url": {
+        "type": "string"
+      },
+      "meeting_id": {
+        "type": "integer"
+      },
+      "password": {
+        "type": "string"
+      },
+      "start_time": {
+        "type": "string"
+      },
+      "start_url": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "topic": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  }
+}

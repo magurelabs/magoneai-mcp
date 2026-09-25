@@ -1,0 +1,7348 @@
+{
+  "atlassian_confluence/addConfluenceLabel": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "labels": {
+          "description": "Label names to add, e.g. ['roadmap', 'q3']",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId",
+        "labels"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/atlassianUserInfo": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/createConfluenceAttachment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "fileContentBase64": {
+          "description": "File content, base64-encoded",
+          "type": "string"
+        },
+        "fileName": {
+          "description": "Name the attachment is saved as, e.g. 'report.pdf'",
+          "type": "string"
+        },
+        "mimeType": {
+          "description": "(Optional) MIME type, e.g. 'application/pdf'. Defaults to application/octet-stream when omitted.",
+          "type": "string"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId",
+        "fileName",
+        "fileContentBase64"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/createConfluenceBlogPost": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body": {
+          "description": "Post body in the given bodyFormat. For 'storage' this is Confluence XHTML, e.g. '<p>Hello</p>'.",
+          "type": "string"
+        },
+        "bodyFormat": {
+          "default": "storage",
+          "description": "(Optional) Format of 'body'. Defaults to Confluence storage XHTML.",
+          "enum": [
+            "storage",
+            "atlas_doc_format",
+            "wiki"
+          ],
+          "type": "string"
+        },
+        "spaceId": {
+          "description": "Numeric space id from getConfluenceSpaces",
+          "type": "string"
+        },
+        "status": {
+          "default": "current",
+          "description": "(Optional) Publish immediately ('current') or save as a draft",
+          "enum": [
+            "current",
+            "draft"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "description": "Blog post title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spaceId",
+        "title",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/createConfluenceFooterComment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "anyOf": [
+        {
+          "required": [
+            "pageId"
+          ]
+        },
+        {
+          "required": [
+            "parentCommentId"
+          ]
+        }
+      ],
+      "properties": {
+        "body": {
+          "description": "Comment body in Confluence storage XHTML, e.g. '<p>Hi</p>'",
+          "type": "string"
+        },
+        "pageId": {
+          "description": "(Optional) Numeric page id to comment on. Omit only when replying, where parentCommentId identifies the thread.",
+          "type": "string"
+        },
+        "parentCommentId": {
+          "description": "(Optional) Comment id to reply to, making this a reply rather than a new top-level comment",
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/createConfluenceInlineComment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body": {
+          "description": "Comment body in Confluence storage XHTML",
+          "type": "string"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        },
+        "selectedText": {
+          "description": "The exact text on the page to anchor to",
+          "type": "string"
+        },
+        "textSelectionMatchCount": {
+          "default": 1,
+          "description": "(Optional) How many times the selected text occurs on the page before and including the one being anchored to. Use 1 when the text appears only once.",
+          "type": "integer"
+        },
+        "textSelectionMatchIndex": {
+          "default": 0,
+          "description": "(Optional) 0-based index of which occurrence to anchor to",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pageId",
+        "body",
+        "selectedText"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/createConfluencePage": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body": {
+          "description": "Page body in the given bodyFormat. For 'storage' this is Confluence XHTML, e.g. '<p>Hello</p>'.",
+          "type": "string"
+        },
+        "bodyFormat": {
+          "default": "storage",
+          "description": "(Optional) Format of 'body'. Defaults to Confluence storage XHTML.",
+          "enum": [
+            "storage",
+            "atlas_doc_format",
+            "wiki"
+          ],
+          "type": "string"
+        },
+        "parentId": {
+          "description": "(Optional) Id of the parent page, to nest this one under it rather than at the space root",
+          "type": "string"
+        },
+        "spaceId": {
+          "description": "Numeric space id from getConfluenceSpaces",
+          "type": "string"
+        },
+        "status": {
+          "default": "current",
+          "description": "(Optional) Publish immediately ('current') or save as a draft",
+          "enum": [
+            "current",
+            "draft"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "description": "Page title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spaceId",
+        "title",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/deleteConfluenceAttachment": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachmentId": {
+          "description": "Attachment id, from getConfluencePageAttachments",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/deleteConfluencePage": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getAccessibleAtlassianResources": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluenceBlogPost": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "blogPostId": {
+          "description": "Numeric blog post id",
+          "type": "string"
+        },
+        "bodyFormat": {
+          "default": "storage",
+          "description": "(Optional) Body representation to return",
+          "enum": [
+            "storage",
+            "atlas_doc_format",
+            "view"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "blogPostId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluenceCommentChildren": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "commentId": {
+          "description": "Numeric comment id",
+          "type": "string"
+        },
+        "commentType": {
+          "description": "Which kind of comment this is - 'footer' if it came from getConfluencePageFooterComments, 'inline' if it came from getConfluencePageInlineComments.",
+          "enum": [
+            "footer",
+            "inline"
+          ],
+          "type": "string"
+        },
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum replies to return (1-250)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commentId",
+        "commentType"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluenceFolder": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folderId": {
+          "description": "Numeric folder id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "folderId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluenceFolderChildren": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'. It is null once there are no further results.",
+          "type": "string"
+        },
+        "folderId": {
+          "description": "Numeric folder id",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum children to return (1-250)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "folderId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluencePage": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "bodyFormat": {
+          "default": "storage",
+          "description": "(Optional) Body representation to return. 'storage' is Confluence's XHTML, 'view' is rendered HTML.",
+          "enum": [
+            "storage",
+            "atlas_doc_format",
+            "view"
+          ],
+          "type": "string"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluencePageAttachments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum attachments to return (1-250)",
+          "type": "integer"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluencePageDescendants": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'. It is null once there are no further results.",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum descendants to return (1-250)",
+          "type": "integer"
+        },
+        "pageId": {
+          "description": "Numeric id of the parent page",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluencePageFooterComments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum comments to return (1-250)",
+          "type": "integer"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluencePageInlineComments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum comments to return (1-250)",
+          "type": "integer"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluencePageLabels": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum labels to return (1-250)",
+          "type": "integer"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluenceSpaces": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "keys": {
+          "description": "(Optional) Comma-separated space keys to filter by, e.g. 'DEV,DOCS'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum spaces to return (1-250)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getConfluenceTemplates": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum templates to return (1-100)",
+          "type": "integer"
+        },
+        "spaceKey": {
+          "description": "(Optional) Restrict to templates in this space, by key",
+          "type": "string"
+        },
+        "start": {
+          "default": 0,
+          "description": "(Optional) 0-based offset of the first result. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/getPagesInConfluenceSpace": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "(Optional) Cursor from a previous response's 'next_cursor'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum pages to return (1-250)",
+          "type": "integer"
+        },
+        "spaceId": {
+          "description": "Numeric space id from getConfluenceSpaces",
+          "type": "string"
+        }
+      },
+      "required": [
+        "spaceId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/removeConfluenceLabel": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "label": {
+          "description": "Label name to remove",
+          "type": "string"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId",
+        "label"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/searchConfluenceUsingCql": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cql": {
+          "description": "CQL query string. Quote values containing spaces.",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "(Optional) Maximum results to return (1-250)",
+          "type": "integer"
+        },
+        "start": {
+          "default": 0,
+          "description": "(Optional) 0-based offset of the first result. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cql"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_confluence/updateConfluencePage": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "anyOf": [
+        {
+          "required": [
+            "title"
+          ]
+        },
+        {
+          "required": [
+            "body"
+          ]
+        }
+      ],
+      "properties": {
+        "body": {
+          "description": "(Optional) New body, replacing the existing one entirely. Keeps the existing body if omitted.",
+          "type": "string"
+        },
+        "bodyFormat": {
+          "default": "storage",
+          "description": "(Optional) Format of 'body'",
+          "enum": [
+            "storage",
+            "atlas_doc_format",
+            "wiki"
+          ],
+          "type": "string"
+        },
+        "pageId": {
+          "description": "Numeric page id",
+          "type": "string"
+        },
+        "title": {
+          "description": "(Optional) New title. Keeps the existing one if omitted.",
+          "type": "string"
+        },
+        "versionMessage": {
+          "description": "(Optional) Note recorded against this version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/addCommentToJiraIssue": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body": {
+          "description": "Comment text",
+          "type": "string"
+        },
+        "commentId": {
+          "description": "(Optional) Id of an existing comment to update instead of adding a new one",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/addJiraIssueAttachment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachments": {
+          "description": "Files to attach (max 10). Pass a platform file reference: the file_id UUID of a file uploaded to the workflow (e.g. a Start node file or image field) or an exports/... storage key from a tool such as render_document, either as a plain string or as {\"file_id\": \"<uuid-or-key>\"}. The platform reads the file from its own storage and replaces the reference with {filename, content_base64, content_type} before this tool runs, so the file never passes through the model and its size is not limited by it. Add a \"filename\" key next to file_id to rename the attachment. DO NOT ENCODE content_base64 YOURSELF: a hand-encoded file arrives silently corrupt. If you hold no file_id or storage key, do not improvise one.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "Platform file_id (UUID) or storage key",
+                "type": "string"
+              },
+              {
+                "properties": {
+                  "file_id": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_id"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "content_base64": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content_base64"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "fileContentBase64": {
+          "description": "(Optional) File content, base64-encoded, for a caller that already holds the bytes. Prefer `attachments`.",
+          "type": "string"
+        },
+        "fileName": {
+          "description": "(Optional) Name the attachment is saved as, e.g. 'report.pdf'. Only with fileContentBase64.",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "mimeType": {
+          "description": "(Optional) MIME type, e.g. 'application/pdf'. Defaults to application/octet-stream when omitted.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/addJiraIssueWatcher": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "accountId": {
+          "description": "Account id of the user to add as a watcher",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey",
+        "accountId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/addWorklogToJiraIssue": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "comment": {
+          "description": "(Optional) What the time was spent on",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "started": {
+          "description": "(Optional) When the work started, ISO 8601 with offset, e.g. '2026-08-21T09:00:00.000+0000'. Defaults to now.",
+          "type": "string"
+        },
+        "timeSpent": {
+          "description": "Duration in Jira format, e.g. '3h 30m', '1d', '45m'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey",
+        "timeSpent"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/assignJiraIssue": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "anyOf": [
+        {
+          "required": [
+            "accountId"
+          ]
+        },
+        {
+          "required": [
+            "unassign"
+          ]
+        }
+      ],
+      "properties": {
+        "accountId": {
+          "description": "(Optional) Account id to assign to",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "unassign": {
+          "default": false,
+          "description": "(Optional) Remove the current assignee instead of setting a new one",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/atlassianUserInfo": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_jira/createJiraIssue": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "additionalFields": {
+          "additionalProperties": true,
+          "description": "(Optional) Any other fields, in Jira's own field format, e.g. {\"labels\": [\"urgent\"], \"priority\": {\"name\": \"High\"}}",
+          "type": "object"
+        },
+        "assigneeAccountId": {
+          "description": "(Optional) Account id to assign to. Use lookupJiraAccountId to turn a name or email into one.",
+          "type": "string"
+        },
+        "description": {
+          "description": "(Optional) Issue description as plain text",
+          "type": "string"
+        },
+        "issueTypeName": {
+          "description": "Issue type name, e.g. 'Task', 'Bug', 'Story'",
+          "type": "string"
+        },
+        "projectKey": {
+          "description": "Project key, e.g. 'PROJ'",
+          "type": "string"
+        },
+        "summary": {
+          "description": "Issue title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectKey",
+        "summary",
+        "issueTypeName"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/createJiraIssueLink": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "comment": {
+          "description": "(Optional) Comment to add alongside the link",
+          "type": "string"
+        },
+        "inwardIssueKey": {
+          "description": "Key of the inward issue. For a 'Blocks' link this is the issue that IS blocked.",
+          "type": "string"
+        },
+        "linkTypeName": {
+          "description": "Link type name from getIssueLinkTypes, e.g. 'Blocks'",
+          "type": "string"
+        },
+        "outwardIssueKey": {
+          "description": "Key of the outward issue. For a 'Blocks' link this is the issue doing the blocking.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkTypeName",
+        "inwardIssueKey",
+        "outwardIssueKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/createJiraProjectComponent": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "description": "(Optional) Component description",
+          "type": "string"
+        },
+        "leadAccountId": {
+          "description": "(Optional) Account id of the component's owner",
+          "type": "string"
+        },
+        "name": {
+          "description": "Component name, e.g. 'Backend'",
+          "type": "string"
+        },
+        "projectKey": {
+          "description": "Project key, e.g. 'PROJ'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectKey",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/createJiraProjectVersion": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "description": "(Optional) Version description",
+          "type": "string"
+        },
+        "name": {
+          "description": "Version name, e.g. '2.4.0'",
+          "type": "string"
+        },
+        "projectKey": {
+          "description": "Project key, e.g. 'PROJ'",
+          "type": "string"
+        },
+        "releaseDate": {
+          "description": "(Optional) Planned release date, 'YYYY-MM-DD'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectKey",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/deleteJiraIssue": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "deleteSubtasks": {
+          "default": false,
+          "description": "(Optional) Also delete the issue's subtasks. Off by default, matching Jira's own default: widening one delete into several is something to ask for, not to inherit.",
+          "type": "boolean"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/deleteJiraIssueAttachment": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachmentId": {
+          "description": "Attachment id, from getJiraIssueAttachments",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/editJiraIssue": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "anyOf": [
+        {
+          "required": [
+            "summary"
+          ]
+        },
+        {
+          "required": [
+            "description"
+          ]
+        },
+        {
+          "required": [
+            "assigneeAccountId"
+          ]
+        },
+        {
+          "required": [
+            "additionalFields"
+          ]
+        }
+      ],
+      "properties": {
+        "additionalFields": {
+          "additionalProperties": true,
+          "description": "(Optional) Any other fields in Jira's field format",
+          "type": "object"
+        },
+        "assigneeAccountId": {
+          "description": "(Optional) Account id to assign to",
+          "type": "string"
+        },
+        "description": {
+          "description": "(Optional) New description as plain text. Replaces the existing description entirely.",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "summary": {
+          "description": "(Optional) New title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getAccessibleAtlassianResources": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getIssueLinkTypes": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraBoardsForProject": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "maxResults": {
+          "default": 50,
+          "description": "(Optional) Maximum boards to return (1-50)",
+          "type": "integer"
+        },
+        "projectKeyOrId": {
+          "description": "Project key or numeric id",
+          "type": "string"
+        },
+        "startAt": {
+          "default": 0,
+          "description": "(Optional) 0-based offset. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "projectKeyOrId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraEpicIssues": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "epicIdOrKey": {
+          "description": "Epic's issue key or numeric id",
+          "type": "string"
+        },
+        "maxResults": {
+          "default": 50,
+          "description": "(Optional) Maximum issues to return (1-100)",
+          "type": "integer"
+        },
+        "startAt": {
+          "default": 0,
+          "description": "(Optional) 0-based offset. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "epicIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssue": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "includeComments": {
+          "default": false,
+          "description": "(Optional) Include the issue's comments. Off by default because a long thread can dwarf the issue itself.",
+          "type": "boolean"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key such as 'PROJ-123', or the numeric issue id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssueAttachments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssueChangelog": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "maxResults": {
+          "default": 50,
+          "description": "(Optional) Maximum changelog entries to return (1-100)",
+          "type": "integer"
+        },
+        "startAt": {
+          "default": 0,
+          "description": "(Optional) 0-based offset. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssueRemoteIssueLinks": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssueTypeMetaWithFields": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueTypeId": {
+          "description": "Issue type id",
+          "type": "string"
+        },
+        "projectIdOrKey": {
+          "description": "Project key, e.g. 'PROJ'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectIdOrKey",
+        "issueTypeId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssueWatchers": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraIssueWorklogs": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "maxResults": {
+          "default": 100,
+          "description": "(Optional) Maximum worklog entries to return (1-1000)",
+          "type": "integer"
+        },
+        "startAt": {
+          "default": 0,
+          "description": "(Optional) 0-based offset. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraPriorities": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraProjectComponents": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "projectIdOrKey": {
+          "description": "Project key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraProjectIssueTypesMetadata": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "projectIdOrKey": {
+          "description": "Project key, e.g. 'PROJ'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraProjectVersions": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "projectIdOrKey": {
+          "description": "Project key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "projectIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraResolutions": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraSprintsForBoard": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "boardId": {
+          "description": "Board id from getJiraBoardsForProject",
+          "type": "string"
+        },
+        "maxResults": {
+          "default": 50,
+          "description": "(Optional) Maximum sprints to return (1-50)",
+          "type": "integer"
+        },
+        "startAt": {
+          "default": 0,
+          "description": "(Optional) 0-based offset. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        },
+        "state": {
+          "description": "(Optional) Filter to sprints in this state",
+          "enum": [
+            "active",
+            "future",
+            "closed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "boardId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getJiraStatuses": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getTransitionsForJiraIssue": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/getVisibleJiraProjects": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "maxResults": {
+          "default": 50,
+          "description": "(Optional) Maximum projects to return (1-50)",
+          "type": "integer"
+        },
+        "searchString": {
+          "description": "(Optional) Filter by project name or key",
+          "type": "string"
+        },
+        "startAt": {
+          "default": 0,
+          "description": "(Optional) 0-based offset. Pass 'next_start' from the previous response; it is null once there are no further results.",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "atlassian_jira/lookupJiraAccountId": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "maxResults": {
+          "default": 10,
+          "description": "(Optional) Maximum users to return (1-50)",
+          "type": "integer"
+        },
+        "searchString": {
+          "description": "Display name or email to search for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "searchString"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/moveJiraIssuesToSprint": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "issueKeys": {
+          "description": "Issue keys to move, e.g. ['PROJ-1', 'PROJ-2']. Max 50.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sprintId": {
+          "description": "Target sprint id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sprintId",
+        "issueKeys"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/removeJiraIssueLink": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "linkId": {
+          "description": "Issue link id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/removeJiraIssueWatcher": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "accountId": {
+          "description": "Account id of the watcher to remove",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey",
+        "accountId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/searchJiraIssuesUsingJql": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "jql": {
+          "description": "JQL query string. Quote values containing spaces.",
+          "type": "string"
+        },
+        "maxResults": {
+          "default": 50,
+          "description": "(Optional) Maximum issues to return (1-100)",
+          "type": "integer"
+        },
+        "nextPageToken": {
+          "description": "(Optional) Cursor from a previous response's 'next_page_token'. It is null once there are no further results.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "jql"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/transitionJiraIssue": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "comment": {
+          "description": "(Optional) Comment to add as part of the transition",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "transitionId": {
+          "description": "Transition id from getTransitionsForJiraIssue",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey",
+        "transitionId"
+      ],
+      "type": "object"
+    }
+  },
+  "atlassian_jira/updateJiraIssueStatus": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "comment": {
+          "description": "(Optional) Comment to add as part of the transition",
+          "type": "string"
+        },
+        "issueIdOrKey": {
+          "description": "Issue key or numeric id",
+          "type": "string"
+        },
+        "status": {
+          "description": "Target status name, e.g. 'Done'. Case-insensitive.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueIdOrKey",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  "cloudflare_r2/upload_file": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "content_type": {
+          "description": "MIME type override, e.g. 'application/pdf'. Inferred from the filename when omitted.",
+          "type": "string"
+        },
+        "expires_in": {
+          "description": "Presigned URL lifetime in seconds (60 to 604800, default 3600). Ignored when the bucket has a public base URL configured.",
+          "type": "integer"
+        },
+        "file_base64": {
+          "description": "File content as base64, optionally a 'data:<mime>;base64,...' URL.",
+          "type": "string"
+        },
+        "filename": {
+          "description": "Filename with extension, e.g. 'report.pdf'. Drives the stored name and inferred content type.",
+          "type": "string"
+        },
+        "prefix": {
+          "description": "Optional key prefix / folder inside the bucket (default 'uploads').",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename",
+        "file_base64"
+      ],
+      "type": "object"
+    }
+  },
+  "cloudflare_r2/upload_from_url": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "content_type": {
+          "description": "MIME type override, e.g. 'application/pdf'. Inferred from the filename when omitted.",
+          "type": "string"
+        },
+        "expires_in": {
+          "description": "Presigned URL lifetime in seconds (60 to 604800, default 3600). Ignored when the bucket has a public base URL configured.",
+          "type": "integer"
+        },
+        "filename": {
+          "description": "Optional stored filename. Derived from the source URL when omitted.",
+          "type": "string"
+        },
+        "prefix": {
+          "description": "Optional key prefix / folder inside the bucket (default 'uploads').",
+          "type": "string"
+        },
+        "source_url": {
+          "description": "Public https URL of the file to mirror into R2.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_url"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_create_table": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "columns": {
+          "description": "Column definitions",
+          "items": {
+            "properties": {
+              "default": {
+                "description": "Default value for the column",
+                "type": "string"
+              },
+              "name": {
+                "description": "Column name",
+                "type": "string"
+              },
+              "nullable": {
+                "default": true,
+                "description": "Allow NULL values?",
+                "type": "boolean"
+              },
+              "primary_key": {
+                "default": false,
+                "description": "Is this the primary key?",
+                "type": "boolean"
+              },
+              "type": {
+                "description": "Column type: TEXT, INTEGER, BIGINT, SERIAL, VARCHAR(n), BOOLEAN, TIMESTAMP, NUMERIC, JSONB",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "table": {
+          "description": "Name of the table to create",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "columns"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_drop_table": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "confirm": {
+          "description": "Must be true to confirm the drop",
+          "type": "boolean"
+        },
+        "table": {
+          "description": "Name of the table to drop",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "confirm"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_insert": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "data": {
+          "description": "Records to insert. Each item is an object with column names as keys. IMPORTANT: use 'data', not 'records'.",
+          "items": {
+            "description": "A record with column-name keys and their values",
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "records": {
+          "description": "Alias for 'data'. Prefer using 'data'.",
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "table": {
+          "description": "Table or collection name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_list_tables": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "database/db_query": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "params": {
+          "default": [],
+          "description": "Query parameters for parameterized queries (SQL only)",
+          "items": {},
+          "type": "array"
+        },
+        "query": {
+          "description": "SQL query (e.g. 'SELECT * FROM leads WHERE phone = $1') or MongoDB JSON (e.g. '{\"collection\": \"leads\", \"filter\": {\"phone\": \"123\"}}')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_schema": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "table": {
+          "description": "Table or collection name to inspect",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_search": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "filters": {
+          "default": {},
+          "description": "Filter conditions as key-value pairs. Use operator suffixes for advanced filters: phone='123' (exact), name__contains='sharma', amount__gt=1000, status__in=['active','pending']. Pass a list as a value to match multiple values: {\"status\": [\"active\", \"pending\"]} works like __in; {\"status__ne\": [\"a\", \"b\"]} works like NOT IN. Invalid column names or type mismatches raise an error.",
+          "type": "object"
+        },
+        "limit": {
+          "description": "Max rows to return (default: configured db_query_row_limit)",
+          "type": "integer"
+        },
+        "offset": {
+          "default": 0,
+          "description": "Number of rows to skip for pagination",
+          "type": "integer"
+        },
+        "order_by": {
+          "description": "Column to sort by. Prefix with '-' for descending (MongoDB only)",
+          "type": "string"
+        },
+        "table": {
+          "description": "Table or collection name to search",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table"
+      ],
+      "type": "object"
+    }
+  },
+  "database/db_update": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "data": {
+          "description": "Fields to update with new values. Example: {\"status\": \"contacted\", \"last_contact_date\": \"2026-02-14\"}",
+          "type": "object"
+        },
+        "filters": {
+          "description": "Filter to identify records to update. Same syntax as db_search filters. Example: {\"id\": 42} or {\"phone\": \"9876543210\"}",
+          "type": "object"
+        },
+        "table": {
+          "description": "Table or collection name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table",
+        "filters",
+        "data"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/create_envelope": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "anchor_string": {
+          "default": "/sign/",
+          "description": "Literal text in the document to anchor the signature tab to (default: /sign/)",
+          "type": "string"
+        },
+        "document_base64": {
+          "description": "Base64-encoded document",
+          "type": "string"
+        },
+        "document_name": {
+          "description": "Document filename with extension",
+          "type": "string"
+        },
+        "email_subject": {
+          "description": "Subject of the signing email",
+          "type": "string"
+        },
+        "embedded": {
+          "default": false,
+          "description": "Enable embedded signing via get_signing_url (default: false)",
+          "type": "boolean"
+        },
+        "send_now": {
+          "default": true,
+          "description": "Send immediately (default: true)",
+          "type": "boolean"
+        },
+        "signer_email": {
+          "description": "Signer's email address",
+          "type": "string"
+        },
+        "signer_name": {
+          "description": "Signer's full name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_subject",
+        "signer_email",
+        "signer_name",
+        "document_base64",
+        "document_name"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/create_envelope_from_template": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "email_subject": {
+          "description": "Overrides the template's default subject",
+          "type": "string"
+        },
+        "role_name": {
+          "default": "Signer",
+          "description": "Template signer role name (default: Signer)",
+          "type": "string"
+        },
+        "signer_email": {
+          "description": "Signer's email address",
+          "type": "string"
+        },
+        "signer_name": {
+          "description": "Signer's full name",
+          "type": "string"
+        },
+        "template_id": {
+          "description": "Template id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "template_id",
+        "signer_email",
+        "signer_name"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/get_account_details": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "docusign/get_document": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "document_id": {
+          "default": "combined",
+          "description": "Document id, or 'combined' for all documents merged",
+          "type": "string"
+        },
+        "envelope_id": {
+          "description": "Envelope id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "envelope_id"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/get_envelope_status": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "envelope_id": {
+          "description": "Envelope id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "envelope_id"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/get_signing_url": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "envelope_id": {
+          "description": "Envelope id",
+          "type": "string"
+        },
+        "recipient_id": {
+          "default": "1",
+          "description": "Recipient id, if not the default '1' (create_envelope always uses '1')",
+          "type": "string"
+        },
+        "return_url": {
+          "description": "Redirect target after signing completes",
+          "type": "string"
+        },
+        "signer_email": {
+          "description": "Signer's email, as used at creation",
+          "type": "string"
+        },
+        "signer_name": {
+          "description": "Signer's name, as used at creation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "envelope_id",
+        "signer_email",
+        "signer_name",
+        "return_url"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/get_user_details": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "docusign/list_envelopes": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "count": {
+          "description": "Page size",
+          "type": "integer"
+        },
+        "from_date": {
+          "description": "YYYY-MM-DD",
+          "type": "string"
+        },
+        "start_position": {
+          "description": "Offset into results",
+          "type": "integer"
+        },
+        "status": {
+          "description": "Envelope status filter",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "docusign/list_groups": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "docusign/list_products": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "docusign/list_templates": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "count": {
+          "description": "Page size",
+          "type": "integer"
+        },
+        "start_position": {
+          "description": "Offset into results",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "docusign/search_documents": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "count": {
+          "description": "Page size",
+          "type": "integer"
+        },
+        "from_date": {
+          "description": "YYYY-MM-DD",
+          "type": "string"
+        },
+        "query": {
+          "description": "Search text",
+          "type": "string"
+        },
+        "start_position": {
+          "description": "Offset into results",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/send_envelope": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "envelope_id": {
+          "description": "Envelope id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "envelope_id"
+      ],
+      "type": "object"
+    }
+  },
+  "docusign/void_envelope": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "envelope_id": {
+          "description": "Envelope id",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why the envelope is being voided",
+          "type": "string"
+        }
+      },
+      "required": [
+        "envelope_id",
+        "reason"
+      ],
+      "type": "object"
+    }
+  },
+  "google_calendar/google_calendar_create_event": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "calendar_id": {
+          "default": "primary",
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "end_datetime": {
+          "description": "Event end in RFC3339 format.",
+          "type": "string"
+        },
+        "start_datetime": {
+          "description": "Event start in RFC3339 format.",
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "description": "IANA timezone (e.g. Asia/Kolkata).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "summary",
+        "start_datetime",
+        "end_datetime"
+      ],
+      "type": "object"
+    }
+  },
+  "google_calendar/google_calendar_delete_event": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "calendar_id": {
+          "default": "primary",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "ID of the event to delete.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    }
+  },
+  "google_calendar/google_calendar_list_calendars": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "google_calendar/google_calendar_list_events": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "calendar_id": {
+          "default": "primary",
+          "description": "Calendar ID (default: primary).",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 50,
+          "maximum": 250,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "time_max": {
+          "description": "RFC3339 end time filter.",
+          "type": "string"
+        },
+        "time_min": {
+          "description": "RFC3339 start time filter.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "google_calendar/google_calendar_update_event": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "calendar_id": {
+          "default": "primary",
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "end_datetime": {
+          "description": "Event end in RFC3339 format.",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "ID of the event to update.",
+          "type": "string"
+        },
+        "start_datetime": {
+          "description": "Event start in RFC3339 format.",
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA timezone (e.g. Asia/Kolkata).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    }
+  },
+  "google_drive/google_drive_get_file_content": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "export_mime_type": {
+          "description": "Override the export MIME type for Google Docs/Sheets/Slides (e.g. 'text/plain', 'text/csv'). If omitted, the best format is chosen automatically based on the file type. Not needed for regular files.",
+          "type": "string"
+        },
+        "file_id": {
+          "description": "ID of the file in Google Drive.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_id"
+      ],
+      "type": "object"
+    }
+  },
+  "google_drive/google_drive_get_file_metadata": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "file_id": {
+          "description": "ID of the file in Google Drive.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_id"
+      ],
+      "type": "object"
+    }
+  },
+  "google_drive/google_drive_search_files": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "mime_types": {
+          "description": "Optional list of MIME types to filter by.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "page_size": {
+          "default": 20,
+          "description": "Maximum number of files to return.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query in Drive query syntax, e.g. name contains 'report'",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "google_gmail/google_gmail_get_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "format": {
+          "default": "full",
+          "enum": [
+            "metadata",
+            "full",
+            "minimal"
+          ],
+          "type": "string"
+        },
+        "message_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id"
+      ],
+      "type": "object"
+    }
+  },
+  "google_gmail/google_gmail_list_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "label_ids": {
+          "description": "Optional Gmail label IDs to filter on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_results": {
+          "default": 20,
+          "description": "Maximum number of messages to list.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "description": "Gmail search query (e.g. from:alice newer_than:7d).",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "google_gmail/google_gmail_send_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachments": {
+          "description": "Optional array of file IDs to attach. The platform automatically resolves file IDs to base64 attachments.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "File ID resolved automatically by the platform",
+                "type": "string"
+              },
+              {
+                "description": "Inline attachment resolved by the platform from a file_id",
+                "properties": {
+                  "content_base64": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "filename",
+                  "content_base64"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipient email address.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "subject",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/list_contacts": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "customer_id": {
+          "description": "Optional Kapso customer id to filter contacts",
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "type": "integer"
+        },
+        "phone_number_id": {
+          "description": "Phone number id (defaults to the connection's).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/list_conversations": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "type": "integer"
+        },
+        "phone_number_id": {
+          "description": "Phone number id (defaults to the connection's).",
+          "type": "string"
+        },
+        "status": {
+          "description": "Filter by conversation status (omit for all)",
+          "enum": [
+            "active",
+            "ended"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/list_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "conversation_id": {
+          "description": "Conversation id to filter by (from list_conversations)",
+          "type": "string"
+        },
+        "direction": {
+          "description": "Filter by message direction",
+          "enum": [
+            "inbound",
+            "outbound"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "default": 20,
+          "type": "integer"
+        },
+        "phone_number_id": {
+          "description": "Phone number id (defaults to the connection's).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/list_templates": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 20,
+          "type": "integer"
+        },
+        "phone_number_id": {
+          "description": "Phone number id (defaults to the connection's).",
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/send_media_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "caption": {
+          "description": "Optional caption (image, video, document only)",
+          "type": "string"
+        },
+        "filename": {
+          "description": "Optional display filename (document only)",
+          "type": "string"
+        },
+        "link": {
+          "description": "Public HTTPS URL of the media file",
+          "type": "string"
+        },
+        "media_type": {
+          "description": "Kind of media to send",
+          "enum": [
+            "image",
+            "document",
+            "video",
+            "audio"
+          ],
+          "type": "string"
+        },
+        "phone_number_id": {
+          "description": "Sender WhatsApp phone number id (defaults to the connection's).",
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipient WhatsApp number in E.164 digits, e.g. 15551234567",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "media_type",
+        "link"
+      ],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/send_template_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body_params": {
+          "default": [],
+          "description": "Ordered values for the template body {{1}}, {{2}}, ...",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "language_code": {
+          "default": "en_US",
+          "description": "Template language/locale code, e.g. en_US, es, pt_BR",
+          "type": "string"
+        },
+        "phone_number_id": {
+          "description": "Sender WhatsApp phone number id (defaults to the connection's).",
+          "type": "string"
+        },
+        "template_name": {
+          "description": "Meta-approved template name, e.g. order_confirmation",
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipient WhatsApp number in E.164 digits, e.g. 15551234567",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "template_name"
+      ],
+      "type": "object"
+    }
+  },
+  "kapso_whatsapp/send_text_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "phone_number_id": {
+          "description": "Sender WhatsApp phone number id (defaults to the connection's).",
+          "type": "string"
+        },
+        "preview_url": {
+          "default": false,
+          "description": "Render a link preview for URLs in the body",
+          "type": "boolean"
+        },
+        "text": {
+          "description": "Message body to send",
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipient WhatsApp number in E.164 digits, e.g. 15551234567",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/create_comment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body": {
+          "description": "Comment body in markdown",
+          "type": "string"
+        },
+        "issue": {
+          "description": "Issue identifier ('ENG-123') or UUID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/create_issue": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "assignee": {
+          "description": "Assignee email, name, or 'me'",
+          "type": "string"
+        },
+        "description": {
+          "description": "Issue description in markdown",
+          "type": "string"
+        },
+        "due_date": {
+          "description": "Due date as YYYY-MM-DD",
+          "type": "string"
+        },
+        "estimate": {
+          "description": "Estimate in the team's point scale",
+          "type": "integer"
+        },
+        "labels": {
+          "description": "Label names, e.g. ['Bug', 'Backend']",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parent": {
+          "description": "Parent issue identifier ('ENG-123') to create a sub-issue",
+          "type": "string"
+        },
+        "priority": {
+          "description": "0/none, 1/urgent, 2/high, 3/medium, 4/low",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "project": {
+          "description": "Project name or UUID",
+          "type": "string"
+        },
+        "state": {
+          "description": "Workflow state name, e.g. 'Todo', 'In Progress'. Defaults to the team's default state.",
+          "type": "string"
+        },
+        "team": {
+          "description": "Team key ('ENG'), name, or UUID",
+          "type": "string"
+        },
+        "title": {
+          "description": "Issue title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team",
+        "title"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/create_project": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "description": "Project description in markdown",
+          "type": "string"
+        },
+        "lead": {
+          "description": "Project lead: email, name, or 'me'",
+          "type": "string"
+        },
+        "name": {
+          "description": "Project name",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Start date as YYYY-MM-DD",
+          "type": "string"
+        },
+        "target_date": {
+          "description": "Target date as YYYY-MM-DD",
+          "type": "string"
+        },
+        "teams": {
+          "description": "Team keys or names the project belongs to, e.g. ['ENG']",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "teams"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/get_issue": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "include_comments": {
+          "default": true,
+          "description": "Include the issue's comments (default true)",
+          "type": "boolean"
+        },
+        "issue": {
+          "description": "Issue identifier ('ENG-123') or UUID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/get_viewer": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "linear/list_comments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "issue": {
+          "description": "Issue identifier ('ENG-123') or UUID",
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "description": "Max comments to return (default 50, max 100)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/list_issue_statuses": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "team": {
+          "description": "Team key ('ENG'), name, or UUID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/list_issues": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "assignee": {
+          "description": "Filter by assignee: email, name, 'me' (the API key's user), or 'unassigned'",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "Pagination cursor from a previous call's next_cursor",
+          "type": "string"
+        },
+        "label": {
+          "description": "Filter by label name, e.g. 'Bug'",
+          "type": "string"
+        },
+        "limit": {
+          "default": 25,
+          "description": "Max issues to return (default 25, max 100)",
+          "type": "integer"
+        },
+        "priority": {
+          "description": "Filter by priority: 0/none, 1/urgent, 2/high, 3/medium, 4/low",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "project": {
+          "description": "Filter by project name or UUID",
+          "type": "string"
+        },
+        "query": {
+          "description": "Text search across issue titles and descriptions",
+          "type": "string"
+        },
+        "state": {
+          "description": "Filter by workflow state name, e.g. 'In Progress', 'Done'",
+          "type": "string"
+        },
+        "state_type": {
+          "description": "Filter by state category \u2014 use 'started' for all in-progress issues regardless of the team's custom state names",
+          "enum": [
+            "backlog",
+            "canceled",
+            "completed",
+            "started",
+            "triage",
+            "unstarted"
+          ],
+          "type": "string"
+        },
+        "team": {
+          "description": "Filter by team key ('ENG'), name, or UUID",
+          "type": "string"
+        },
+        "updated_since": {
+          "description": "Only issues updated at or after this ISO 8601 timestamp, e.g. '2026-07-01T00:00:00Z'",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "linear/list_labels": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "team": {
+          "description": "Optional team key/name/UUID \u2014 limits to that team's labels plus workspace-level labels",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "linear/list_projects": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 50,
+          "description": "Max projects to return (default 50, max 100)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Text search across project names",
+          "type": "string"
+        },
+        "team": {
+          "description": "Only projects belonging to this team key, name, or UUID",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "linear/list_teams": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "linear/list_users": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "include_inactive": {
+          "default": false,
+          "description": "Include deactivated users (default false)",
+          "type": "boolean"
+        },
+        "query": {
+          "description": "Filter by name/email substring (case-insensitive)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "linear/update_issue": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "assignee": {
+          "description": "New assignee email/name/'me', or 'unassigned' to clear",
+          "type": "string"
+        },
+        "description": {
+          "description": "New description in markdown (replaces the old one)",
+          "type": "string"
+        },
+        "due_date": {
+          "description": "Due date as YYYY-MM-DD, or empty string to clear",
+          "type": "string"
+        },
+        "estimate": {
+          "description": "Estimate in the team's point scale",
+          "type": "integer"
+        },
+        "issue": {
+          "description": "Issue identifier ('ENG-123') or UUID",
+          "type": "string"
+        },
+        "labels": {
+          "description": "Label names \u2014 replaces the issue's current labels",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "priority": {
+          "description": "0/none, 1/urgent, 2/high, 3/medium, 4/low",
+          "type": [
+            "integer",
+            "string"
+          ]
+        },
+        "project": {
+          "description": "Project name or UUID to move the issue into",
+          "type": "string"
+        },
+        "state": {
+          "description": "New workflow state name, e.g. 'In Progress', 'Done'",
+          "type": "string"
+        },
+        "title": {
+          "description": "New title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue"
+      ],
+      "type": "object"
+    }
+  },
+  "linear/update_project": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "description": "New description in markdown (replaces the old one)",
+          "type": "string"
+        },
+        "lead": {
+          "description": "New lead: email, name, or 'me'",
+          "type": "string"
+        },
+        "name": {
+          "description": "New project name",
+          "type": "string"
+        },
+        "project": {
+          "description": "Project name or UUID",
+          "type": "string"
+        },
+        "start_date": {
+          "description": "Start date as YYYY-MM-DD",
+          "type": "string"
+        },
+        "target_date": {
+          "description": "Target date as YYYY-MM-DD",
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_sharepoint/sharepoint_download_file": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "drive_id": {
+          "type": "string"
+        },
+        "item_id": {
+          "type": "string"
+        },
+        "max_size_bytes": {
+          "description": "Maximum allowed file size. Default 50 MB.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "drive_id",
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_sharepoint/sharepoint_get_drive_item": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "drive_id": {
+          "type": "string"
+        },
+        "item_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "drive_id",
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_sharepoint/sharepoint_get_site": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "hostname": {
+          "description": "e.g. contoso.sharepoint.com",
+          "type": "string"
+        },
+        "site_path": {
+          "description": "e.g. sites/Marketing (omit for the host root site)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hostname"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_sharepoint/sharepoint_list_children": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "drive_id": {
+          "type": "string"
+        },
+        "folder_item_id": {
+          "description": "Folder driveItem id; omit to list the drive root.",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 100,
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "drive_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_sharepoint/sharepoint_list_folder": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "drive_id": {
+          "description": "SharePoint drive (document library) id.",
+          "type": "string"
+        },
+        "folder_item_id": {
+          "description": "Folder driveItem id to walk. Optional.",
+          "type": "string"
+        },
+        "folder_path": {
+          "description": "Drive-root-relative folder path, e.g. 'Shared Documents/Reports'. Optional.",
+          "type": "string"
+        },
+        "max_items": {
+          "description": "Safety cap on files returned (default 10000).",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "drive_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_sharepoint/sharepoint_site_libraries": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "site_id": {
+          "description": "Graph site id. Optional \u2014 defaults to this connection's bound site (one site per connection).",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "microsoft_teams/create_meeting": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attendees": {
+          "description": "Attendee emails, comma-separated",
+          "type": "string"
+        },
+        "body": {
+          "description": "Agenda / meeting description",
+          "type": "string"
+        },
+        "end": {
+          "description": "End datetime, ISO 8601",
+          "type": "string"
+        },
+        "start": {
+          "description": "Start datetime, ISO 8601 (e.g. 2026-07-24T15:00:00)",
+          "type": "string"
+        },
+        "subject": {
+          "description": "Meeting title",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "description": "Timezone for start/end (default: UTC)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subject",
+        "start",
+        "end"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/get_unread_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "max_chats": {
+          "default": 10,
+          "description": "Max unread chats to return (default: 10, max: 20)",
+          "type": "integer"
+        },
+        "max_messages_per_chat": {
+          "default": 20,
+          "description": "Max unread messages per chat (default: 20, max: 50)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "microsoft_teams/list_channel_members": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "channel_id": {
+          "description": "Channel ID from list_channels",
+          "type": "string"
+        },
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "channel_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/list_channels": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/list_chats": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "max_results": {
+          "default": 20,
+          "description": "Max chats to return (default: 20, max: 50)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "microsoft_teams/list_teams": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "microsoft_teams/read_channel_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "channel_id": {
+          "description": "Channel ID from list_channels",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 20,
+          "description": "Max messages to return (default: 20, max: 50)",
+          "type": "integer"
+        },
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "channel_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/read_chat_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "chat_id": {
+          "description": "Chat ID from list_chats",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 20,
+          "description": "Max messages to return (default: 20, max: 50)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "chat_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/reply_to_channel_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "channel_id": {
+          "description": "Channel ID from list_channels",
+          "type": "string"
+        },
+        "content": {
+          "description": "Reply content",
+          "type": "string"
+        },
+        "content_type": {
+          "default": "text",
+          "description": "Content format",
+          "enum": [
+            "text",
+            "html"
+          ],
+          "type": "string"
+        },
+        "mentions": {
+          "description": "People to @-mention. Each item is {\"id\": \"<Entra user id>\", \"name\": \"Display Name\"}. Get ids from list_chats members for a chat, or list_channel_members for a channel. Forces HTML formatting.",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "message_id": {
+          "description": "Root message ID to reply to",
+          "type": "string"
+        },
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "channel_id",
+        "message_id",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/search_people": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "max_results": {
+          "default": 10,
+          "description": "Max people to return (default: 10, max: 25)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Name, partial name, or email to search for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/send_channel_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "channel_id": {
+          "description": "Channel ID from list_channels",
+          "type": "string"
+        },
+        "content": {
+          "description": "Message content",
+          "type": "string"
+        },
+        "content_type": {
+          "default": "text",
+          "description": "Content format",
+          "enum": [
+            "text",
+            "html"
+          ],
+          "type": "string"
+        },
+        "mentions": {
+          "description": "People to @-mention. Each item is {\"id\": \"<Entra user id>\", \"name\": \"Display Name\"}. Get ids from list_chats members for a chat, or list_channel_members for a channel. Forces HTML formatting.",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "channel_id",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/send_chat_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "chat_id": {
+          "description": "Existing chat ID from list_chats",
+          "type": "string"
+        },
+        "content": {
+          "description": "Message content",
+          "type": "string"
+        },
+        "content_type": {
+          "default": "text",
+          "description": "Content format",
+          "enum": [
+            "text",
+            "html"
+          ],
+          "type": "string"
+        },
+        "mentions": {
+          "description": "People to @-mention. Each item is {\"id\": \"<Entra user id>\", \"name\": \"Display Name\"}. Get ids from list_chats members for a chat, or list_channel_members for a channel. Forces HTML formatting.",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "user_email": {
+          "description": "Recipient email for a 1:1 chat (used when chat_id is omitted)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "otp_verification/check_verification_status": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "days_lookback": {
+          "default": 7,
+          "type": "integer"
+        },
+        "identifier": {
+          "description": "The identifier to check (email, phone)",
+          "type": "string"
+        },
+        "purpose": {
+          "default": "general",
+          "type": "string"
+        },
+        "table_name": {
+          "default": "otp_verifications",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identifier"
+      ],
+      "type": "object"
+    }
+  },
+  "otp_verification/generate_otp": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "expiry_minutes": {
+          "default": 5,
+          "type": "integer"
+        },
+        "identifier": {
+          "description": "What to verify (email address, phone number)",
+          "type": "string"
+        },
+        "identifier_type": {
+          "default": "email",
+          "enum": [
+            "email",
+            "phone",
+            "user_id"
+          ],
+          "type": "string"
+        },
+        "metadata": {
+          "description": "Optional JSON string with extra context",
+          "type": "string"
+        },
+        "purpose": {
+          "default": "general",
+          "type": "string"
+        },
+        "table_name": {
+          "default": "otp_verifications",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identifier"
+      ],
+      "type": "object"
+    }
+  },
+  "otp_verification/verify_otp": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "code": {
+          "description": "The OTP code to verify",
+          "type": "string"
+        },
+        "identifier": {
+          "description": "The identifier (email, phone) used when generating",
+          "type": "string"
+        },
+        "purpose": {
+          "default": "general",
+          "type": "string"
+        },
+        "table_name": {
+          "default": "otp_verifications",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identifier",
+        "code"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_calendar/create_event": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attendees": {
+          "description": "Attendee emails. Omit for a personal slot.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "description": "Event body",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "description": "How long it runs, as an alternative to end_time",
+          "type": "integer"
+        },
+        "end_time": {
+          "description": "Optional end. ISO datetime (2026-08-21T09:00:00), or a relative expression resolved on the server: 'now', '+30m', '+2h', '+1d', or 'in 30 minutes'. Prefer the relative form for anything expressed relative to now - do NOT compute the clock time yourself. Read in `timezone`. A relative end is measured from the START.",
+          "type": "string"
+        },
+        "is_online_meeting": {
+          "default": false,
+          "description": "Create a Teams meeting",
+          "type": "boolean"
+        },
+        "location": {
+          "description": "Event location",
+          "type": "string"
+        },
+        "start_time": {
+          "description": "ISO datetime (2026-08-21T09:00:00), or a relative expression resolved on the server: 'now', '+30m', '+2h', '+1d', or 'in 30 minutes'. Prefer the relative form for anything expressed relative to now - do NOT compute the clock time yourself. Read in `timezone`.",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Naive times are read in it, relative offsets are measured from now in it, and results come back in it. Pass the user's own zone; it defaults to UTC only when unknown.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Event title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "start_time"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_calendar/delete_event": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "event_id": {
+          "description": "Event ID to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_calendar/get_free_busy": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "emails": {
+          "description": "Email addresses to check, at most 20",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "end_time": {
+          "description": "Window end. ISO datetime (2026-08-21T09:00:00), or a relative expression resolved on the server: 'now', '+30m', '+2h', '+1d', or 'in 30 minutes'. Prefer the relative form for anything expressed relative to now - do NOT compute the clock time yourself. Read in `timezone`. A relative end is measured from the START. Defaults to 1 day after the start.",
+          "type": "string"
+        },
+        "interval_minutes": {
+          "default": 30,
+          "description": "Granularity of `availability_view`, one character per interval (default: 30)",
+          "type": "integer"
+        },
+        "start_time": {
+          "description": "Window start. ISO datetime (2026-08-21T09:00:00), or a relative expression resolved on the server: 'now', '+30m', '+2h', '+1d', or 'in 30 minutes'. Prefer the relative form for anything expressed relative to now - do NOT compute the clock time yourself. Read in `timezone`. Defaults to now.",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Naive times are read in it, relative offsets are measured from now in it, and results come back in it. Pass the user's own zone; it defaults to UTC only when unknown.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "emails"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_calendar/list_events": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "date": {
+          "description": "Start date YYYY-MM-DD (default: today in `timezone`)",
+          "type": "string"
+        },
+        "days": {
+          "default": 1,
+          "description": "Days to fetch (default: 1)",
+          "type": "integer"
+        },
+        "max_results": {
+          "default": 50,
+          "description": "Max events (default: 50)",
+          "type": "integer"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Naive times are read in it, relative offsets are measured from now in it, and results come back in it. Pass the user's own zone; it defaults to UTC only when unknown.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "outlook_calendar/update_event": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attendees": {
+          "description": "The COMPLETE guest list after the change, as email addresses. Replaces the existing list; omit to leave it untouched.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "description": "New body",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "description": "New length, as an alternative to end_time (requires start_time)",
+          "type": "integer"
+        },
+        "end_time": {
+          "description": "New end time.",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Event ID from list_events",
+          "type": "string"
+        },
+        "location": {
+          "description": "New location",
+          "type": "string"
+        },
+        "start_time": {
+          "description": "New start time.",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA timezone name.",
+          "type": "string"
+        },
+        "title": {
+          "description": "New title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_calendar/update_event_details": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attendees": {
+          "description": "The COMPLETE guest list after the change, as email addresses. Replaces the existing list; omit to leave it untouched.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "description": "New body",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Event ID from list_events",
+          "type": "string"
+        },
+        "is_online_meeting": {
+          "description": "Turn this event into (true) or out of (false) a Teams meeting",
+          "type": "boolean"
+        },
+        "location": {
+          "description": "New location",
+          "type": "string"
+        },
+        "title": {
+          "description": "New title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_calendar/update_event_time": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "duration_minutes": {
+          "description": "New length, as an alternative to end_time (requires start_time)",
+          "type": "integer"
+        },
+        "end_time": {
+          "description": "New end. ISO datetime (2026-08-21T09:00:00), or a relative expression resolved on the server: 'now', '+30m', '+2h', '+1d', or 'in 30 minutes'. Prefer the relative form for anything expressed relative to now - do NOT compute the clock time yourself. Read in `timezone`.",
+          "type": "string"
+        },
+        "event_id": {
+          "description": "Event ID from list_events",
+          "type": "string"
+        },
+        "start_time": {
+          "description": "ISO datetime (2026-08-21T09:00:00), or a relative expression resolved on the server: 'now', '+30m', '+2h', '+1d', or 'in 30 minutes'. Prefer the relative form for anything expressed relative to now - do NOT compute the clock time yourself. Read in `timezone`.",
+          "type": "string"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Naive times are read in it, relative offsets are measured from now in it, and results come back in it. Pass the user's own zone; it defaults to UTC only when unknown.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/create_draft": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachment_filename": {
+          "description": "Custom filename for the first URL's downloaded file",
+          "type": "string"
+        },
+        "attachment_urls": {
+          "description": "File URLs to attach (max 10)",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "attachments": {
+          "description": "Files to attach (max 10). Three accepted forms per item: (1) a platform file_id UUID or storage key as a plain string, (2) {\"file_id\": \"<uuid-or-key>\"}, or (3) a pre-fetched {filename, content_base64, content_type}. Forms 1 and 2 are replaced with form 3 by the platform before this tool runs, so pass the identifier as-is: never put it in `filename`, and never send an empty `content_base64`. DO NOT ENCODE `content_base64` YOURSELF. Form 3 exists for bytes the platform has already fetched, not for base64 you write: a hand-encoded attachment arrives as a file that opens and is silently corrupt. If you hold no file_id or storage key, send the mail without an attachment and say so - do not improvise one, and do not retype data from the conversation into a file.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "Platform file_id (UUID) or storage key",
+                "type": "string"
+              },
+              {
+                "properties": {
+                  "file_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_id"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "content_base64": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content_base64"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "body": {
+          "description": "Email body",
+          "type": "string"
+        },
+        "cc": {
+          "description": "CC recipients, comma-separated",
+          "type": "string"
+        },
+        "importance": {
+          "default": "normal",
+          "description": "Email importance level",
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "type": "string"
+        },
+        "is_html": {
+          "default": false,
+          "description": "Body is HTML",
+          "type": "boolean"
+        },
+        "subject": {
+          "description": "Email subject",
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipients, comma-separated",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "subject",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/delete_email": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/download_attachment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "attachment_id": {
+          "description": "Attachment ID returned by list_attachments",
+          "type": "string"
+        },
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to download from via app-only auth, instead of /me. Omit to use the signed-in user's own mailbox.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id",
+        "attachment_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/forward_email": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "comment": {
+          "default": "",
+          "description": "Comment above forwarded content",
+          "type": "string"
+        },
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipients, comma-separated",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id",
+        "to"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/get_email": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to read via app-only auth, instead of /me. Omit to read the signed-in user's own mailbox.",
+          "type": "string"
+        },
+        "mark_as_read": {
+          "default": false,
+          "description": "Mark as read after fetching",
+          "type": "boolean"
+        },
+        "strip_html": {
+          "default": false,
+          "description": "Strip HTML markup from the body before returning it (same cleanup get_email_thread already applies), so the 10000-char truncation budget covers actual message content instead of Outlook's boilerplate <style>/<div> markup. Default False preserves the original raw body for callers that render it.",
+          "type": "boolean"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/get_email_bodies": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "email_ids": {
+          "description": "Message IDs to fetch (max 10)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_body_length": {
+          "default": 3000,
+          "description": "Max body characters per email (default: 3000)",
+          "type": "integer"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_ids"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/get_email_thread": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "email_id": {
+          "description": "Message ID of any email in the thread (from list_emails, search_emails, etc.)",
+          "type": "string"
+        },
+        "max_body_length": {
+          "default": 3000,
+          "description": "Max body characters per message (default: 3000)",
+          "type": "integer"
+        },
+        "max_results": {
+          "default": 25,
+          "description": "Max messages to return (default: 25, max: 50)",
+          "type": "integer"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/get_my_manager": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "outlook_email/get_my_profile": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "outlook_email/get_unread_count": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folder": {
+          "default": "inbox",
+          "description": "Mail folder to check",
+          "enum": [
+            "inbox",
+            "drafts",
+            "sentitems",
+            "deleteditems",
+            "junkemail",
+            "archive",
+            "outbox"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "outlook_email/list_attachments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to list attachments via app-only auth, instead of /me. Omit to use the signed-in user's own mailbox.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/list_drafts": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "max_results": {
+          "default": 20,
+          "description": "Max drafts to return (default: 20, max: 100)",
+          "type": "integer"
+        },
+        "skip": {
+          "default": 0,
+          "description": "Number of items to skip for pagination (default: 0)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "outlook_email/list_email_headers": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folder": {
+          "default": "inbox",
+          "description": "Mail folder to list from",
+          "enum": [
+            "inbox",
+            "drafts",
+            "sentitems",
+            "deleteditems",
+            "junkemail",
+            "archive",
+            "outbox"
+          ],
+          "type": "string"
+        },
+        "max_results": {
+          "default": 100,
+          "description": "Max emails to return (default: 100, max: 100)",
+          "type": "integer"
+        },
+        "skip": {
+          "default": 0,
+          "description": "Number of items to skip for pagination (default: 0)",
+          "type": "integer"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        },
+        "unread_only": {
+          "default": false,
+          "description": "Only unread emails",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "outlook_email/list_emails": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folder": {
+          "default": "inbox",
+          "description": "Mail folder to list from",
+          "enum": [
+            "inbox",
+            "drafts",
+            "sentitems",
+            "deleteditems",
+            "junkemail",
+            "archive",
+            "outbox"
+          ],
+          "type": "string"
+        },
+        "max_results": {
+          "default": 20,
+          "description": "Max emails to return (default: 20, max: 100)",
+          "type": "integer"
+        },
+        "skip": {
+          "default": 0,
+          "description": "Number of items to skip for pagination (default: 0)",
+          "type": "integer"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        },
+        "unread_only": {
+          "default": false,
+          "description": "Only unread emails",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "outlook_email/list_folders": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "max_results": {
+          "default": 50,
+          "description": "Max folders to return (default: 50, max: 100)",
+          "type": "integer"
+        },
+        "skip": {
+          "default": 0,
+          "description": "Number of items to skip for pagination (default: 0)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "outlook_email/list_mailbox_subscriptions": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "outlook_email/mark_emails": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "email_ids": {
+          "description": "List of message IDs from list_emails or search_emails (max 50)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "is_read": {
+          "description": "true=mark read, false=mark unread",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "email_ids",
+        "is_read"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/match_emails": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folder": {
+          "default": "inbox",
+          "description": "Mail folder to search",
+          "enum": [
+            "inbox",
+            "drafts",
+            "sentitems",
+            "deleteditems",
+            "junkemail",
+            "archive",
+            "outbox"
+          ],
+          "type": "string"
+        },
+        "max_results": {
+          "default": 100,
+          "description": "Number of recent emails to scan (default: 100, max: 100)",
+          "type": "integer"
+        },
+        "min_score": {
+          "default": 50,
+          "description": "Minimum fuzzy match score 0-100 (default: 50)",
+          "type": "integer"
+        },
+        "search_terms": {
+          "description": "Terms to fuzzy-match against email subject and sender",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "search_terms"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/move_email": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "destination_folder": {
+          "description": "Well-known folder name (inbox, archive, deleteditems, junkemail) or folder ID from list_folders",
+          "type": "string"
+        },
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id",
+        "destination_folder"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/read_attachment": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "attachment_id": {
+          "description": "Attachment ID returned by list_attachments",
+          "type": "string"
+        },
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to read from (app-only). Omit for the signed-in user's own mailbox.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "email_id",
+        "attachment_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/renew_mailbox_subscription": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "expiration_hours": {
+          "default": 70,
+          "description": "New lifetime in hours from now (default: 70)",
+          "type": "integer"
+        },
+        "subscription_id": {
+          "description": "Subscription id to renew",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscription_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/reply_email": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachment_filename": {
+          "description": "Custom filename for the first URL's downloaded file",
+          "type": "string"
+        },
+        "attachment_urls": {
+          "description": "URLs to fetch and attach (max 10, 25MB each)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "attachments": {
+          "description": "Files to attach (max 10). Three accepted forms per item: (1) a platform file_id UUID or storage key as a plain string, (2) {\"file_id\": \"<uuid-or-key>\"}, or (3) a pre-fetched {filename, content_base64, content_type}. Forms 1 and 2 are replaced with form 3 by the platform before this tool runs, so pass the identifier as-is: never put it in `filename`, and never send an empty `content_base64`. DO NOT ENCODE `content_base64` YOURSELF. Form 3 exists for bytes the platform has already fetched, not for base64 you write: a hand-encoded attachment arrives as a file that opens and is silently corrupt. If you hold no file_id or storage key, send the mail without an attachment and say so - do not improvise one, and do not retype data from the conversation into a file.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "Platform file_id (UUID) or storage key",
+                "type": "string"
+              },
+              {
+                "properties": {
+                  "file_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_id"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "content_base64": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content_base64"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "bcc": {
+          "default": "",
+          "description": "Extra BCC recipients, comma-separated",
+          "type": "string"
+        },
+        "body": {
+          "description": "Reply body content",
+          "type": "string"
+        },
+        "cc": {
+          "default": "",
+          "description": "Extra CC recipients, comma-separated",
+          "type": "string"
+        },
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "is_html": {
+          "default": false,
+          "description": "Body is HTML",
+          "type": "boolean"
+        },
+        "reply_all": {
+          "default": false,
+          "description": "Reply to all recipients",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "email_id",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/search_emails": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folder": {
+          "description": "Folder to search in (default: all folders)",
+          "enum": [
+            "inbox",
+            "drafts",
+            "sentitems",
+            "deleteditems",
+            "junkemail",
+            "archive",
+            "outbox"
+          ],
+          "type": "string"
+        },
+        "max_results": {
+          "default": 20,
+          "description": "Max results (default: 20, max: 100)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "KQL search query",
+          "type": "string"
+        },
+        "skip": {
+          "default": 0,
+          "description": "Number of items to skip for pagination (default: 0)",
+          "type": "integer"
+        },
+        "timezone": {
+          "description": "IANA timezone for this call, e.g. 'Asia/Dubai'. Email dates are returned in it. Pass the user's own zone; it falls back to UTC when unknown or invalid.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/send_draft": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "draft_id": {
+          "description": "Draft message ID returned by create_draft or list_drafts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "draft_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/send_email": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachment_filename": {
+          "description": "Custom filename for the first URL's downloaded file",
+          "type": "string"
+        },
+        "attachment_urls": {
+          "description": "File URLs to attach (max 10)",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "attachments": {
+          "description": "Files to attach (max 10). Three accepted forms per item: (1) a platform file_id UUID or storage key as a plain string, (2) {\"file_id\": \"<uuid-or-key>\"}, or (3) a pre-fetched {filename, content_base64, content_type}. Forms 1 and 2 are replaced with form 3 by the platform before this tool runs, so pass the identifier as-is: never put it in `filename`, and never send an empty `content_base64`. DO NOT ENCODE `content_base64` YOURSELF. Form 3 exists for bytes the platform has already fetched, not for base64 you write: a hand-encoded attachment arrives as a file that opens and is silently corrupt. If you hold no file_id or storage key, send the mail without an attachment and say so - do not improvise one, and do not retype data from the conversation into a file.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "Platform file_id (UUID) or storage key",
+                "type": "string"
+              },
+              {
+                "properties": {
+                  "file_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_id"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "content_base64": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content_base64"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "bcc": {
+          "description": "BCC recipients, comma-separated",
+          "type": "string"
+        },
+        "body": {
+          "description": "Email body (HTML supported)",
+          "type": "string"
+        },
+        "cc": {
+          "description": "CC recipients, comma-separated",
+          "type": "string"
+        },
+        "importance": {
+          "default": "normal",
+          "description": "Email importance level",
+          "enum": [
+            "low",
+            "normal",
+            "high"
+          ],
+          "type": "string"
+        },
+        "is_html": {
+          "default": false,
+          "description": "Body is HTML",
+          "type": "boolean"
+        },
+        "save_to_sent": {
+          "default": true,
+          "description": "Save to Sent Items",
+          "type": "boolean"
+        },
+        "subject": {
+          "description": "Email subject",
+          "type": "string"
+        },
+        "to": {
+          "description": "Recipient(s), comma-separated",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "subject",
+        "body"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/stop_watching_mailbox": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "subscription_id": {
+          "description": "Subscription id to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscription_id"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/watch_mailbox": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "additionalProperties": false,
+      "properties": {
+        "client_state": {
+          "description": "Anti-forgery secret Graph echoes back on every notification",
+          "type": "string"
+        },
+        "expiration_hours": {
+          "default": 70,
+          "description": "Subscription lifetime in hours (default: 70, Graph caps at ~70.5h for mail)",
+          "type": "integer"
+        },
+        "mailbox": {
+          "description": "Mailbox address to watch",
+          "type": "string"
+        },
+        "notification_url": {
+          "description": "Public HTTPS URL Graph sends notifications to",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mailbox",
+        "notification_url",
+        "client_state"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_add_contacts_bulk": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "contact_list_id": {
+          "type": "string"
+        },
+        "contacts": {
+          "items": {
+            "properties": {
+              "custom_fields": {
+                "type": "object"
+              },
+              "email": {
+                "type": "string"
+              },
+              "first_name": {
+                "type": "string"
+              },
+              "last_name": {
+                "type": "string"
+              },
+              "phone_number": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "first_name",
+              "last_name"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "update_existing": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contact_list_id",
+        "contacts"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_add_message_recipients": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "collector_id": {
+          "type": "string"
+        },
+        "contact_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "contact_list_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "contacts": {
+          "description": "Raw contact info for people not already in the address book.",
+          "items": {
+            "properties": {
+              "email": {
+                "type": "string"
+              },
+              "first_name": {
+                "type": "string"
+              },
+              "last_name": {
+                "type": "string"
+              },
+              "phone_number": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "message_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "collector_id",
+        "message_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_add_page": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_add_question": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "choices": {
+          "description": "Answer options in order. Required for single_choice/multiple_choice.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "heading": {
+          "description": "The question text. Required for every type except 'advanced'.",
+          "type": "string"
+        },
+        "high_label": {
+          "description": "rating_scale only: caption for the highest point.",
+          "type": "string"
+        },
+        "low_label": {
+          "description": "rating_scale only: caption for the lowest point.",
+          "type": "string"
+        },
+        "page_id": {
+          "type": "string"
+        },
+        "question": {
+          "description": "type='advanced' only: raw SurveyMonkey question body (family, subtype, headings, answers, ...).",
+          "type": "object"
+        },
+        "required": {
+          "default": false,
+          "type": "boolean"
+        },
+        "scale_max": {
+          "default": 5,
+          "description": "rating_scale only: number of points, e.g. 5 or 10.",
+          "type": "integer"
+        },
+        "style": {
+          "description": "rating_scale only: render as a star/emoji rating instead of numbers.",
+          "enum": [
+            "star",
+            "smiley",
+            "heart",
+            "thumb"
+          ],
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "single_choice",
+            "multiple_choice",
+            "short_text",
+            "long_text",
+            "rating_scale",
+            "advanced"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "page_id",
+        "type"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_create_collector": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "allow_multiple_responses": {
+          "description": "Let the same browser/device respond more than once. Not available for email collectors.",
+          "type": "boolean"
+        },
+        "anonymous_type": {
+          "description": "Turns off IP tracking; 'fully_anonymous' on an email collector also strips respondent identity.",
+          "enum": [
+            "not_anonymous",
+            "partially_anonymous",
+            "fully_anonymous"
+          ],
+          "type": "string"
+        },
+        "close_date": {
+          "description": "ISO 8601. Collector auto-closes at this time.",
+          "type": "string"
+        },
+        "closed_page_message": {
+          "description": "Shown to respondents once closed.",
+          "type": "string"
+        },
+        "display_survey_results": {
+          "description": "Show respondents instant results after they complete the survey.",
+          "type": "boolean"
+        },
+        "disqualification_message": {
+          "type": "string"
+        },
+        "disqualification_url": {
+          "description": "Redirect here on disqualification.",
+          "type": "string"
+        },
+        "edit_response_type": {
+          "description": "When respondents can edit their submitted response.",
+          "enum": [
+            "until_complete",
+            "never",
+            "always"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "description": "Collector display name.",
+          "type": "string"
+        },
+        "password": {
+          "description": "Require a password to access the survey.",
+          "type": "string"
+        },
+        "redirect_type": {
+          "description": "'url' uses redirect_url, 'close' closes the tab, 'loop' restarts the survey (weblink + allow_multiple_responses only).",
+          "enum": [
+            "url",
+            "close",
+            "loop"
+          ],
+          "type": "string"
+        },
+        "redirect_url": {
+          "description": "Redirect respondents here on completion.",
+          "type": "string"
+        },
+        "response_limit": {
+          "description": "Auto-close after this many responses.",
+          "type": "integer"
+        },
+        "sender_email": {
+          "description": "Sender address for email collectors.",
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "thank_you_message": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "weblink",
+            "email",
+            "sms",
+            "popup_invitation",
+            "embedded_survey",
+            "popup_survey"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "type"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_create_contact_list": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_create_folder": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "title": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_create_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "body_html": {
+          "type": "string"
+        },
+        "body_text": {
+          "type": "string"
+        },
+        "collector_id": {
+          "type": "string"
+        },
+        "is_branding_enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "subject": {
+          "description": "Default: 'We want your opinion'.",
+          "type": "string"
+        },
+        "type": {
+          "default": "invite",
+          "enum": [
+            "invite",
+            "reminder",
+            "thank_you",
+            "sms"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "collector_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_create_survey": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "folder_id": {
+          "type": "string"
+        },
+        "from_survey_id": {
+          "type": "string"
+        },
+        "from_template_id": {
+          "type": "string"
+        },
+        "language": {
+          "description": "ISO 639-1 code, default 'en'.",
+          "type": "string"
+        },
+        "title": {
+          "description": "Default: 'New Survey'.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_create_webhook": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "event_type": {
+          "enum": [
+            "response_completed",
+            "response_updated",
+            "response_disqualified",
+            "response_created",
+            "response_deleted",
+            "response_overquota",
+            "collector_created",
+            "collector_updated",
+            "collector_deleted",
+            "survey_created",
+            "survey_updated",
+            "survey_deleted"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "object_ids": {
+          "description": "Survey or collector ids to filter on. Omit for survey_created.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "object_type": {
+          "description": "Omit for survey_created.",
+          "enum": [
+            "survey",
+            "collector"
+          ],
+          "type": "string"
+        },
+        "subscription_url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "event_type",
+        "subscription_url"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_delete_collector": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "collector_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "collector_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_delete_page": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "page_id": {
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "page_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_delete_question": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "page_id": {
+          "type": "string"
+        },
+        "question_id": {
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "page_id",
+        "question_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_delete_survey": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_delete_webhook": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "webhook_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "webhook_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_get_message_stats": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "collector_id": {
+          "type": "string"
+        },
+        "message_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "collector_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_get_response_detail": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "response_id": {
+          "type": "string"
+        },
+        "simple": {
+          "default": true,
+          "description": "Include question/answer text, not just ids.",
+          "type": "boolean"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "response_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_get_response_summary": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "collector_ids": {
+          "description": "Only include responses from these collector ids.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "custom": {
+          "description": "Filter by SurveyMonkey's custom_value field on the response.",
+          "type": "string"
+        },
+        "email": {
+          "description": "Filter to one respondent's email (email collectors only).",
+          "type": "string"
+        },
+        "end_created_at": {
+          "description": "ISO 8601. Response started before this.",
+          "type": "string"
+        },
+        "end_modified_at": {
+          "description": "ISO 8601. Response last modified before this.",
+          "type": "string"
+        },
+        "first_name": {
+          "description": "Filter by respondent first name (email collectors only).",
+          "type": "string"
+        },
+        "ip": {
+          "description": "Filter to responses from this IP address.",
+          "type": "string"
+        },
+        "last_name": {
+          "description": "Filter by respondent last name (email collectors only).",
+          "type": "string"
+        },
+        "start_created_at": {
+          "description": "ISO 8601. Response started after this.",
+          "type": "string"
+        },
+        "start_modified_at": {
+          "description": "ISO 8601. Response last modified after this.",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "partial",
+            "overquota",
+            "disqualified"
+          ],
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "total_time_max": {
+          "description": "Only responses that took at most this long.",
+          "type": "integer"
+        },
+        "total_time_min": {
+          "description": "Only responses that took at least this long.",
+          "type": "integer"
+        },
+        "total_time_units": {
+          "description": "Unit for total_time_min/total_time_max. Default seconds.",
+          "enum": [
+            "second",
+            "minute",
+            "hour"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_get_responses_bulk": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "collector_ids": {
+          "description": "Only include responses from these collector ids.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "custom": {
+          "description": "Filter by SurveyMonkey's custom_value field on the response.",
+          "type": "string"
+        },
+        "email": {
+          "description": "Filter to one respondent's email (email collectors only).",
+          "type": "string"
+        },
+        "end_created_at": {
+          "description": "ISO 8601. Response started before this.",
+          "type": "string"
+        },
+        "end_modified_at": {
+          "description": "ISO 8601. Response last modified before this.",
+          "type": "string"
+        },
+        "first_name": {
+          "description": "Filter by respondent first name (email collectors only).",
+          "type": "string"
+        },
+        "ip": {
+          "description": "Filter to responses from this IP address.",
+          "type": "string"
+        },
+        "last_name": {
+          "description": "Filter by respondent last name (email collectors only).",
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "page_ids": {
+          "description": "Only include answers from these survey pages. Default: all pages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "per_page": {
+          "default": 50,
+          "description": "Max 100.",
+          "type": "integer"
+        },
+        "question_ids": {
+          "description": "Only include answers to these questions. Default: all questions.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "simple": {
+          "default": true,
+          "description": "Include question/answer text, not just ids.",
+          "type": "boolean"
+        },
+        "sort_by": {
+          "enum": [
+            "date_modified"
+          ],
+          "type": "string"
+        },
+        "sort_order": {
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "type": "string"
+        },
+        "start_created_at": {
+          "description": "ISO 8601. Response started after this.",
+          "type": "string"
+        },
+        "start_modified_at": {
+          "description": "ISO 8601. Response last modified after this.",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "partial",
+            "overquota",
+            "disqualified"
+          ],
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "total_time_max": {
+          "description": "Only responses that took at most this long.",
+          "type": "integer"
+        },
+        "total_time_min": {
+          "description": "Only responses that took at least this long.",
+          "type": "integer"
+        },
+        "total_time_units": {
+          "description": "Unit for total_time_min/total_time_max. Default seconds.",
+          "enum": [
+            "second",
+            "minute",
+            "hour"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_get_survey_details": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "survey_id": {
+          "description": "Survey id from surveymonkey_list_surveys.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_collectors": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "end_date": {
+          "description": "ISO 8601. Only collectors created before this.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Filter by collector name.",
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        },
+        "sort_by": {
+          "enum": [
+            "id",
+            "date_modified",
+            "type",
+            "status",
+            "name"
+          ],
+          "type": "string"
+        },
+        "sort_order": {
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "type": "string"
+        },
+        "start_date": {
+          "description": "ISO 8601. Only collectors created after this.",
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_contact_fields": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_contact_lists": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_contacts": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "contact_list_id": {
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        },
+        "search": {
+          "type": "string"
+        },
+        "search_by": {
+          "enum": [
+            "email",
+            "first_name",
+            "last_name",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ],
+          "type": "string"
+        },
+        "sort_by": {
+          "enum": [
+            "email",
+            "first_name",
+            "last_name",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ],
+          "type": "string"
+        },
+        "sort_order": {
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "optout",
+            "bounced"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "contact_list_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_folders": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_pages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_questions": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "page_id": {
+          "type": "string"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "page_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_recipients": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "collector_id": {
+          "type": "string"
+        },
+        "include": {
+          "description": "Fields to include per recipient. Default: survey_response_status, mail_status. Options: ('survey_response_status', 'mail_status', 'custom_fields', 'remove_link', 'extra_fields', 'survey_link').",
+          "items": {
+            "enum": [
+              "survey_response_status",
+              "mail_status",
+              "custom_fields",
+              "remove_link",
+              "extra_fields",
+              "survey_link"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "collector_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_responses": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "collector_ids": {
+          "description": "Only include responses from these collector ids.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "custom": {
+          "description": "Filter by SurveyMonkey's custom_value field on the response.",
+          "type": "string"
+        },
+        "email": {
+          "description": "Filter to one respondent's email (email collectors only).",
+          "type": "string"
+        },
+        "end_created_at": {
+          "description": "ISO 8601. Response started before this.",
+          "type": "string"
+        },
+        "end_modified_at": {
+          "description": "ISO 8601. Response last modified before this.",
+          "type": "string"
+        },
+        "first_name": {
+          "description": "Filter by respondent first name (email collectors only).",
+          "type": "string"
+        },
+        "ip": {
+          "description": "Filter to responses from this IP address.",
+          "type": "string"
+        },
+        "last_name": {
+          "description": "Filter by respondent last name (email collectors only).",
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "page_ids": {
+          "description": "Only include answers from these survey pages. Default: all pages.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        },
+        "question_ids": {
+          "description": "Only include answers to these questions. Default: all questions.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sort_by": {
+          "enum": [
+            "date_modified"
+          ],
+          "type": "string"
+        },
+        "sort_order": {
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "type": "string"
+        },
+        "start_created_at": {
+          "description": "ISO 8601. Response started after this.",
+          "type": "string"
+        },
+        "start_modified_at": {
+          "description": "ISO 8601. Response last modified after this.",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "completed",
+            "partial",
+            "overquota",
+            "disqualified"
+          ],
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "total_time_max": {
+          "description": "Only responses that took at most this long.",
+          "type": "integer"
+        },
+        "total_time_min": {
+          "description": "Only responses that took at least this long.",
+          "type": "integer"
+        },
+        "total_time_units": {
+          "description": "Unit for total_time_min/total_time_max. Default seconds.",
+          "enum": [
+            "second",
+            "minute",
+            "hour"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_survey_templates": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "category": {
+          "description": "Filter by category id (see survey_categories in SurveyMonkey's docs).",
+          "type": "string"
+        },
+        "language": {
+          "description": "ISO 639-1 code, default 'en'.",
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_surveys": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "folder_id": {
+          "description": "Only return surveys in this folder.",
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "description": "Max 1000.",
+          "type": "integer"
+        },
+        "sort_by": {
+          "enum": [
+            "title",
+            "date_modified",
+            "num_responses"
+          ],
+          "type": "string"
+        },
+        "sort_order": {
+          "enum": [
+            "ASC",
+            "DESC"
+          ],
+          "type": "string"
+        },
+        "title": {
+          "description": "Filter by (partial) survey title.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_list_webhooks": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_search_question_bank": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "locale": {
+          "description": "e.g. en_US. Default en_US.",
+          "type": "string"
+        },
+        "page": {
+          "default": 1,
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "type": "integer"
+        },
+        "search": {
+          "description": "Free-text search query.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_send_message": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "collector_id": {
+          "type": "string"
+        },
+        "message_id": {
+          "type": "string"
+        },
+        "scheduled_date": {
+          "description": "ISO 8601. Omit to send immediately.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "collector_id",
+        "message_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_update_collector": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "allow_multiple_responses": {
+          "description": "Let the same browser/device respond more than once. Not available for email collectors.",
+          "type": "boolean"
+        },
+        "anonymous_type": {
+          "description": "Turns off IP tracking; 'fully_anonymous' on an email collector also strips respondent identity.",
+          "enum": [
+            "not_anonymous",
+            "partially_anonymous",
+            "fully_anonymous"
+          ],
+          "type": "string"
+        },
+        "close_date": {
+          "description": "ISO 8601. Collector auto-closes at this time.",
+          "type": "string"
+        },
+        "closed_page_message": {
+          "description": "Shown to respondents once closed.",
+          "type": "string"
+        },
+        "collector_id": {
+          "type": "string"
+        },
+        "display_survey_results": {
+          "description": "Show respondents instant results after they complete the survey.",
+          "type": "boolean"
+        },
+        "disqualification_message": {
+          "type": "string"
+        },
+        "disqualification_url": {
+          "description": "Redirect here on disqualification.",
+          "type": "string"
+        },
+        "edit_response_type": {
+          "description": "When respondents can edit their submitted response.",
+          "enum": [
+            "until_complete",
+            "never",
+            "always"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "description": "Collector display name.",
+          "type": "string"
+        },
+        "password": {
+          "description": "Require a password to access the survey.",
+          "type": "string"
+        },
+        "redirect_type": {
+          "description": "'url' uses redirect_url, 'close' closes the tab, 'loop' restarts the survey (weblink + allow_multiple_responses only).",
+          "enum": [
+            "url",
+            "close",
+            "loop"
+          ],
+          "type": "string"
+        },
+        "redirect_url": {
+          "description": "Redirect respondents here on completion.",
+          "type": "string"
+        },
+        "response_limit": {
+          "description": "Auto-close after this many responses.",
+          "type": "integer"
+        },
+        "sender_email": {
+          "description": "Sender address for email collectors.",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "closed"
+          ],
+          "type": "string"
+        },
+        "thank_you_message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "collector_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_update_page": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "page_id": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "page_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_update_question": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "choices": {
+          "description": "Replaces the answer choices for a single/multiple choice question.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "heading": {
+          "type": "string"
+        },
+        "page_id": {
+          "type": "string"
+        },
+        "question": {
+          "description": "Raw partial SurveyMonkey question body, for changes the other fields don't cover.",
+          "type": "object"
+        },
+        "question_id": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "survey_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id",
+        "page_id",
+        "question_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_update_survey": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "folder_id": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "nickname": {
+          "type": "string"
+        },
+        "survey_id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "survey_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_update_webhook": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "event_type": {
+          "enum": [
+            "response_completed",
+            "response_updated",
+            "response_disqualified",
+            "response_created",
+            "response_deleted",
+            "response_overquota",
+            "collector_created",
+            "collector_updated",
+            "collector_deleted",
+            "survey_created",
+            "survey_updated",
+            "survey_deleted"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "object_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "object_type": {
+          "enum": [
+            "survey",
+            "collector"
+          ],
+          "type": "string"
+        },
+        "subscription_url": {
+          "type": "string"
+        },
+        "webhook_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "webhook_id"
+      ],
+      "type": "object"
+    }
+  },
+  "surveymonkey/surveymonkey_whoami": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "trino/trino_list_catalogs": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "trino/trino_list_schemas": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "catalog": {
+          "description": "Catalog name to list schemas from (e.g. hive, postgresql)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "catalog"
+      ],
+      "type": "object"
+    }
+  },
+  "trino/trino_list_tables": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "catalog": {
+          "description": "Catalog name (e.g. hive, postgresql)",
+          "type": "string"
+        },
+        "schema": {
+          "description": "Schema name (e.g. public, sales)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "catalog",
+        "schema"
+      ],
+      "type": "object"
+    }
+  },
+  "trino/trino_query": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "query": {
+          "description": "SQL query to run on Trino. Use fully qualified names: catalog.schema.table",
+          "type": "string"
+        },
+        "row_limit": {
+          "default": 100,
+          "description": "Max rows to return (1\u20135000, default 100)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "trino/trino_table_schema": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "catalog": {
+          "description": "Catalog name",
+          "type": "string"
+        },
+        "schema": {
+          "description": "Schema name",
+          "type": "string"
+        },
+        "table": {
+          "description": "Table name to inspect",
+          "type": "string"
+        }
+      },
+      "required": [
+        "catalog",
+        "schema",
+        "table"
+      ],
+      "type": "object"
+    }
+  },
+  "twitter_intel/get_account_tweets": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "accounts": {
+          "description": "Twitter handles without @, e.g. ['openai', 'anthropicai']. Omit to use the Default Accounts list configured on the platform connection.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hours_back": {
+          "default": 24,
+          "description": "Only tweets from the last N hours (default 24, 0 = no limit)",
+          "type": "number"
+        },
+        "include_replies": {
+          "default": false,
+          "description": "Include the accounts' replies (default false)",
+          "type": "boolean"
+        },
+        "include_retweets": {
+          "default": true,
+          "description": "Include the accounts' retweets (default true)",
+          "type": "boolean"
+        },
+        "max_results": {
+          "default": 50,
+          "description": "Maximum tweets per batch of 10 accounts (default 50, max 100)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "twitter_intel/get_tweet_thread": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "max_replies": {
+          "default": 20,
+          "description": "Maximum replies to fetch (default 20, max 100)",
+          "type": "integer"
+        },
+        "tweet_id": {
+          "description": "The tweet ID (the number at the end of a tweet URL)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tweet_id"
+      ],
+      "type": "object"
+    }
+  },
+  "twitter_intel/search_ai_trends": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "hours_back": {
+          "default": 24,
+          "description": "Look-back window in hours (default 24)",
+          "type": "number"
+        },
+        "language": {
+          "default": "en",
+          "description": "Language filter (default 'en', '' = any)",
+          "type": "string"
+        },
+        "lens": {
+          "default": "tech",
+          "description": "Curated topic set to use: tech = models/tooling/research, business = enterprise adoption/strategy/analyst calls, marketing = AI in marketing/ads/content (default tech). Ignored when topic is set.",
+          "enum": [
+            "tech",
+            "business",
+            "marketing"
+          ],
+          "type": "string"
+        },
+        "max_results": {
+          "default": 30,
+          "description": "Maximum tweets to return (default 30, max 100)",
+          "type": "integer"
+        },
+        "min_likes": {
+          "default": 100,
+          "description": "Minimum likes for a tweet to qualify (default 100)",
+          "type": "integer"
+        },
+        "topic": {
+          "default": "",
+          "description": "Optional custom topic, e.g. 'multimodal models' or 'AI coding agents'. Overrides lens when set.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "twitter_intel/search_tweets": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "hours_back": {
+          "default": 0,
+          "description": "Only tweets from the last N hours. 0 (default) = no time filter. Ignored if the query already contains since/until operators.",
+          "type": "number"
+        },
+        "max_results": {
+          "default": 30,
+          "description": "Maximum tweets to return (default 30, max 100)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Advanced search query, e.g. 'from:openai' or '\"AI agents\" min_faves:500 lang:en'",
+          "type": "string"
+        },
+        "query_type": {
+          "default": "Latest",
+          "description": "Latest = chronological, Top = highest engagement (default Latest)",
+          "enum": [
+            "Latest",
+            "Top"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "web_search/perplexity_search": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "country": {
+          "description": "ISO 3166-1 alpha-2 country code, e.g. 'US', 'GB'",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 10,
+          "description": "Max results to return (1-20, default 10)",
+          "type": "integer"
+        },
+        "max_tokens_per_page": {
+          "default": 4096,
+          "description": "Max tokens of content extracted per page (default 4096)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query \u2014 a single string or up to 5 strings for batch",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 5,
+              "type": "array"
+            }
+          ]
+        },
+        "search_after_date_filter": {
+          "description": "Results published after this date (MM/DD/YYYY)",
+          "type": "string"
+        },
+        "search_before_date_filter": {
+          "description": "Results published before this date (MM/DD/YYYY)",
+          "type": "string"
+        },
+        "search_domain_filter": {
+          "description": "Up to 20 domains. Use plain domain for allowlist or '-domain' prefix for denylist \u2014 do not mix",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "search_language_filter": {
+          "description": "ISO 639-1 language codes to restrict results to",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "search_recency_filter": {
+          "description": "Recency filter",
+          "enum": [
+            "hour",
+            "day",
+            "week",
+            "month",
+            "year"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "web_search/scrape_url": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "extra_args": {
+          "description": "Optional Chromium flags forwarded to Crawl4AI's BrowserConfig.extra_args. Used by KB ingestion to pin DNS via --host-resolver-rules as SSRF defense-in-depth. Ignored when return_full=false.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_chars": {
+          "default": 8000,
+          "description": "Max characters to return, stopping at the last full stop (default 8000). Ignored when return_full=true.",
+          "type": "integer"
+        },
+        "return_full": {
+          "default": false,
+          "description": "When true, return the full markdown plus parsed links, title, status code, and final post-redirect URL. Used by KB URL ingestion to enable multi-page BFS crawl. Defaults to false for backwards compatibility with search flows.",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "The URL to scrape",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  },
+  "web_search/search_web": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "categories": {
+          "description": "Optional list of categories to use (default: general)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "engines": {
+          "description": "Optional list of engines to use (reduces requests when set)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "language": {
+          "default": "en",
+          "description": "Language code for results, e.g. 'en', 'de', 'fr' (default 'en')",
+          "type": "string"
+        },
+        "num_results": {
+          "default": 10,
+          "description": "Maximum number of results to return (default 10, max 50)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query",
+          "type": "string"
+        },
+        "region": {
+          "description": "Region code to pair with language, e.g. 'US' (optional)",
+          "type": "string"
+        },
+        "safe_search": {
+          "default": 1,
+          "description": "Safe search level: 0 (off), 1 (moderate), 2 (strict) (default 1)",
+          "type": "integer"
+        },
+        "time_range": {
+          "default": "",
+          "description": "Recency filter: day, week, month, or year. Omit (default) for ALL-TIME results - use a range ONLY for time-sensitive queries like latest news. For person/company/definition/evergreen lookups do NOT set this, or good older pages get filtered out.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "web_search/serper_search": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "country": {
+          "default": "us",
+          "description": "Country code for results, e.g. 'us', 'in', 'gb' (default 'us')",
+          "type": "string"
+        },
+        "language": {
+          "default": "en",
+          "description": "Language code, e.g. 'en', 'hi', 'de' (default 'en')",
+          "type": "string"
+        },
+        "location": {
+          "description": "Specific location for results, e.g. 'New York' (optional)",
+          "type": "string"
+        },
+        "num_results": {
+          "default": 10,
+          "description": "Number of results to return (default 10, max 100)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query",
+          "type": "string"
+        },
+        "search_type": {
+          "default": "search",
+          "description": "Type of search (default: search)",
+          "enum": [
+            "search",
+            "news",
+            "images",
+            "videos",
+            "scholar"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "zoom/create_meeting": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "agenda": {
+          "description": "Meeting description/agenda (optional)",
+          "type": "string"
+        },
+        "duration": {
+          "default": 60,
+          "description": "Duration in minutes (default 60)",
+          "type": "integer"
+        },
+        "start_time": {
+          "description": "Start time in ISO 8601 UTC format (e.g. '2026-04-10T14:00:00Z')",
+          "type": "string"
+        },
+        "topic": {
+          "description": "Meeting title (e.g. 'Consultation with John Doe')",
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "start_time"
+      ],
+      "type": "object"
+    }
+  },
+  "zoom/delete_meeting": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "meeting_id": {
+          "description": "The Zoom meeting ID (e.g. 82345678901), as a number or string",
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "meeting_id"
+      ],
+      "type": "object"
+    }
+  },
+  "zoom/get_meeting": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "meeting_id": {
+          "description": "The Zoom meeting ID (e.g. 82345678901), as a number or string",
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "meeting_id"
+      ],
+      "type": "object"
+    }
+  }
+}
