@@ -91,7 +91,9 @@ line-length = 100
 target-version = "py310"
 # Ported connector code is generated, and its bodies are carried across from v1
 # unchanged on purpose: reformatting them would defeat the property that makes
-# the port reviewable, which is that the body is the body.
+# the port reviewable, which is that the body is the body. Their real gate is
+# scripts/port_status.py, which counts unresolved names and only lets that
+# number fall.
 extend-exclude = ["connectors"]
 
 [tool.ruff.lint]
