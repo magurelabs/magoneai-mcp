@@ -1,0 +1,12 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.magurelabs/google-gmail",
+  "description": "List, read and send Gmail messages.",
+  "version": "2.0.0",
+  "websiteUrl": "https://github.com/magurelabs/magoneai-mcp/tree/main/connectors/google_gmail",
+  "repository": {
+    "url": "https://github.com/magurelabs/magoneai-mcp",
+    "source": "github",
+    "subfolder": "connectors/google_gmail"
+  }
+}

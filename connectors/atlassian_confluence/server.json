@@ -1,0 +1,12 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.magurelabs/atlassian-confluence",
+  "description": "Read and write Confluence pages, blog posts, comments, labels and attachments.",
+  "version": "2.0.0",
+  "websiteUrl": "https://github.com/magurelabs/magoneai-mcp/tree/main/connectors/atlassian_confluence",
+  "repository": {
+    "url": "https://github.com/magurelabs/magoneai-mcp",
+    "source": "github",
+    "subfolder": "connectors/atlassian_confluence"
+  }
+}

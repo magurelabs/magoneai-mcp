@@ -1,0 +1,12 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.magurelabs/database",
+  "description": "Query and modify PostgreSQL, MySQL, SQL Server, Oracle or MongoDB databases.",
+  "version": "2.0.0",
+  "websiteUrl": "https://github.com/magurelabs/magoneai-mcp/tree/main/connectors/database",
+  "repository": {
+    "url": "https://github.com/magurelabs/magoneai-mcp",
+    "source": "github",
+    "subfolder": "connectors/database"
+  }
+}

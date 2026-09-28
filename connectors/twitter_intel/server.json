@@ -1,0 +1,12 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.magurelabs/twitter-intel",
+  "description": "Search tweets, read threads and follow an account's recent activity.",
+  "version": "2.0.0",
+  "websiteUrl": "https://github.com/magurelabs/magoneai-mcp/tree/main/connectors/twitter_intel",
+  "repository": {
+    "url": "https://github.com/magurelabs/magoneai-mcp",
+    "source": "github",
+    "subfolder": "connectors/twitter_intel"
+  }
+}

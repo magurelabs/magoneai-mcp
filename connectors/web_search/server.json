@@ -1,0 +1,12 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.magurelabs/web-search",
+  "description": "Search the web and fetch a page's readable text.",
+  "version": "2.0.0",
+  "websiteUrl": "https://github.com/magurelabs/magoneai-mcp/tree/main/connectors/web_search",
+  "repository": {
+    "url": "https://github.com/magurelabs/magoneai-mcp",
+    "source": "github",
+    "subfolder": "connectors/web_search"
+  }
+}

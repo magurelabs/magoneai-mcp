@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Publication status per connector, enforced by scripts/publication_gate.py.",
+    "",
+    "Every connector needs an entry, so adding one is a decision somebody makes",
+    "rather than a default somebody inherits. `blocked` connectors must not",
+    "carry a server.json: that file is the publication manifest, and its",
+    "presence is what a publishing pipeline keys on.",
+    "",
+    "`ready` means the connector satisfies the rule in README.md: it talks to",
+    "somebody else's API, with the caller's own credentials and storage, and",
+    "works the same on a laptop as inside a platform. Nothing here means a",
+    "connector has been reviewed for anything else."
+  ],
+  "connectors": {
+    "atlassian_confluence": { "status": "ready" },
+    "atlassian_jira": { "status": "ready" },
+    "cloudflare_r2": { "status": "ready" },
+    "database": { "status": "ready" },
+    "docusign": { "status": "ready" },
+    "google_calendar": { "status": "ready" },
+    "google_drive": {
+      "status": "blocked",
+      "reason": "Not yet verified against a live deployment. Publishing a connector nobody has run end to end is a claim the maintainers cannot support. Run it end to end first."
+    },
+    "google_gmail": { "status": "ready" },
+    "kapso_whatsapp": { "status": "ready" },
+    "linear": { "status": "ready" },
+    "microsoft_sharepoint": { "status": "ready" },
+    "microsoft_teams": { "status": "ready" },
+    "otp_verification": { "status": "ready" },
+    "outlook_calendar": { "status": "ready" },
+    "outlook_email": { "status": "ready" },
+    "surveymonkey": {
+      "status": "blocked",
+      "reason": "Not yet verified against a live deployment, and at 40 tools it is the largest connector in the catalogue. Same rule as google_drive: run it end to end before presenting it as a flagship."
+    },
+    "trino": { "status": "ready" },
+    "twitter_intel": { "status": "ready" },
+    "web_search": { "status": "ready" },
+    "zoom": { "status": "ready" }
+  }
+}
