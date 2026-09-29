@@ -1,0 +1,80 @@
+# Conformance scenarios a tools-only connector does not satisfy.
+#
+# This is a baseline, not an excuse. Its job is to make the passing set a
+# regression gate: anything that fails and is NOT listed here turns the build
+# red, so a real conformance regression cannot hide behind a known gap.
+#
+# Every entry falls into one of three groups, and none of them is a wire-
+# protocol defect:
+#
+# 1. Optional capabilities these connectors do not advertise: prompts,
+#    resources, completion, sampling, elicitation, roots, tasks. The
+#    specification makes these optional; the suite exercises them anyway.
+# 2. Scenarios that need a purpose-built fixture server. `tools-call-image`
+#    requires a tool that returns an image, `json-schema-2020-12` requires a
+#    tool by a specific name. A vendor connector has neither.
+# 3. SEP-2243 header validation and SEP-2575 capability rejection, both marked
+#    "pending" by the suite itself and not scored for 2026-07-28.
+#
+# What is NOT here, and must never be added without a written reason:
+# tools-list, tools-call, initialize, dns-rebinding-protection, wire-schema
+# validity. Those are the contract, and v1 failed tools-list on every tool.
+#
+# Measured: v1 scored 32 passed / 125 failed. This port scores 114 / 56.
+#
+# HOW THIS FILE MUST BE MAINTAINED, because the obvious method is wrong.
+#
+# You cannot derive this baseline by running the suite WITHOUT
+# `--expected-failures` and recording what failed. Supplying the file changes
+# which scenarios fail. Measured on google_calendar:
+#
+#   without the flag: `input-required-result-missing-input-response` and
+#                     `input-required-result-validate-input` PASS
+#   with the flag:    both are waived (`~`)
+#   with the flag and those two entries REMOVED: both FAIL, and the run
+#                     exits 1 with "Unexpected failures detected"
+#
+# So an entry here is not a passive filter over a fixed result set. Removing a
+# scenario that appears to pass turns the build red. Both entries were removed
+# once on exactly that reasoning and had to be put back.
+#
+# To change this file: edit it, then run the suite WITH the flag and confirm
+# the exit code is 0. Never take a run without the flag as evidence.
+server:
+  - completion-complete
+  - http-custom-header-server-validation
+  - input-required-result-basic-elicitation
+  - input-required-result-basic-list-roots
+  - input-required-result-basic-sampling
+  - input-required-result-capability-check
+  - input-required-result-missing-input-response
+  - input-required-result-multi-round
+  - input-required-result-multiple-input-requests
+  - input-required-result-non-tool-request
+  - input-required-result-request-state
+  - input-required-result-result-type
+  - input-required-result-tampered-state
+  - input-required-result-validate-input
+  - json-schema-2020-12
+  - prompts-get-embedded-resource
+  - prompts-get-simple
+  - prompts-get-with-args
+  - prompts-get-with-image
+  - resources-read-binary
+  - resources-read-text
+  - resources-templates-read
+  - server-stateless
+  - tasks-capability-negotiation
+  - tasks-dispatch-and-envelope
+  - tasks-lifecycle
+  - tasks-mrtr-composition
+  - tasks-mrtr-input
+  - tasks-request-headers
+  - tasks-request-state-removal
+  - tasks-required-task-error
+  - tasks-wire-fields
+  - tools-call-audio
+  - tools-call-embedded-resource
+  - tools-call-image
+  - tools-call-mixed-content
+  - tools-call-with-progress

@@ -1,0 +1,355 @@
+# Jobs run on GitHub-hosted runners only.
+#
+# Never point a job at a self-hosted runner while this repository is public.
+# ci.yml runs on pull_request, so a fork's branch would execute on that machine
+# with whatever it can reach in scope. That is not left to memory:
+# `scripts/runner_label_gate.py` runs below and fails if a self-hosted label and
+# a public repository are ever true at the same time.
+
+name: CI
+
+# `pull_request`, never `pull_request_target`.
+#
+# `pull_request_target` runs the workflow from the base branch with repository
+# secrets available, against a fork's code. In a public repository that hands
+# any contributor a way to read every secret this workflow can see. This
+# repository is about to accept pull requests from strangers, so the
+# distinction is load-bearing rather than stylistic.
+#
+# No job here needs a secret. Publication lives in its own workflow, gated on a
+# protected environment rather than on a branch name, because a branch name is
+# something a contributor can choose.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Which connectors can this change possibly have broken?
+  #
+  # Conformance is 20 jobs, one per connector, and it was the single most
+  # expensive thing in this CI. Every one of them ran on every pull request,
+  # including a pull request that touched one connector's docstring.
+  #
+  # The rule is deliberately conservative: a change to anything outside
+  # `connectors/` runs all 20, because shared code is shared. Only a diff
+  # confined to `connectors/<name>/` narrows the matrix, and only to the
+  # connectors it actually touched. Anything unrecognised falls back to all 20.
+  #
+  # Push to `main` always runs all 20, so a cross-connector break that a
+  # narrowed pull request could not have seen is still caught before publish.
+  scope:
+    name: Scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      connectors: ${{ steps.scope.outputs.connectors }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The three-dot diff needs a real merge base. A shallow clone has none.
+          fetch-depth: 0
+      - name: Work out which connectors are in scope
+        id: scope
+        # Passed through env rather than interpolated into the script. These are
+        # commit SHAs so they are not attacker-controlled, but a `run:` block is
+        # the wrong place to learn that habit.
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          ALL="atlassian_confluence atlassian_jira cloudflare_r2 database docusign google_calendar google_drive google_gmail kapso_whatsapp linear microsoft_sharepoint microsoft_teams otp_verification outlook_calendar outlook_email surveymonkey trino twitter_intel web_search zoom"
+          to_json() { printf '%s' "$1" | tr ' ' '\n' | grep -v '^$' | sed 's/.*/"&"/' | paste -sd, - | sed 's/^/[/;s/$/]/'; }
+
+          pick="$ALL"
+          reason="all 20 (not a pull request)"
+
+          if [ "$EVENT" = "pull_request" ]; then
+            changed="$(git diff --name-only "$BASE" "$HEAD")"
+            if [ -z "$changed" ]; then
+              reason="all 20 (empty diff)"
+            elif printf '%s\n' "$changed" | grep -qv '^connectors/'; then
+              reason="all 20 (shared code changed)"
+            else
+              names="$(printf '%s\n' "$changed" | sed -n 's|^connectors/\([^/][^/]*\)/.*|\1|p' | sort -u)"
+              keep=""
+              for c in $ALL; do
+                if printf '%s\n' "$names" | grep -qx "$c"; then keep="$keep $c"; fi
+              done
+              if [ -n "$keep" ]; then
+                pick="${keep# }"
+                reason="only the connectors this pull request touches"
+              else
+                reason="all 20 (no known connector matched the diff)"
+              fi
+            fi
+          fi
+
+          echo "connectors=$(to_json "$pick")" >> "$GITHUB_OUTPUT"
+          echo "Conformance scope: $reason"
+          # Word splitting is the point: one connector per line.
+          # shellcheck disable=SC2086
+          printf '%s\n' $pick | sed 's/^/  - /'
+
+  # One job, ten gates.
+  #
+  # These ran as ten separate jobs. Each finished in six to twelve seconds and
+  # each was billed a whole minute, because GitHub meters per job and rounds up:
+  # roughly ninety per cent of what they cost was rounding, not compute. Run
+  # back to back in one job they cost two billable minutes instead of ten, and
+  # add about forty seconds of wall clock.
+  #
+  # `!cancelled()` on every gate after the first preserves the property that
+  # made ten jobs attractive: one run still reports every gate that is failing,
+  # rather than stopping at the first and making you discover the rest one push
+  # at a time.
+  static-gates:
+    name: Static gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # FIRST, and before anything is installed. This gate exists to see what
+      # `pip install magone-mcp-core` alone fails to provide, and that gap is
+      # only visible in an environment that has nothing else in it. Installing
+      # ruff below would not change its answer, but ordering it first means
+      # nobody has to reason about that.
+      #
+      # Installing the core package plus a connector's own extra must be
+      # enough to start that connector. Once it was not: an empty virtualenv
+      # started 10 of 23 connectors, and `web_search` failed on `trafilatura`,
+      # declared nowhere, because the port left every per-server requirements
+      # file behind.
+      - name: Dependencies
+        run: python scripts/dependency_gate.py
+
+      # Schemas here are declared, not derived, so the expected diff is empty
+      # by construction. Any diff means a tool's wire contract moved, which
+      # changes what every live agent is told it may pass.
+      - name: Golden schema
+        if: ${{ !cancelled() }}
+        run: python scripts/golden_schema_gate.py --check
+
+      # Every other gate here reads source with `ast.parse`, deliberately, so
+      # it needs no credentials and no vendor dependencies. `ast.parse` is not
+      # the compiler though: it accepts a misplaced `from __future__` import
+      # that fails at container start. Two connectors shipped in exactly that
+      # state with every gate green. `compile()` executes nothing and needs no
+      # more than `ast.parse` did.
+      - name: Compile
+        if: ${{ !cancelled() }}
+        run: python scripts/compile_gate.py
+
+      # server.json is derived from each connector's own SERVER_NAME and
+      # SERVER_VERSION, so a manifest that drifts from the server it describes
+      # is a manifest that would publish a lie. Regenerating and diffing is
+      # cheaper than trusting anyone to remember.
+      - name: Server manifests
+        if: ${{ !cancelled() }}
+        run: python scripts/gen_server_json.py --check
+
+      # docs/TOOLS.md is the only list of all 233 tools. A hand-kept
+      # list of 233 anything is wrong within a week, and this
+      # repository has already produced three documents that became
+      # false because something else changed correctly.
+      - name: Tool reference
+        if: ${{ !cancelled() }}
+        run: python scripts/gen_tool_reference.py --check
+
+      # Publishing is the one step here that cannot be undone. Some
+      # connectors are blocked for a reason that is nothing to do with code
+      # quality and everything to do with being easy to forget: none of them
+      # has been verified against a live deployment yet.
+      - name: Publication
+        if: ${{ !cancelled() }}
+        run: python scripts/publication_gate.py
+
+      # A tool whose credential headers stayed a comment receives an empty
+      # credentials dict and fails against its vendor with "missing
+      # credentials", which reads as a misconfigured connection rather than a
+      # port defect. 66 tools were in that state once, silently, because a
+      # repair script's idempotency check was per file instead of per tool.
+      - name: Credential headers
+        if: ${{ !cancelled() }}
+        run: python scripts/credential_headers_gate.py
+
+      # The second half of the same lesson: a permission group that stays a
+      # comment narrows nothing, and fails in the dangerous direction. All 263
+      # tools were in that state while the platform kept sending
+      # X-MCP-Enabled-Groups, so a connection that selected read-only Jira was
+      # served deleteJiraIssue and could call it.
+      - name: Permission groups
+        if: ${{ !cancelled() }}
+        run: python scripts/permission_group_gate.py
+
+      # ci.yml is on: pull_request, so a self-hosted label plus a public
+      # repository means a stranger's branch runs on somebody's own machine.
+      # Visibility comes from the event payload, so this needs no token;
+      # --require-visibility means the gate cannot pass by not knowing.
+      - name: Runner labels
+        if: ${{ !cancelled() }}
+        env:
+          REPO_VISIBILITY: ${{ github.event.repository.visibility }}
+        run: python scripts/runner_label_gate.py --require-visibility
+
+      - name: Boundary
+        if: ${{ !cancelled() }}
+        run: python scripts/boundary_gate.py
+
+      # The allowance covers descriptions inherited from the v1 catalogue and
+      # is meant to come down, not to stay. Everything else is blocking.
+      - name: Tool contract
+        if: ${{ !cancelled() }}
+        run: python scripts/tool_contract_lint.py --max-undescribed 152
+
+      # Pinned. An unpinned linter can turn every open pull request red on the
+      # day it releases, for a change nobody in this repository made.
+      - name: Install ruff
+        if: ${{ !cancelled() }}
+        run: pip install ruff==0.16.1
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: ruff check .
+
+      - name: Format
+        if: ${{ !cancelled() }}
+        run: ruff format --check .
+
+      # Undefined names over whole modules, functions defined twice,
+      # constants reassigned with a different value, relative imports that do
+      # not resolve (including inside functions). Each shipped once and broke
+      # tools at runtime with every other gate green.
+      - name: Code health
+        if: ${{ !cancelled() }}
+        run: python scripts/code_health_gate.py
+
+      # The unresolved-name budget is 0 and only comes down.
+      - name: Port status
+        if: ${{ !cancelled() }}
+        run: python scripts/port_status.py --check
+
+  framework:
+    name: Framework tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: pip install -e ".[dev]"
+      # No credentials and no network. That is the property an outside
+      # contributor needs: they can run most of the suite before opening a
+      # pull request, and CI can judge a fork the same way it judges a branch.
+      #
+      # `-m "not requires_connectors"` because `[dev]` installs the framework's
+      # dependencies and not each connector's - a connector that talks to
+      # Oracle should not drag `oracledb` into an install that only wanted the
+      # framework. The tests that DO import a connector run in the job below,
+      # which installs everything.
+      - run: pytest tests/ -q -m "not requires_connectors"
+
+  connector-tests:
+    name: Connector tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      # Every connector dependency. This job exists because the two gates that
+      # matter most are worthless if they skip, and both were written from a
+      # failure that had already shipped: eleven connectors that would not
+      # import, and twenty-five tools that raised NameError on call while
+      # importing perfectly. A skipped gate reports the same green as a passing
+      # one.
+      - run: pip install -e ".[dev,all]"
+      # The framework's connector-dependent tests, then every connector's own
+      # suite. `connectors/*/tests` was never collected here, so the
+      # per-connector regression tests ran only on a laptop.
+      - run: pytest tests/ -q -m "requires_connectors"
+      - run: pytest connectors/ -q
+
+  conformance:
+    name: Conformance
+    needs: scope
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Package names, which use underscores: a hyphen fails at `python -m`
+        # with a confusing module-not-found error.
+        #
+        # The list comes from the `scope` job above rather than being written
+        # out here. On push, and on any pull request that touches shared code,
+        # that is all 20. The canonical list lives in `scope`; this must not be
+        # duplicated here, or the two will disagree the first time a connector
+        # is added.
+        connector: ${{ fromJSON(needs.scope.outputs.connectors) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # Every per-connector extra, because the matrix now covers all 20 and
+      # six of them need a third-party library. Installing only [dev] would
+      # fail those at start-up for a reason this job is not about.
+      - run: pip install -e ".[dev,cloudflare_r2,database,otp_verification,outlook_email,trino,web_search]"
+      - name: Start the connector
+        env:
+          CONNECTOR: ${{ matrix.connector }}
+        run: |
+          MCP_MODE=local PORT=8111 python -m "connectors.$CONNECTOR" &
+          # Readiness by POST, not GET: /mcp answers 404 to GET, so a `curl -sf`
+          # probe never succeeds and the loop just burns its 30 seconds and
+          # then tests a server that may not be listening. That is how the
+          # first run of this job scored a server that had never started.
+          for _ in $(seq 1 40); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 2 -X POST \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json, text/event-stream' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
+              http://127.0.0.1:8111/mcp || true)
+            [ "$code" != "000" ] && echo "connector answering (HTTP $code)" && break
+            sleep 1
+          done
+          [ "$code" = "000" ] && { echo "connector never started"; exit 1; } || true
+      # Pinned to the alpha deliberately. The `latest` dist-tag is 0.1.16,
+      # which has no support for 2026-07-28 at all: an unpinned invocation
+      # would produce a green gate that never tested the target revision,
+      # which is the same class of defect this repository exists to fix.
+      # The baseline records the scenarios a tools-only connector does not
+      # satisfy (prompts, resources, tasks, sampling). Its purpose is to make
+      # the passing set a regression gate: anything failing that is NOT in the
+      # baseline turns this red. tools-list, tools-call, initialize and
+      # dns-rebinding-protection are deliberately not in it.
+      - name: Conformance
+        run: |
+          npx -y @modelcontextprotocol/conformance@0.2.0-alpha.11 server \
+            --url http://127.0.0.1:8111/mcp --requirements 2026-07-28 \
+            --expected-failures tests/conformance/expected-failures.yaml

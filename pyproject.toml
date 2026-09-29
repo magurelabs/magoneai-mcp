@@ -3,6 +3,10 @@ name = "magone-mcp-core"
 version = "0.1.0"
 description = "A thin layer over the official MCP Python SDK for building connectors"
 readme = "README.md"
+# 3.11, not 3.10. Every CI job pins 3.11 and both Dockerfiles pin the
+# 3.11-slim digest, so 3.10 and 3.12 were a support claim with no evidence
+# behind it on a package about to go on PyPI. Widen this when a CI matrix
+# proves the wider range, not before.
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 keywords = ["mcp", "model-context-protocol", "connector"]
@@ -73,6 +77,15 @@ outlook_email = [
 ]
 trino = ["trino>=0.328.0"]
 web_search = ["trafilatura>=1.8.0"]
+
+# Every connector dependency at once. Not for users - a deployment installs
+# the one connector it runs - but CI needs it, because the import gate and the
+# name-resolution gate are worthless if they skip. Both exist BECAUSE those
+# failures shipped: eleven connectors that would not import, and twenty-five
+# tools that raised NameError on call while importing perfectly.
+all = [
+  "magone-mcp-core[database,otp_verification,outlook_email,trino,web_search]",
+]
 
 [project.urls]
 Homepage = "https://github.com/magurelabs/magoneai-mcp"
