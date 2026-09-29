@@ -1,0 +1,191 @@
+# Jobs run on GitHub-hosted runners only. See the note at the top of ci.yml;
+# `scripts/runner_label_gate.py` checks this file too.
+
+# Publication pipelines. DRY RUN ONLY.
+#
+# Nothing here publishes. Every job stops at the step before the one that
+# would push, and the push step is present but commented, so the pipeline can
+# be read and reviewed in full without being armed.
+#
+# That is deliberate and it is the whole design. Publishing is the one step in
+# this programme that cannot be undone: a version yanked from PyPI still
+# cannot be reused, a registry entry is a public claim on a name, and an image
+# tag that has been pulled is somewhere forever. So the pipeline is built now,
+# while there is time to get it wrong safely, and armed later by a person who
+# decides to.
+#
+# The jobs below DO run, and that is the point: they build the distribution,
+# build every publishable image, and validate every manifest against the
+# published schema. All of that is worth knowing continuously. None of it
+# sends anything anywhere.
+#
+# To arm it, someone with that authority does two things and no fewer:
+#   1. uncomment the push step in the job they intend to run
+#   2. add the credential that step names to repository secrets
+# Neither happens by accident, and the second is not something CI can do to
+# itself.
+
+name: Publish (dry run)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/publish.yml"
+      - "pyproject.toml"
+      - "connectors/*/server.json"
+
+permissions:
+  contents: read
+
+jobs:
+  pypi:
+    name: PyPI (dry run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install build twine
+
+      - name: Build the distribution
+        run: python -m build
+
+      # twine check is the closest thing to a publish that is not one: it
+      # parses the metadata PyPI would reject on, without contacting PyPI.
+      - name: Validate what would be uploaded
+        run: twine check dist/*
+
+      - name: Show what would be published
+        run: |
+          echo "Would upload:"
+          ls -la dist/
+          python - <<'PY'
+          import tomllib, pathlib
+          data = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          project = data["project"]
+          print(f"  name:    {project['name']}")
+          print(f"  version: {project['version']}")
+          print(f"  extras:  {sorted(project.get('optional-dependencies', {}))}")
+          PY
+          echo
+          echo "NOT UPLOADING. This pipeline is a dry run."
+
+      # - name: Upload to PyPI
+      #   env:
+      #     TWINE_USERNAME: __token__
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      #   run: twine upload dist/*
+
+  images:
+    name: Container images (dry run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # This job shells out to `python` to read publication.json. ubuntu-latest
+      # ships Python, but pin the version rather than inherit whatever the
+      # image happens to carry. The other jobs in this file already do.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Build every publishable connector's image. Building is not publishing,
+      # and it is the only way to know the Dockerfile still works for all of
+      # them rather than for the one that was tried by hand.
+      - name: Build each publishable connector
+        run: |
+          set -euo pipefail
+          ready=$(python -c "
+          import json, pathlib
+          data = json.loads(pathlib.Path('connectors/publication.json').read_text())
+          print(' '.join(sorted(
+              name for name, entry in data['connectors'].items()
+              if entry.get('status') == 'ready'
+          )))
+          ")
+          for connector in $ready; do
+            echo "::group::$connector"
+            name=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "connectors/$connector/server.json")
+            docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" \
+              -t "magoneai/mcp-$connector:dry-run" .
+            # The registry's ownership check, run here first: the label must
+            # equal the manifest's name, or the publish is refused.
+            label=$(docker inspect "magoneai/mcp-$connector:dry-run" \
+              --format '{{index .Config.Labels "io.modelcontextprotocol.server.name"}}')
+            if [ "$label" != "$name" ]; then
+              echo "::error::$connector: image label '$label' != server.json name '$name'"
+              exit 1
+            fi
+            echo "label ok: $label"
+            echo "::endgroup::"
+          done
+          echo "NOT PUSHING. This pipeline is a dry run."
+
+      # - name: Push to the registry
+      #   env:
+      #     DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      #     DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      #   run: |
+      #     # `ready` is computed in the build step above; recompute it here
+      #     # rather than relying on a shell variable that did not survive.
+      #     echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      #     ready=$(python -c "import json,pathlib;d=json.loads(pathlib.Path('connectors/publication.json').read_text());print(' '.join(sorted(n for n,e in d['connectors'].items() if e.get('status')=='ready')))")
+      #     for connector in $ready; do docker push "magoneai/mcp-$connector:dry-run"; done
+
+  registry:
+    name: MCP Registry (dry run)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The manifests are generated from the connectors, so this re-derives
+      # them and fails on any drift before anything could be submitted. A
+      # registry entry describing a server that does not exist is the mistake
+      # that cannot be withdrawn.
+      - name: Every manifest matches its connector
+        run: python scripts/gen_server_json.py --check
+
+      - name: A blocked connector carries no manifest
+        run: python scripts/publication_gate.py
+
+      - name: Validate each manifest against the published schema
+        run: |
+          pip install jsonschema requests
+          python - <<'PY'
+          import json, pathlib, sys
+          import requests
+          from jsonschema import Draft202012Validator
+
+          url = "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
+          schema = requests.get(url, timeout=30).json()
+          validator = Draft202012Validator(schema)
+
+          manifests = sorted(pathlib.Path("connectors").glob("*/server.json"))
+          if not manifests:
+              sys.exit("no manifests found; this check would prove nothing")
+
+          failed = False
+          for path in manifests:
+              errors = sorted(validator.iter_errors(json.loads(path.read_text())), key=str)
+              status = "ok" if not errors else "INVALID"
+              print(f"  {path.parent.name:24} {status}")
+              for error in errors:
+                  failed = True
+                  print(f"      {'/'.join(str(p) for p in error.path)}: {error.message}")
+          print(f"\n{len(manifests)} manifest(s) validated against {url}")
+          print("NOT SUBMITTING. This pipeline is a dry run.")
+          sys.exit(1 if failed else 0)
+          PY
+
+      # - name: Publish to the MCP Registry
+      #   env:
+      #     MCP_REGISTRY_TOKEN: ${{ secrets.MCP_REGISTRY_TOKEN }}
+      #   run: |
+      #     for manifest in connectors/*/server.json; do
+      #       mcp-publisher publish "$manifest"
+      #     done
