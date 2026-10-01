@@ -572,8 +572,25 @@ class ConnectorServer:
         return self.mcp.custom_route(path, methods)
 
     def app(self) -> Any:
-        """The ASGI application."""
-        app = self.mcp.streamable_http_app()
+        """The ASGI application.
+
+        Two settings are passed explicitly rather than left to the SDK:
+
+        - `transport_security`: the SDK's default admits loopback Host
+          headers only, so a connector reached by its service name answered
+          every call with 421. See `transport.py` for why `host="0.0.0.0"` is
+          not the fix.
+        - `stateless_http=True`: a pre-2026 client that negotiates a session
+          otherwise holds it in this process's memory, so a second replica
+          answers "Missing session ID". Requests on the `2026-07-28` envelope
+          are stateless whatever this says; this makes the older ones so too.
+        """
+        from .transport import transport_security
+
+        app = self.mcp.streamable_http_app(
+            stateless_http=True,
+            transport_security=transport_security(self._env),
+        )
         service_token = str(self._env.get("MCP_SERVICE_TOKEN", "")).strip()
         if service_token and self.mode == "platform":
             from .auth import require_service_token
@@ -608,6 +625,8 @@ class ConnectorServer:
     def run(self, host: str = "0.0.0.0", port: int = 8000) -> None:  # noqa: S104
         import uvicorn
 
+        from .transport import configured_hosts, host_check_disabled
+
         problem = self.authentication_problem()
         if problem:
             # Refused at start-up, not discovered as an open endpoint later. v1
@@ -619,6 +638,19 @@ class ConnectorServer:
                 "something in front of this server authenticates every caller."
             )
         host = self.effective_bind_host(host)
+        if host_check_disabled(self._env):
+            self.logger.warning(
+                "host_check_disabled",
+                msg="MCP_ALLOWED_HOSTS=* accepts any Host and Origin header",
+            )
+        elif host.strip().lower() not in LOOPBACK and not configured_hosts(self._env):
+            # Loud at start-up rather than as a 421 on the first call, which is
+            # where this was found: every request by service name refused.
+            self.logger.warning(
+                "only_loopback_hosts_accepted",
+                bind=host,
+                msg="set MCP_ALLOWED_HOSTS to the names callers use, e.g. the service name",
+            )
         self.logger.info(
             "starting",
             server=self.name,

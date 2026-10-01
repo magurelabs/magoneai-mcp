@@ -92,4 +92,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # `local` mode will not bind beyond loopback without MCP_ALLOW_INSECURE_BIND=1,
 # so the default MCP_MODE above is what makes this image useful in a cluster
 # and refuses to be accidentally unauthenticated.
+#
+# Set MCP_ALLOWED_HOSTS to the name callers reach this container by (the
+# Compose service or Kubernetes Service name). Only loopback is accepted
+# otherwise, and every other Host is answered 421.
 CMD ["sh", "-c", "python -m connectors.${CONNECTOR}"]
