@@ -44,18 +44,14 @@ server = ConnectorServer(
 # body refers to these, so moving the body without them leaves undefined
 # names: 1,898 of them on the first pass, in code that parsed cleanly.
 
-import os
-from typing import Any, Dict, List, Optional
-import httpx
 import asyncio
+import os
 import re
-import sys
 import time
-from pathlib import Path
-from typing import Any
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
-import trafilatura
 
+import httpx
+import trafilatura
 
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
 
@@ -395,6 +391,69 @@ _MIN_CONTENT_LENGTH = 50
 _MAX_REDIRECTS = 5
 
 
+class RedirectBlocked(Exception):
+    """A fetch was redirected to an address the SSRF check refuses."""
+
+
+def _refuse_blocked_final_url(result: dict, requested: str) -> None:
+    """Refuse content from a crawl whose FINAL URL is a blocked address.
+
+    Crawl4AI fetches and follows redirects itself, so the check on the URL we
+    hand it cannot see where it ended up. The request has already happened by
+    now; what this stops is the body of a metadata endpoint or an internal
+    service being returned to the model as page text. The egress policy on
+    the Crawl4AI pod is what stops the request itself.
+    """
+    for key in ("redirected_url", "url"):
+        final = result.get(key)
+        if isinstance(final, str) and final and final != requested:
+            # A relative value is resolved against what was requested, as a
+            # browser would; refusing it outright would reject a clean crawl.
+            final = urljoin(requested, final)
+            try:
+                validate_url(final)
+            except (SSRFBlocked, InvalidURL) as exc:
+                logger.warning("scrape_url.final_url_blocked", target=final)
+                raise RedirectBlocked(str(exc)) from exc
+
+
+_RESOLVER_FLAG = "--host-resolver-rules="
+
+
+def _pinning_args(url: str, extra_args: list[str] | None) -> list[str]:
+    """The only Chromium flags a caller may pass: DNS pinning for THIS host.
+
+    `extra_args` exists so KB ingestion can pin the page's host to the address
+    it already resolved, closing the DNS-rebinding window. Forwarded verbatim,
+    it let the model choose Chromium's resolver and proxy:
+    `--host-resolver-rules=MAP example.com 169.254.169.254` passes the URL
+    check and then fetches cloud metadata. So each rule must MAP the URL's own
+    host to a public IP literal, and no other flag is accepted.
+    """
+    if not extra_args:
+        return []
+    host = (urlparse(url).hostname or "").lower()
+    for arg in extra_args:
+        if not isinstance(arg, str) or not arg.startswith(_RESOLVER_FLAG):
+            raise ValueError(
+                "extra_args accepts only --host-resolver-rules pinning the URL's host; "
+                f"refused: {str(arg)[:80]!r}"
+            )
+        for rule in arg[len(_RESOLVER_FLAG):].split(","):
+            parts = rule.strip().split()
+            if len(parts) != 3 or parts[0].upper() != "MAP" or parts[1].lower() != host:
+                raise ValueError(
+                    f"extra_args may only MAP the URL's own host ({host}); refused: {rule.strip()!r}"
+                )
+            ip = parts[2]
+            literal = f"[{ip}]" if ":" in ip else ip
+            try:
+                validate_url(f"http://{literal}/")
+            except (SSRFBlocked, InvalidURL) as exc:
+                raise ValueError(f"extra_args may not pin {host} to a blocked address: {exc}") from exc
+    return list(extra_args)
+
+
 async def _fetch_via_trafilatura(client, url: str, max_chars: int) -> str:
     """Fast path: fetch with httpx + trafilatura (no JS rendering).
 
@@ -419,9 +478,13 @@ async def _fetch_via_trafilatura(client, url: str, max_chars: int) -> str:
             url = urljoin(url, location)
             try:
                 validate_url(url)
-            except (SSRFBlocked, InvalidURL):
+            except (SSRFBlocked, InvalidURL) as exc:
                 logger.warning("scrape_url.redirect_blocked", target=url)
-                return ""
+                # Raised, not returned as "". An empty body looks like a
+                # JS-rendered page, and the fallback then hands the ORIGINAL
+                # URL to a headless browser that follows the same redirect
+                # itself: the block was one line from being undone.
+                raise RedirectBlocked(str(exc)) from exc
         else:
             return ""
 
@@ -435,6 +498,8 @@ async def _fetch_via_trafilatura(client, url: str, max_chars: int) -> str:
             output_format="markdown",
         )
         return _truncate_content(content, max_chars) if content else ""
+    except RedirectBlocked:
+        raise
     except Exception:
         return ""
 
@@ -465,8 +530,11 @@ async def _fetch_via_crawl4ai(url: str, max_chars: int) -> str:
         if not results:
             return ""
 
+        _refuse_blocked_final_url(results[0], url)
         content = results[0].get("markdown") or results[0].get("fit_markdown") or ""
         return _truncate_content(content, max_chars) if content else ""
+    except RedirectBlocked:
+        raise
     except Exception:
         return ""
 
@@ -572,6 +640,7 @@ async def _fetch_via_crawl4ai_rich(
                     if isinstance(href, str) and href.strip():
                         links.append(href.strip())
 
+        _refuse_blocked_final_url(r, url)
         metadata = r.get("metadata") or {}
         final_url = r.get("url") or url
         return {
@@ -585,6 +654,8 @@ async def _fetch_via_crawl4ai_rich(
             "status_code": r.get("status_code"),
             "links": links,
         }
+    except RedirectBlocked:
+        raise
     except Exception as e:
         return {"success": False, "error": f"crawl4ai call failed: {e}"}
 
@@ -817,11 +888,19 @@ async def scrape_url(credentials: dict[str, str],
     except InvalidURL as exc:
         return {"error": f"Refused to scrape URL: {exc}"}
 
+    try:
+        pinned = _pinning_args(url, extra_args)
+    except ValueError as exc:
+        return {"error": f"Refused to scrape URL: {exc}"}
+
     if return_full:
         # KB-style rich fetch: full markdown + links + title + status.
         # No truncation here; callers (kb-worker) enforce their own
         # max-content-MB ceiling downstream.
-        result = await _fetch_via_crawl4ai_rich(url, extra_args=extra_args)
+        try:
+            result = await _fetch_via_crawl4ai_rich(url, extra_args=pinned)
+        except RedirectBlocked as exc:
+            return {"error": f"Refused to scrape URL: redirected to a blocked address ({exc})"}
         if not result.get("success"):
             return {"error": f"Failed to scrape URL: {result.get('error', 'unknown error')}"}
         return result
@@ -831,6 +910,8 @@ async def scrape_url(credentials: dict[str, str],
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             content = await _fetch_page_content(client, url, max_chars)
+    except RedirectBlocked as exc:
+        return {"error": f"Refused to scrape URL: redirected to a blocked address ({exc})"}
     except Exception as e:
         return {"error": f"Failed to scrape URL: {str(e)}"}
 

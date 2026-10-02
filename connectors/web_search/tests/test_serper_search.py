@@ -1,6 +1,12 @@
 import importlib
+
 search_tools = importlib.import_module("connectors.web_search.server")
-from connectors.web_search.server import _serper_error, _serper_key, _serper_web_search, _web_search_provider
+from connectors.web_search.server import (
+    _serper_error,
+    _serper_key,
+    _serper_web_search,
+    _web_search_provider,
+)
 
 """Tests for the Serper-backed search_web path.
 
@@ -12,8 +18,10 @@ network or key is needed.
 """
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
 import pytest
+
 
 def _run(coro):
     return asyncio.run(coro)

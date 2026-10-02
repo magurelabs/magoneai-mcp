@@ -199,11 +199,11 @@ class TestRedirectsCannotEscape:
                 _, status, location = next(hops)
                 return FakeResponse(status, location)
 
-        content = await web_search._fetch_via_trafilatura(
-            FakeClient(), "https://example.com/start", 8000
-        )
+        # Raised, not "": an empty body is what sent the ORIGINAL url to the
+        # headless-browser fallback, which then followed the redirect itself.
+        with pytest.raises(web_search.RedirectBlocked):
+            await web_search._fetch_via_trafilatura(FakeClient(), "https://example.com/start", 8000)
 
-        assert content == ""
         assert fetched == ["https://example.com/start"], (
             "the internal address was requested: " + repr(fetched)
         )
@@ -229,3 +229,75 @@ class TestTheSharedCheckIsTheOneUsed:
 
         with pytest.raises(SSRFBlocked):
             validate_url("http://169.254.169.254/")
+
+
+class TestTheFallbackCannotUndoTheBlock:
+    async def test_a_blocked_redirect_never_reaches_the_headless_browser(self, monkeypatch):
+        """Found by running it: hop two was refused, the fast path returned
+        an empty body, and the short-content fallback POSTed the original URL
+        to Crawl4AI, whose Chromium followed the redirect to metadata."""
+        crawled = []
+
+        async def blocked(client, url, max_chars):
+            raise web_search.RedirectBlocked("169.254.169.254 is link-local")
+
+        async def fallback(url, max_chars):
+            crawled.append(url)
+            return "metadata body"
+
+        monkeypatch.setattr(web_search, "_fetch_via_trafilatura", blocked)
+        monkeypatch.setattr(web_search, "_fetch_via_crawl4ai", fallback)
+
+        with pytest.raises(web_search.RedirectBlocked):
+            await web_search._fetch_page_content(object(), "https://example.com/x", 8000)
+        assert crawled == []
+
+    def test_a_crawl_that_ended_on_a_blocked_address_is_refused(self):
+        with pytest.raises(web_search.RedirectBlocked):
+            web_search._refuse_blocked_final_url(
+                {"url": "http://169.254.169.254/latest/meta-data/", "markdown": "secret"},
+                "https://example.com/x",
+            )
+
+    def test_a_relative_final_url_is_resolved_not_refused(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(web_search, "validate_url", lambda url: seen.append(url) or url)
+
+        web_search._refuse_blocked_final_url({"url": "next"}, "https://example.com/x")
+
+        assert seen == ["https://example.com/next"]
+
+    def test_a_crawl_that_stayed_public_is_accepted(self, monkeypatch):
+        monkeypatch.setattr(web_search, "validate_url", lambda url: url)
+
+        web_search._refuse_blocked_final_url(
+            {"url": "https://www.example.com/x"}, "https://example.com/x"
+        )
+
+
+class TestExtraArgsOnlyPinTheUrlsOwnHost:
+    URL = "https://example.com/page"
+
+    def test_pinning_the_urls_host_to_a_public_ip_is_allowed(self):
+        args = ["--host-resolver-rules=MAP example.com 93.184.216.34"]
+
+        assert web_search._pinning_args(self.URL, args) == args
+
+    @pytest.mark.parametrize(
+        "arg",
+        [
+            "--host-resolver-rules=MAP example.com 169.254.169.254",
+            "--host-resolver-rules=MAP example.com 127.0.0.1",
+            "--host-resolver-rules=MAP example.com ::ffff:169.254.169.254",
+            "--host-resolver-rules=MAP internal.corp 93.184.216.34",
+            "--host-resolver-rules=MAP * 10.0.0.1",
+            "--proxy-server=http://10.0.0.5:3128",
+            "--disable-web-security",
+        ],
+    )
+    def test_anything_else_is_refused(self, arg):
+        with pytest.raises(ValueError):
+            web_search._pinning_args(self.URL, [arg])
+
+    def test_no_args_is_no_args(self):
+        assert web_search._pinning_args(self.URL, None) == []
