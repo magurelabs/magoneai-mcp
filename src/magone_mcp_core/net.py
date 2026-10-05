@@ -70,8 +70,10 @@ BLOCKED_NETWORKS = tuple(
 # itself is legitimate - dual-stack hosts resolve into it - so it is the
 # embedded address that decides, not the prefix.
 NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
-# RFC 8215 local-use NAT64. A deployment may use it with its own translator,
-# so an address inside it can reach the IPv4 embedded in its low 32 bits.
+# RFC 8215 local-use NAT64. Listed so the embedded IPv4 is still decoded and
+# judged, but deliberately NOT exempt from the check on the address itself:
+# "local-use" means a translator inside somebody's network, so the address is
+# internal whatever payload it carries. See `is_blocked_address`.
 LOCAL_NAT64_PREFIX = ipaddress.ip_network("64:ff9b:1::/48")
 # Two older embeddings whose low 32 bits are an IPv4 destination: the
 # deprecated IPv4-compatible form (`::a.b.c.d`) and IPv4-translated
@@ -119,7 +121,14 @@ def is_blocked_address(ip: _BaseAddress) -> bool:
     forgot is still refused. The list exists for the ranges the library does
     NOT report (carrier-grade NAT, site-local, discard-only).
     """
-    translated = ip.version == 6 and (ip in NAT64_PREFIX or ip in LOCAL_NAT64_PREFIX)
+    # Only the WELL-KNOWN prefix is exempt from the check on the address itself.
+    # `64:ff9b::/96` is globally assigned and the library classes it non-global,
+    # so judging the address would refuse every public host a dual-stack resolver
+    # returns over NAT64. None of that is true of RFC 8215's `64:ff9b:1::/48`:
+    # local-use names a translator inside somebody's network, so the address is
+    # internal whatever it carries. Exempting both let `64:ff9b:1::5db8:d822`
+    # through. v1 had already narrowed this, and this is the same narrowing.
+    translated = ip.version == 6 and ip in NAT64_PREFIX
     for candidate in encoded_addresses(ip):
         if translated and candidate is ip:
             # A NAT64 address is only as internal as the IPv4 it carries; the

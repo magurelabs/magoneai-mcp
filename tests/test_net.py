@@ -135,3 +135,33 @@ def test_public_addresses_stay_allowed(address):
 def test_an_out_of_range_port_is_an_invalid_url_not_a_bare_value_error():
     with pytest.raises(InvalidURL):
         validate_url("http://example.com:99999/")
+
+
+class TestOnlyTheWellKnownNat64PrefixIsExempt:
+    """The NAT64 exemption must not reach RFC 8215's local-use prefix.
+
+    The exemption exists because `64:ff9b::/96` is globally assigned and the
+    standard library classes it non-global, so judging the address itself would
+    refuse every public host a dual-stack resolver returns over NAT64. None of
+    that is true of `64:ff9b:1::/48`: "local-use" names a translator inside
+    somebody's network, so the address is internal whatever payload it carries.
+
+    Exempting both let `64:ff9b:1::5db8:d822` through here while v1 blocked it.
+    v1 narrowed this and pinned it with a test; this is that test's
+    counterpart, which the port did not carry across.
+    """
+
+    def test_a_local_use_address_with_a_public_payload_is_blocked(self):
+        assert is_blocked_address(ipaddress.ip_address("64:ff9b:1::5db8:d822")) is True
+
+    def test_the_payload_it_carries_really_is_public(self):
+        """Otherwise the test above would pass for the wrong reason."""
+        assert is_blocked_address(ipaddress.ip_address("93.184.216.34")) is False
+
+    def test_a_well_known_address_with_a_public_payload_is_still_allowed(self):
+        """The exemption has to keep working, or NAT64 users lose every host."""
+        assert is_blocked_address(ipaddress.ip_address("64:ff9b::5db8:d822")) is False
+
+    def test_local_use_addresses_wrapping_internal_targets_stay_blocked(self):
+        for address in ("64:ff9b:1::a00:1", "64:ff9b:1::7f00:1", "64:ff9b:1::a9fe:a9fe"):
+            assert is_blocked_address(ipaddress.ip_address(address)) is True, address
