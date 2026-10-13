@@ -22,9 +22,16 @@
 # published schema. All of that is worth knowing continuously. None of it
 # sends anything anywhere.
 #
-# To arm it, someone with that authority does two things and no fewer:
-#   1. uncomment the push step in the job they intend to run
-#   2. add the credential that step names to repository secrets
+# The dry-run jobs run on pull requests and hold no secret. Each publish job
+# runs only on a manual dispatch, after its dry run passed, and only inside the
+# `release` environment, which is protected by required reviewers. A branch
+# name is something a contributor can choose; an environment approval is not.
+#
+# To arm a publish job, someone with that authority does two things and no
+# fewer:
+#   1. uncomment the push step in the publish job they intend to run
+#   2. add the credential that step names to the `release` environment's
+#      secrets, never to repository secrets
 # Neither happens by accident, and the second is not something CI can do to
 # itself.
 
@@ -75,11 +82,6 @@ jobs:
           echo
           echo "NOT UPLOADING. This pipeline is a dry run."
 
-      # - name: Upload to PyPI
-      #   env:
-      #     TWINE_USERNAME: __token__
-      #     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      #   run: twine upload dist/*
 
   images:
     name: Container images (dry run)
@@ -126,16 +128,6 @@ jobs:
           done
           echo "NOT PUSHING. This pipeline is a dry run."
 
-      # - name: Push to the registry
-      #   env:
-      #     DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      #     DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      #   run: |
-      #     # `ready` is computed in the build step above; recompute it here
-      #     # rather than relying on a shell variable that did not survive.
-      #     echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-      #     ready=$(python -c "import json,pathlib;d=json.loads(pathlib.Path('connectors/publication.json').read_text());print(' '.join(sorted(n for n,e in d['connectors'].items() if e.get('status')=='ready')))")
-      #     for connector in $ready; do docker push "magoneai/mcp-$connector:dry-run"; done
 
   registry:
     name: MCP Registry (dry run)
@@ -184,6 +176,70 @@ jobs:
           print("NOT SUBMITTING. This pipeline is a dry run.")
           sys.exit(1 if failed else 0)
           PY
+
+  # ---------------------------------------------------------------------------
+  # Publish jobs. Manual dispatch only, after the matching dry run, inside the
+  # protected `release` environment. Every push step is still commented out.
+  # ---------------------------------------------------------------------------
+
+  publish-pypi:
+    name: PyPI (publish)
+    needs: pypi
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - run: echo "NOT UPLOADING. The upload step below is commented out."
+
+      # - name: Upload to PyPI
+      #   env:
+      #     TWINE_USERNAME: __token__
+      #     TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      #   run: twine upload dist/*
+
+  publish-images:
+    name: Container images (publish)
+    needs: images
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+      - run: echo "NOT PUSHING. The push step below is commented out."
+
+      # - name: Build and push each publishable connector
+      #   env:
+      #     DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      #     DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      #   run: |
+      #     set -euo pipefail
+      #     echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      #     ready=$(python -c "import json,pathlib;d=json.loads(pathlib.Path('connectors/publication.json').read_text());print(' '.join(sorted(n for n,e in d['connectors'].items() if e.get('status')=='ready')))")
+      #     for connector in $ready; do
+      #       name=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "connectors/$connector/server.json")
+      #       docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" -t "magoneai/mcp-$connector:dry-run" .
+      #       docker push "magoneai/mcp-$connector:dry-run"
+      #     done
+
+  publish-registry:
+    name: MCP Registry (publish)
+    needs: registry
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - run: echo "NOT SUBMITTING. The publish step below is commented out."
 
       # - name: Publish to the MCP Registry
       #   env:
