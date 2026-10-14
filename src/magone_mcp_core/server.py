@@ -574,7 +574,7 @@ class ConnectorServer:
     def app(self) -> Any:
         """The ASGI application.
 
-        Two settings are passed explicitly rather than left to the SDK:
+        Three settings are passed explicitly rather than left to the SDK:
 
         - `transport_security`: the SDK's default admits loopback Host
           headers only, so a connector reached by its service name answered
@@ -584,12 +584,15 @@ class ConnectorServer:
           otherwise holds it in this process's memory, so a second replica
           answers "Missing session ID". Requests on the `2026-07-28` envelope
           are stateless whatever this says; this makes the older ones so too.
+        - `max_request_body_size`: the SDK's 4 MiB default answered 413 to a
+          base64 attachment that v1's 10 MB limit accepted. See `transport.py`.
         """
-        from .transport import transport_security
+        from .transport import max_body_bytes, transport_security
 
         app = self.mcp.streamable_http_app(
             stateless_http=True,
             transport_security=transport_security(self._env),
+            max_request_body_size=max_body_bytes(self._env),
         )
         service_token = str(self._env.get("MCP_SERVICE_TOKEN", "")).strip()
         if service_token and self.mode == "platform":
@@ -625,7 +628,7 @@ class ConnectorServer:
     def run(self, host: str = "0.0.0.0", port: int = 8000) -> None:  # noqa: S104
         import uvicorn
 
-        from .transport import configured_hosts, host_check_disabled
+        from .transport import configured_hosts, host_check_disabled, max_body_bytes
 
         problem = self.authentication_problem()
         if problem:
@@ -660,5 +663,6 @@ class ConnectorServer:
             port=port,
             read_only=self._read_only(),
             max_result_chars=self.budget.max_result_chars,
+            max_body_bytes=max_body_bytes(self._env),
         )
         uvicorn.run(self.app(), host=host, port=port)

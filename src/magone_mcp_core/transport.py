@@ -20,6 +20,12 @@ else is named by the deployment:
 A bare name allows it with and without a port. `MCP_ALLOWED_HOSTS=*` turns the
 check off, and says so in the log, for the deployment that genuinely cannot
 enumerate its hostnames. That is an explicit decision rather than a default.
+
+The same module owns the request body cap, the other transport-level setting
+the SDK picks a default for. Its 4 MiB default answers `413` to a tool call
+that v1 accepted, because base64 inflates an attachment by a third: a 3.5 MB
+file arrives as a body of about 4.7 MB. So the default here is v1's 10 MiB,
+and `MCP_MAX_BODY_BYTES` moves it for a deployment that needs more or less.
 """
 
 from collections.abc import Mapping
@@ -29,6 +35,27 @@ from mcp.server.transport_security import TransportSecuritySettings
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 
 DISABLED = "*"
+
+# v1's limit. Anything lower breaks base64 attachment tools that worked there;
+# the bound itself still matters, because the SDK buffers the whole body in
+# memory before it parses a byte of it.
+DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024
+
+
+def max_body_bytes(env: Mapping[str, str]) -> int:
+    """The largest request body accepted, from MCP_MAX_BODY_BYTES.
+
+    An unparseable or non-positive value falls back to the default rather than
+    raising, like the result budget: a typo in a size should not stop a server
+    from starting, and zero or a negative number cannot mean "accept nothing"
+    on an endpoint whose every request has a body.
+    """
+    raw = str(env.get("MCP_MAX_BODY_BYTES", "")).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_MAX_BODY_BYTES
+    return value if value > 0 else DEFAULT_MAX_BODY_BYTES
 
 
 def _entries(raw: str | None) -> list[str]:
