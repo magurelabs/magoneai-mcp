@@ -30,6 +30,8 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.tools.base import Tool as SDKTool
 from mcp.types import ToolAnnotations
 
+from .text_args import preserve_declared_text
+
 # Attribute stamped on a handler by `declare_schema`, read by `register_tool`.
 _SCHEMA_ATTR = "_magone_input_schema"
 
@@ -127,6 +129,10 @@ def register_tool(
     output = declared_output_schema(fn)
     if output is not None:
         tool.fn_metadata.output_schema = output
+    # Last of the schema edits, so it is decided against exactly the schema a
+    # client is shown: an argument that schema calls text is passed through as
+    # sent, never JSON-decoded by the SDK's pre-parse. See `text_args.py`.
+    preserve_declared_text(tool)
     if meta is not None:
         # Carried to the client as `_meta` on the listed tool. Set after
         # `from_function` because that is where the SDK would have taken it,
