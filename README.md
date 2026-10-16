@@ -4,8 +4,204 @@ MCP connectors for third-party APIs, built on the [official MCP Python SDK](http
 
 Every connector here talks to somebody else's API. You supply your own credentials and your own storage, and the tool works the same whether it runs inside a platform or on your laptop. If a tool cannot do that, it does not belong in this repository.
 
-This repository is in early development. Nothing in it has been published to any package index or registry.
+## What is here
+
+- **`magone-mcp-core`** (`src/magone_mcp_core/`) - a thin layer over the SDK. It adds the handful of things a connector catalogue needs and the SDK has no opinion about, and gets out of the way otherwise.
+- **`connectors/`** - one package per connector: 24 connectors, 257 tools. [`docs/TOOLS.md`](docs/TOOLS.md) lists every tool, generated from the code.
+- **`scripts/`** - the gates CI runs on every pull request, each of which you can run locally.
+
+`connectors/publication.json` records which connectors are ready to publish (19) and which are not yet (5), with the reason for each.
+
+## Quickstart
+
+Requires Python 3.11 or later. The published wheel ships only `magone-mcp-core`; connectors run from a source checkout:
+
+```bash
+git clone https://github.com/magurelabs/magoneai-mcp
+cd magoneai-mcp
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -e ".[web_search]"
+MCP_MODE=local python -m connectors.web_search
+```
+
+Replace `web_search` with any directory under `connectors/`. A connector that needs a third-party library declares it as an extra of the same name; a connector without one needs only `pip install -e .`. Several at once: `pip install -e ".[database,outlook_email]"`.
+
+The server speaks MCP over Streamable HTTP at `http://127.0.0.1:8000/mcp` (`PORT` changes the port). `local` mode is unauthenticated and therefore bound to loopback. There is no stdio transport yet, so point your client at the URL.
+
+`GET /healthz` answers `{status, name, version, tools}`.
+
+### Credentials
+
+Each tool declares the request headers it may receive, for example `X-Linear-Api-Key`, and gets them as a `credentials` dict. Send them as HTTP headers from your client, or, for a server you run yourself, put them in a JSON file and set `MCP_CREDENTIALS_PATH` to its path. Keys are the header name without the leading `X-`, lower-cased, with `-` replaced by `_`:
+
+```json
+{"linear_api_key": "lin_api_..."}
+```
+
+A header on the request overrides the file. `docs/TOOLS.md` shows how many credential headers each tool takes; the tool's `credential_headers=` in `connectors/<name>/server.py` names them.
+
+`web_search` needs no key: it uses a SearXNG instance at `SEARXNG_URL` (default `http://localhost:8888`, JSON output enabled), or Serper when `SERPER_API_KEY` is set.
+
+### In a container
+
+One image builds any connector, selected at build time:
+
+```bash
+docker build --build-arg CONNECTOR=web_search \
+  --build-arg SERVER_NAME=io.github.magurelabs/web-search -t magone-mcp-web-search .
+docker run --rm -p 8000:8000 -e MCP_MODE=local -e MCP_ALLOW_INSECURE_BIND=1 magone-mcp-web-search
+```
+
+The connector's own extra is installed so it gets what it needs and nothing else. The image runs as uid 10001, never root, and carries `LABEL io.modelcontextprotocol.server.name` matching the connector's `server.json`. `MCP_ALLOW_INSECURE_BIND=1` is needed because a container must bind beyond loopback; only do that on a network you control, or use `platform` or `hosted` mode with authentication instead.
+
+## Writing a connector
+
+```python
+from mcp.types import ToolAnnotations
+from magone_mcp_core import ConnectorServer
+
+server = ConnectorServer(name="example", version="0.1.0")
+
+
+@server.tool(
+    name="search_issues",
+    description="Search issues by text.",
+    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
+)
+async def search_issues(query: str, limit: int = 20) -> dict:
+    """Return matching issues."""
+    return {"issues": [], "query": query}
+
+
+if __name__ == "__main__":
+    server.run(port=8000)
+```
+
+The schema comes from your type hints, which is the right default for a new tool.
+
+### Declaring a tool's permission group
+
+A connection rarely wants a connector's whole surface, so each tool names the
+group it belongs to and the scopes it needs:
+
+```python
+@server.tool(
+    name="deleteJiraIssue",
+    description="Delete an issue.",
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+    permission_group="write_jira",
+    required_scopes=["write:jira-work"],
+)
+async def delete_jira_issue(credentials: dict, issueIdOrKey: str) -> dict: ...
+```
+
+A tool that declares no group falls in `default`. Both values are carried to a
+client as `_meta` on the listed tool, and `scripts/permission_group_gate.py`
+fails a tool whose group stayed a comment - a group that is not declared cannot
+narrow anything, and the failure is silent in the direction that serves every
+tool to every connection.
+
+### Keeping a schema exactly as written
+
+A tool that already exists, and whose schema agents already rely on, should not have that schema regenerated. Derivation invents a `title`, adds one to every property, and drops every `description` - a silent behaviour change for any agent reading the description to decide what to pass.
+
+`declare_schema` keeps the schema byte for byte:
+
+```python
+from magone_mcp_core import declare_schema
+
+
+@server.tool(name="search_web", description="Search the web.", annotations=...)
+@declare_schema(
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Search query"},
+        },
+        "required": ["query"],
+    }
+)
+async def search_web(query: str) -> dict: ...
+```
+
+Use it for ported tools. Use type hints for new ones.
+
+## What the framework guarantees
+
+Each of these exists because doing it per connector meant it was done differently in each one, or not at all.
+
+| Guarantee | What it does |
+|---|---|
+| **Outbound budget** | Bounds what a single tool result may return, and says so in the result when it truncates. A silently shortened list is worse than an error, because the model treats it as complete. |
+| **Read-only mode** | `MCP_READ_ONLY=1` filters non-read tools out of `tools/list` *and refuses them on `tools/call`*. The call check is the control; the listing filter is a convenience. |
+| **Per-connection tool selection** | A connection is served, and may call, only the tools it selected: `X-MCP-Enabled-Tools` names them outright, `X-MCP-Enabled-Groups` names permission groups. Neither header present means no selection was made and nothing is filtered, so a caller that sends neither is unaffected. Names win over groups. As with read-only mode, the listing filter is a convenience and the call check is the control. |
+| **SSRF validation** | One implementation. IPv6 literals are unwrapped to the IPv4 they encode (IPv4-mapped, 6to4, Teredo, NAT64) before any membership test, because `ip in network` is False across address families. |
+| **Credential-safe logging** | Tool arguments are logged by key only. Upstream error bodies are scrubbed and truncated before they reach a log line, because a vendor's 401 frequently echoes the token. |
+| **Authenticated callers** | `platform` mode requires the caller's `X-Service-Token` to match `MCP_SERVICE_TOKEN`, or a token verifier; `hosted` mode requires a token verifier, which validates audience and expiry and answers 401 with an RFC 9728 challenge. A server with neither refuses to start rather than serving unauthenticated. The inbound token is never forwarded upstream. The shared service token is the interim control: it proves the caller holds a secret, not which tenant it is. |
+| **Loopback default** | `local` mode is unauthenticated, so it will not bind beyond loopback without `MCP_ALLOW_INSECURE_BIND=1`. |
+| **Host and Origin allowlist** | DNS-rebinding protection is always on. Loopback is always accepted; every other name a caller uses (a service name, an ingress host) must be listed in `MCP_ALLOWED_HOSTS`, or the request is answered `421`. |
+| **Text arguments stay text** | An argument whose published schema admits a string (`"type": "string"`, a type list or `anyOf`/`oneOf` that includes one, or no type at all) reaches the handler as the string that was sent. The SDK's pre-parse would otherwise `json.loads` it whenever the annotation is not exactly `str`, turning `"null"` into `None` and `'{"a":1}'` into a dict. Object, array, number and boolean parameters keep the SDK's behaviour. |
+| **Health endpoint** | `GET /healthz` answers `{status, name, version, tools}` for a container or Kubernetes probe. Hosts discover the catalogue over MCP (`server/discover`, `tools/list`), not from this endpoint. |
+
+## Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `MCP_MODE` | `platform` | `platform`, `hosted` or `local`. An unrecognised value falls back to `platform`, so a typo cannot disable authentication. |
+| `MCP_READ_ONLY` | unset | `1` refuses every tool that is not marked `readOnlyHint`. |
+| `MCP_MAX_RESULT_CHARS` | `100000` | Outbound budget per tool result. |
+| `MCP_MAX_BODY_BYTES` | `10485760` | Largest request body accepted, in bytes (10 MiB). A larger one is answered `413` before it is parsed. Base64 attachments are a third bigger than the file they carry. |
+| `MCP_ALLOW_INSECURE_BIND` | unset | `1` lets `local` mode bind beyond loopback. |
+| `MCP_ALLOWED_HOSTS` | loopback only | Comma-separated Host names callers use, e.g. `mcp-jira,mcp-jira.tools.svc.cluster.local`. A bare name is accepted with or without a port. `*` disables the check. |
+| `MCP_ALLOWED_ORIGINS` | loopback only | Comma-separated browser origins allowed to call the server. A server-to-server call sends no Origin and is unaffected. |
+| `MCP_SERVICE_TOKEN` | unset | `platform` mode: the shared secret every caller must send as `X-Service-Token` on `/mcp`. |
+| `MCP_ALLOW_UNAUTHENTICATED` | unset | `1` lets `platform` or `hosted` mode start with no caller authentication. Only for a deployment where something in front authenticates every request. |
+| `MCP_RESOURCE_URL`, `MCP_AUTH_ISSUER_URL` | unset | With a token verifier: this server's canonical URL (the audience tokens must name) and the authorization server. |
+| `MCP_LOG_RAW_UPSTREAM_ERRORS` | unset | `1` logs unscrubbed upstream bodies. Honoured only in `local` mode. |
+
+## On prompt injection
+
+Every connector here returns text written by someone outside your trust boundary: an issue description, an email body, a scraped page. That text reaches a model that may also hold write tools.
+
+No authorization model prevents this, because the caller is legitimately authorized for both the read and the write. A server cannot solve prompt injection and this one does not claim to.
+
+Two things it does do. `MCP_READ_ONLY=1` makes a deployment that only needs reads incapable of writing, so it cannot be talked into one; that is the control with real blast-radius value. The provenance envelope marks third-party text so a client that wants to treat it as data has something to key on; that is a convention, not a guarantee, and wrapping text does not stop a model reading instructions inside it.
+
+## Tests and gates
+
+The whole suite runs with no credentials and no network:
+
+```bash
+pip install -e ".[dev,all]"
+pytest tests/ connectors/ -q
+```
+
+905 tests: 360 framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), 244 framework tests that import every connector, and 301 connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
+
+CI also runs, on every pull request: `ruff check` and `ruff format --check`; a golden-schema diff of every tool's input and output schema (`scripts/golden_schema_gate.py`); a boundary check that refuses platform reach-through (`scripts/boundary_gate.py`); the tool-contract linter (annotations, property descriptions, logged credentials); dependency, compile, code-health, credential-header, permission-group, publication, manifest and runner-label gates; and the official MCP conformance suite against every connector the change can affect. Each gate is a script under `scripts/` that runs locally the same way.
+
+## Publication
+
+Each of the 19 publishable connectors carries a `server.json` (schema `2025-12-11`), derived from the connector's own `SERVER_NAME` and `SERVER_VERSION` so a manifest cannot describe a server other than the one that runs. `scripts/gen_server_json.py --check` regenerates and diffs them, and `scripts/publication_gate.py` fails if a blocked connector ever gains one.
+
+**Writing a manifest is not publishing.** Nothing here has been pushed to any registry. `.github/workflows/publish.yml` builds and validates everything it would publish, and its publish jobs run only on a manual dispatch inside a protected `release` environment, with every push step still commented out.
+
+## Status of the port
+
+Most connectors here were ported from an earlier, unreleased framework, referred to in code comments as **v1**. `filesystem`, `vanna` and `csv_to_sql` were recovered from built v1 images and reworked so the caller supplies its own connection and keys per call.
+
+Every ported tool's input schema is carried across byte for byte with `declare_schema` and checked on every pull request, because that is the part that would silently change behaviour for an agent already running. Handler bodies were carried across unchanged; `scripts/port_status.py` counts names a body refers to that do not resolve, and fails if that number rises above zero.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions are under the [Developer Certificate of Origin](https://developercertificate.org/) rather than a CLA: sign off each commit with `git commit -s`, and a check on every pull request verifies it. Please read the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+See [SECURITY.md](SECURITY.md). Please report vulnerabilities privately through GitHub's private vulnerability reporting rather than by opening an issue.
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+Vendor names are used nominatively to say which API a connector talks to. No connector is affiliated with or endorsed by the vendor whose API it wraps, and no vendor logos appear anywhere in this repository.
