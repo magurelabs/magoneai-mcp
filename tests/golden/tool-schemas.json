@@ -2688,6 +2688,30 @@
       "type": "object"
     }
   },
+  "image_generation/generate_image": {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "filename": {
+          "description": "Optional output filename without extension. Defaults to a slug derived from the prompt.",
+          "type": "string"
+        },
+        "prompt": {
+          "description": "Text description of the image to generate, e.g. 'a watercolor painting of a lighthouse at sunset'.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "type": "object"
+    }
+  },
   "kapso_whatsapp/list_contacts": {
     "annotations": {
       "destructiveHint": false,

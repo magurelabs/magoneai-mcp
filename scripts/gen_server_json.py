@@ -66,6 +66,7 @@ DESCRIPTIONS: dict[str, str] = {
     "docusign": "Create, send, track and void Docusign envelopes, and read their documents.",
     "google_calendar": "List, create, update and delete Google Calendar events.",
     "google_gmail": "List, read and send Gmail messages.",
+    "image_generation": "Generate an image from a text description with Google Gemini.",
     "kapso_whatsapp": "Send WhatsApp text, media and template messages, and read conversations.",
     "linear": "Search, create and update Linear issues, projects, comments and labels.",
     "microsoft_sharepoint": (

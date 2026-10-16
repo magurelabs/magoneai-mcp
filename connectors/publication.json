@@ -24,6 +24,7 @@
       "reason": "Not yet verified against a live deployment. Publishing a connector nobody has run end to end is a claim the maintainers cannot support. Run it end to end first."
     },
     "google_gmail": { "status": "ready" },
+    "image_generation": { "status": "ready" },
     "kapso_whatsapp": { "status": "ready" },
     "linear": { "status": "ready" },
     "microsoft_sharepoint": { "status": "ready" },

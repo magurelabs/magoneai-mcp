@@ -583,6 +583,32 @@
     ],
     "type": "object"
   },
+  "image_generation/generate_image": {
+    "properties": {
+      "content_type": {
+        "description": "MIME type of the image (e.g. 'image/png').",
+        "type": "string"
+      },
+      "filename": {
+        "description": "Filename with extension for the generated image.",
+        "type": "string"
+      },
+      "prompt": {
+        "description": "The prompt used to generate the image.",
+        "type": "string"
+      },
+      "size_bytes": {
+        "description": "Image size in bytes.",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "filename",
+      "content_type",
+      "size_bytes"
+    ],
+    "type": "object"
+  },
   "linear/create_comment": {
     "properties": {
       "comment": {
