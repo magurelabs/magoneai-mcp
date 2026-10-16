@@ -24,7 +24,7 @@ Read by every connector.
 | `MCP_ALLOW_INSECURE_BIND` | off | start-up | Lets `local` mode bind beyond loopback. Without it, `local` mode binds `127.0.0.1` whatever host it was given. Needed in a container; only on a network you control. |
 | `MCP_ALLOWED_HOSTS` | loopback only | start-up | Comma-separated `Host` names callers use besides loopback, for example `mcp-linear,mcp-linear.tools.svc.cluster.local`. A bare name is accepted with or without a port. Any other Host is answered `421`. `*` disables the check (and logs a warning). |
 | `MCP_ALLOWED_ORIGINS` | loopback only | start-up | Comma-separated browser origins allowed to call the server, for example `https://app.example.com`. A server-to-server call sends no `Origin` and is unaffected. |
-| `MCP_MAX_BODY_BYTES` | `10485760` (10 MiB), or the connector's own default | start-up | Largest request body accepted. A larger one is answered `413` before it is parsed. A connector whose tools carry attachments may declare a larger default with `ConnectorServer(max_body_bytes=...)`: `atlassian_jira` declares 70 MiB and `outlook_email` 75 MiB. This variable overrides either. An unparseable or non-positive value falls back to the connector's default. Base64 attachments are about a third larger than the file. |
+| `MCP_MAX_BODY_BYTES` | `10485760` (10 MiB), or the connector's own default | start-up | Largest request body accepted. A larger one is answered `413` before it is parsed. A connector whose tools carry attachments may declare a larger default with `ConnectorServer(max_body_bytes=...)`: `atlassian_jira` declares 70 MiB, and `outlook_email` and `onedrive` 75 MiB. This variable overrides either. An unparseable or non-positive value falls back to the connector's default. Base64 attachments are about a third larger than the file. |
 | `MCP_MAX_RESULT_CHARS` | `1000000` | start-up | Outbound budget: the most text one tool result may carry. Larger results are cut, visibly; a tool with a declared output schema cannot be cut and still conform, so its oversized result is returned as an error instead. Values below `1000` are raised to `1000`; an unparseable value falls back to the default. |
 | `MCP_READ_ONLY` | off | every call | Refuses every tool not marked `readOnlyHint=True`, and hides them from `tools/list`. Read per call, so changing it needs no restart. |
 | `MCP_CREDENTIALS_PATH` | unset | path at start-up, file per call | Path to a JSON object of credentials for a server you run yourself, keyed like the `credentials` dict (`{"linear_api_key": "..."}`). A request header overrides the file. A missing or unreadable file is treated as empty. |
@@ -127,6 +127,19 @@ Fallbacks for the per-call credentials of the same name:
 |---|---|---|
 | `LINEAR_API_KEY` | empty | API key fallback. |
 | `LINEAR_GRAPHQL_URL` | `https://api.linear.app/graphql` | GraphQL endpoint; override for testing. |
+
+### `onedrive`
+
+Works on the signed-in user's own drive through Microsoft Graph's delegated
+flow. Credentials arrive per call as `X-Microsoft-Refresh-Token`,
+`X-Microsoft-Client-Id`, `X-Microsoft-Client-Secret` and
+`X-Microsoft-Tenant-Id` (default `common`), the same headers the other
+delegated Microsoft connectors read. The Azure app needs the delegated Graph
+permissions `Files.ReadWrite`, `User.Read` and `offline_access`.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ONEDRIVE_MAX_UPLOAD_MB` | `250` | Largest file an upload accepts, in megabytes, checked before any request. Files over 4 MB go up in a resumable upload session. An inline file also has to fit the request body cap (75 MiB for this connector). |
 
 ### `outlook_email`
 
