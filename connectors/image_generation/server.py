@@ -64,7 +64,7 @@ class ImageRequestError(ValueError):
 
 
 def slugify(text: str, fallback: str = "image") -> str:
-    """A filesystem-safe name from free text, at most 60 characters (v1's rule)."""
+    """A name safe to use as a file name, from free text, at most 60 characters (v1's rule)."""
     slug = re.sub(r"[^\w\s-]", "", (text or fallback).lower())
     slug = re.sub(r"[\s_-]+", "-", slug).strip("-")
     return slug[:60] or fallback

@@ -16,8 +16,16 @@
     "atlassian_confluence": { "status": "ready" },
     "atlassian_jira": { "status": "ready" },
     "cloudflare_r2": { "status": "ready" },
+    "csv_to_sql": {
+      "status": "blocked",
+      "reason": "Recovered from a v1 build and reworked for per-call connections. Not yet verified against a live deployment. Same rule as google_drive: run it end to end first."
+    },
     "database": { "status": "ready" },
     "docusign": { "status": "ready" },
+    "filesystem": {
+      "status": "blocked",
+      "reason": "Not yet verified against a live deployment, and it exposes the serving host's own disk rather than an API the caller holds an account with, so whether it meets the README rule depends on where it is deployed. Decide that before presenting it."
+    },
     "google_calendar": { "status": "ready" },
     "google_drive": {
       "status": "blocked",
@@ -38,6 +46,10 @@
     },
     "trino": { "status": "ready" },
     "twitter_intel": { "status": "ready" },
+    "vanna": {
+      "status": "blocked",
+      "reason": "Recovered from a v1 build and reworked for per-call credentials and caller-owned training storage. Not yet verified against a live deployment. Same rule as google_drive: run it end to end first."
+    },
     "web_search": { "status": "ready" },
     "zoom": { "status": "ready" }
   }

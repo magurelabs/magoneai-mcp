@@ -1811,6 +1811,226 @@
       "type": "object"
     }
   },
+  "csv_to_sql/create_table": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "columns": {
+          "description": "Column definitions from preview_csv",
+          "items": {
+            "properties": {
+              "inferred_type": {
+                "description": "TEXT, INTEGER, BIGINT, NUMERIC, BOOLEAN, DATE, TIMESTAMP or JSON",
+                "type": "string"
+              },
+              "name": {
+                "description": "Column name, as returned by preview_csv",
+                "type": "string"
+              },
+              "nullable": {
+                "description": "Whether the column accepts NULL",
+                "type": "boolean"
+              },
+              "original_name": {
+                "description": "Header text the column came from",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "inferred_type",
+              "nullable"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "drop_existing": {
+          "default": false,
+          "description": "Drop the table if it already exists",
+          "type": "boolean"
+        },
+        "schema": {
+          "default": "public",
+          "description": "PostgreSQL schema name",
+          "type": "string"
+        },
+        "table_name": {
+          "description": "Name for the new table (will be sanitized)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table_name",
+        "columns"
+      ],
+      "type": "object"
+    }
+  },
+  "csv_to_sql/get_import": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "import_id": {
+          "description": "The unique import identifier (e.g., imp_20250113_a1b2c3d4)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "import_id"
+      ],
+      "type": "object"
+    }
+  },
+  "csv_to_sql/get_table_info": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "schema": {
+          "default": "public",
+          "description": "PostgreSQL schema name",
+          "type": "string"
+        },
+        "table_name": {
+          "description": "Name of the table",
+          "type": "string"
+        }
+      },
+      "required": [
+        "table_name"
+      ],
+      "type": "object"
+    }
+  },
+  "csv_to_sql/import_data": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "columns": {
+          "description": "Column definitions (for type conversion)",
+          "items": {
+            "properties": {
+              "inferred_type": {
+                "description": "TEXT, INTEGER, BIGINT, NUMERIC, BOOLEAN, DATE, TIMESTAMP or JSON",
+                "type": "string"
+              },
+              "name": {
+                "description": "Column name, as returned by preview_csv",
+                "type": "string"
+              },
+              "nullable": {
+                "description": "Whether the column accepts NULL",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "inferred_type"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "csv_content": {
+          "description": "The CSV file content as a string",
+          "type": "string"
+        },
+        "has_header": {
+          "default": true,
+          "description": "Whether the first row is a header row",
+          "type": "boolean"
+        },
+        "schema": {
+          "default": "public",
+          "description": "PostgreSQL schema name",
+          "type": "string"
+        },
+        "table_name": {
+          "description": "Target table name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "csv_content",
+        "table_name",
+        "columns"
+      ],
+      "type": "object"
+    }
+  },
+  "csv_to_sql/list_imports": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 100,
+          "description": "Maximum number of imports to return",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "csv_to_sql/list_tables": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "schema": {
+          "default": "public",
+          "description": "PostgreSQL schema name",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "csv_to_sql/preview_csv": {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "csv_content": {
+          "description": "The CSV file content as a string",
+          "type": "string"
+        },
+        "has_header": {
+          "default": true,
+          "description": "Whether the first row is a header row",
+          "type": "boolean"
+        },
+        "preview_rows": {
+          "default": 5,
+          "description": "Number of rows to include in preview",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "csv_content"
+      ],
+      "type": "object"
+    }
+  },
   "database/db_create_table": {
     "annotations": {
       "destructiveHint": false,
@@ -2359,6 +2579,90 @@
       "required": [
         "envelope_id",
         "reason"
+      ],
+      "type": "object"
+    }
+  },
+  "filesystem/list_directory": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "include_hidden": {
+          "default": false,
+          "description": "Include hidden files (starting with .)",
+          "type": "boolean"
+        },
+        "path": {
+          "description": "Path to the directory to list",
+          "type": "string"
+        },
+        "recursive": {
+          "default": false,
+          "description": "List recursively (up to 2 levels deep)",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "filesystem/read_file": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "encoding": {
+          "default": "utf-8",
+          "description": "File encoding (default: utf-8)",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path to the file to read",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "filesystem/write_file": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "content": {
+          "description": "Content to write to the file",
+          "type": "string"
+        },
+        "create_dirs": {
+          "default": true,
+          "description": "Create parent directories if they don't exist",
+          "type": "boolean"
+        },
+        "encoding": {
+          "default": "utf-8",
+          "description": "File encoding (default: utf-8)",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path to the file to write",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "content"
       ],
       "type": "object"
     }
@@ -7075,6 +7379,265 @@
       },
       "required": [
         "query"
+      ],
+      "type": "object"
+    }
+  },
+  "vanna/add_training_pair": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "context": {
+          "description": "Context name to add training to.",
+          "type": "string"
+        },
+        "question": {
+          "description": "Natural language question",
+          "type": "string"
+        },
+        "sql": {
+          "description": "Corresponding SQL query",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question",
+        "sql"
+      ],
+      "type": "object"
+    }
+  },
+  "vanna/ask_database": {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "context": {
+          "description": "Context name to use for this query. Uses training data from this context only.",
+          "type": "string"
+        },
+        "execute": {
+          "default": true,
+          "description": "Whether to execute the SQL and return results (default: true)",
+          "type": "boolean"
+        },
+        "limit": {
+          "default": 100,
+          "description": "Maximum rows to return (default: 100)",
+          "type": "integer"
+        },
+        "question": {
+          "description": "Natural language question about the data",
+          "type": "string"
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "type": "object"
+    }
+  },
+  "vanna/clear_training": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "context": {
+          "description": "Context name to clear. If not provided, clears default context.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "vanna/connect_database": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "vanna/create_context": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "description": {
+          "description": "Human-readable description of what this context is for",
+          "type": "string"
+        },
+        "name": {
+          "description": "Unique context name (alphanumeric with underscores, e.g., 'real_estate_analytics')",
+          "type": "string"
+        },
+        "tables": {
+          "description": "List of table names to associate with this context",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "vanna/delete_context": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "name": {
+          "description": "Context name to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "vanna/discover_schemas": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "vanna/discover_tables": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "schema": {
+          "default": "public",
+          "description": "Schema name (default: public)",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "vanna/get_context": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "name": {
+          "description": "Context name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "vanna/get_training_status": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "context": {
+          "description": "Context name to get status for. If not provided, uses default context.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "vanna/list_contexts": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "vanna/train_from_schema": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "context": {
+          "description": "Context name to train. Training data will be isolated to this context.",
+          "type": "string"
+        },
+        "schema": {
+          "default": "public",
+          "description": "PostgreSQL schema to extract from (default: public)",
+          "type": "string"
+        },
+        "tables": {
+          "description": "Optional list of specific table names to train on. If not provided, trains on all user-imported tables.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "vanna/upload_training": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "context": {
+          "description": "Context name to train. Training data will be isolated to this context.",
+          "type": "string"
+        },
+        "file_content": {
+          "description": "Training file content (CSV or JSON)",
+          "type": "string"
+        },
+        "file_type": {
+          "default": "csv",
+          "description": "File format",
+          "enum": [
+            "csv",
+            "json"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_content"
       ],
       "type": "object"
     }

@@ -57,6 +57,8 @@ dev = [
 # connector: only 10 of 23 came up, and `web_search` failed on `trafilatura`
 # with nothing anywhere declaring it.
 cloudflare_r2 = ["aioboto3>=13.0.0", "botocore"]
+# Floors from the pip freeze of the v1 image each was recovered from.
+csv_to_sql = ["asyncpg>=0.29.0"]
 database = [
   "aioboto3>=13.0.0",
   "aiomysql>=0.2.0",
@@ -76,6 +78,11 @@ outlook_email = [
   "rapidfuzz>=3.0.0",
 ]
 trino = ["trino>=0.328.0"]
+# `vanna` is pinned exactly, not floored: the connector builds on
+# `vanna.legacy`, the pre-2.0 API that 2.x keeps under a new name, and a
+# module named legacy is the first thing a release is entitled to move. 2.0.1
+# is the version the v1 image ran.
+vanna = ["asyncpg>=0.29.0", "openai>=2.15.0,<3", "vanna==2.0.1"]
 web_search = ["trafilatura>=1.8.0"]
 
 # Every connector dependency at once. Not for users - a deployment installs
@@ -84,7 +91,7 @@ web_search = ["trafilatura>=1.8.0"]
 # failures shipped: eleven connectors that would not import, and twenty-five
 # tools that raised NameError on call while importing perfectly.
 all = [
-  "magone-mcp-core[database,otp_verification,outlook_email,trino,web_search]",
+  "magone-mcp-core[csv_to_sql,database,otp_verification,outlook_email,trino,vanna,web_search]",
 ]
 
 [project.urls]
