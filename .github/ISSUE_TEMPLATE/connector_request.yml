@@ -1,0 +1,49 @@
+name: Connector or tool request
+description: Ask for a new connector, or a tool missing from an existing one.
+labels: ["connector-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A connector here wraps somebody else's API, called with the caller's own credentials and storage. See "The bar" in CONTRIBUTING.md before asking: a tool that needs a platform's own database, object store or tenant id does not belong in this repository.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What are you asking for?
+      options:
+        - A new connector
+        - A new tool in an existing connector
+        - A change to an existing tool
+    validations:
+      required: true
+  - type: input
+    id: service
+    attributes:
+      label: Service and API
+      description: The vendor API, with a link to its documentation.
+      placeholder: e.g. Example CRM REST API v2, https://developer.example.com/api
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: Tools you need
+      description: For each tool, what it should do and whether it only reads or also writes or deletes.
+    validations:
+      required: true
+  - type: textarea
+    id: auth
+    attributes:
+      label: Authentication
+      description: How the API authenticates (API key, OAuth 2.0 and which flow, service account) and which scopes the tools would need.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Why
+      description: What you are trying to do with it.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to open a pull request for this myself.
