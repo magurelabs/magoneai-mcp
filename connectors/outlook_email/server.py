@@ -25,10 +25,17 @@ SERVER_VERSION = "2.0.0"
 # Ported bodies reference `self.logger`, which was the v1 server's own logger.
 logger = structlog.get_logger(f"mcp.{SERVER_NAME}")
 
+# send_email, create_draft and reply_email accept up to 10 attachments and
+# 50 MB per call, which base64 turns into roughly 67 MB of request body. The
+# framework's 10 MiB default refused those calls before any tool ran. v1 ran
+# this connector at 75 MB. MCP_MAX_BODY_BYTES still overrides it.
+MAX_REQUEST_BODY_BYTES = 75 * 1024 * 1024
+
 server = ConnectorServer(
     name=SERVER_NAME,
     version=SERVER_VERSION,
     description="",
+    max_body_bytes=MAX_REQUEST_BODY_BYTES,
 )
 
 

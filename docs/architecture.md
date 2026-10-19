@@ -86,9 +86,11 @@ left to its defaults:
   `MCP_ALLOWED_ORIGINS`. `MCP_ALLOWED_HOSTS=*` turns the check off, and the
   server logs a warning when it starts that way.
 - **Request body cap.** The SDK buffers the whole body before parsing it, so
-  the body is bounded: 10 MiB by default (`MCP_MAX_BODY_BYTES`), answered
-  `413` when exceeded. Base64 attachments are about a third larger than the
-  file they carry.
+  the body is bounded: 10 MiB by default, answered `413` when exceeded. Base64
+  attachments are about a third larger than the file they carry, so a
+  connector whose tools carry several of them declares a larger default with
+  `ConnectorServer(max_body_bytes=...)`. `MCP_MAX_BODY_BYTES` overrides
+  either.
 
 `GET /healthz` answers `{status, name, version, tools}` for a container or
 Kubernetes probe. It sits outside the Host check, because a probe arrives by
