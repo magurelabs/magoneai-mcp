@@ -1,5 +1,9 @@
 # magoneai-mcp
 
+[![CI](https://github.com/magurelabs/magoneai-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/magurelabs/magoneai-mcp/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/magurelabs/magoneai-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/magurelabs/magoneai-mcp)
+
 MCP connectors for third-party APIs, built on the [official MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk).
 
 Every connector here talks to somebody else's API. You supply your own credentials and your own storage, and the tool works the same whether it runs inside a platform or on your laptop. If a tool cannot do that, it does not belong in this repository.
@@ -11,6 +15,19 @@ Every connector here talks to somebody else's API. You supply your own credentia
 - **`scripts/`** - the gates CI runs on every pull request, each of which you can run locally.
 
 `connectors/publication.json` records which connectors are ready to publish (19) and which are not yet (5), with the reason for each.
+
+## Documentation
+
+| | |
+|---|---|
+| [docs/TOOLS.md](docs/TOOLS.md) | every tool in every connector, generated from the code |
+| [docs/configuration.md](docs/configuration.md) | every environment variable the framework and the connectors read, with defaults |
+| [docs/architecture.md](docs/architecture.md) | how `magone-mcp-core` handles a request: transport, auth modes, limits, redaction, read-only mode, annotations |
+| [docs/writing-a-connector.md](docs/writing-a-connector.md) | a complete minimal connector, from an empty directory to a passing pull request |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | the boundary rule, running every gate locally, DCO sign-off, review |
+| [SUPPORT.md](SUPPORT.md) | where to ask questions and report problems |
+| [CHANGELOG.md](CHANGELOG.md), [RELEASING.md](RELEASING.md) | what changed, and how releases are versioned and published |
+| [GOVERNANCE.md](GOVERNANCE.md), [MAINTAINERS.md](MAINTAINERS.md) | how decisions are made, and by whom |
 
 ## Quickstart
 
@@ -77,7 +94,7 @@ if __name__ == "__main__":
     server.run(port=8000)
 ```
 
-The schema comes from your type hints, which is the right default for a new tool.
+The schema comes from your type hints, which is the right default for a new tool. [docs/writing-a-connector.md](docs/writing-a-connector.md) walks through a complete connector with credentials, tests and every step a pull request needs.
 
 ### Declaring a tool's permission group
 
@@ -145,6 +162,8 @@ Each of these exists because doing it per connector meant it was done differentl
 
 ## Configuration
 
+The variables most deployments touch. [docs/configuration.md](docs/configuration.md) lists every one, including those individual connectors read.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `MCP_MODE` | `platform` | `platform`, `hosted` or `local`. An unrecognised value falls back to `platform`, so a typo cannot disable authentication. |
@@ -194,7 +213,7 @@ Every ported tool's input schema is carried across byte for byte with `declare_s
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions are under the [Developer Certificate of Origin](https://developercertificate.org/) rather than a CLA: sign off each commit with `git commit -s`, and a check on every pull request verifies it. Please read the [Code of Conduct](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions are under the [Developer Certificate of Origin](https://developercertificate.org/) rather than a CLA: sign off each commit with `git commit -s`, and a check on every pull request verifies it. Please read the [Code of Conduct](CODE_OF_CONDUCT.md). How the project is run is in [GOVERNANCE.md](GOVERNANCE.md); questions go where [SUPPORT.md](SUPPORT.md) says.
 
 ## Security
 
