@@ -1299,6 +1299,24 @@
     },
     "type": "object"
   },
+  "outlook_email/set_email_categories": {
+    "properties": {
+      "categories": {
+        "description": "The email's full category list after this change",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "email_id": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
   "trino/trino_list_catalogs": {
     "properties": {
       "catalogs": {

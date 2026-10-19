@@ -5505,6 +5505,10 @@
           "description": "Body is HTML",
           "type": "boolean"
         },
+        "mailbox": {
+          "description": "Shared mailbox address to reply from via app-only auth, instead of /me - for both the plain and attachment reply paths. Requires the org's Azure app to have the application permission Mail.Send/Mail.ReadWrite admin-consented, same as get_email, and the mailbox must be in this connection's allowed_mailboxes.",
+          "type": "string"
+        },
         "reply_all": {
           "default": false,
           "description": "Reply to all recipients",
@@ -5686,6 +5690,44 @@
         "to",
         "subject",
         "body"
+      ],
+      "type": "object"
+    }
+  },
+  "outlook_email/set_email_categories": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "add": {
+          "default": [],
+          "description": "Category names to add",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "email_id": {
+          "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to update via app-only auth, instead of /me. Omit to update the signed-in user's own mailbox.",
+          "type": "string"
+        },
+        "remove": {
+          "default": [],
+          "description": "Category names to remove (case-insensitive match)",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "email_id"
       ],
       "type": "object"
     }
