@@ -164,7 +164,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: python scripts/gen_server_json.py --check
 
-      # docs/TOOLS.md is the only list of all 280 tools. A hand-kept
+      # docs/TOOLS.md is the only list of all 281 tools. A hand-kept
       # list of 257 anything is wrong within a week, and this
       # repository has already produced three documents that became
       # false because something else changed correctly.

@@ -4,9 +4,10 @@ Ported from v1 `mcp-servers/onedrive`. Uploads to, and lists, reads, moves,
 copies, shares, searches and deletes items in, the signed-in user's own
 OneDrive through Microsoft Graph, with the caller's own Microsoft credentials.
 
-11 tools, 5 of them proposed read-only. Input schemas are v1's, carried
+12 tools, 5 of them proposed read-only. Input schemas are v1's, carried
 across via `declare_schema`, except `onedrive_upload_file`, which no longer
-takes `file_id` (see below) and so now requires `filename`.
+takes `file_id` (see below) and so now requires `filename`, and
+`onedrive_upload_files`, which uploads several inline files in one call.
 
 ## Credentials
 
@@ -48,7 +49,7 @@ from magone_mcp_core import ConnectorServer, declare_output_schema, declare_sche
 from magone_mcp_core.redact import scrub_text, upstream_error
 
 from ._shared import get_access_token, graph_request
-from .tools import copy_item, upload_graph
+from .tools import copy_item, upload_graph, upload_many
 from .tools._constants import (
     MAX_LINK_EXPIRY_DAYS,
     MAX_RESULTS_CAP,
@@ -341,6 +342,128 @@ async def onedrive_upload_file(
 
     logger.info("onedrive_upload_complete", method=method, size_bytes=len(payload.content))
     return {"success": True, "upload_method": method, **format_uploaded(item)}
+
+
+# REVIEWED: readOnlyHint=False, destructiveHint=True, as onedrive_upload_file:
+# conflict_behavior=replace overwrites. Evidence: one upload_file per attachment
+@server.tool(
+    name="onedrive_upload_files",
+    description=(
+        "Upload several files to the user's OneDrive in one call (at most 20). Put each "
+        "file in `attachments` as {filename, content_base64, content_type}. A platform "
+        "that resolves file references (MagOne rewrites run-file references in a "
+        "parameter named `attachments` into exactly this shape, so a large file such as "
+        "a recording is not cut by a per-string limit) fills these in; any other MCP "
+        "client passes the objects directly. Destination: `folder_path` (e.g. "
+        "'Reports/2026', created if missing) or `folder_id`. Files over 4 MB are sent in "
+        "resumable chunks. One bad file fails alone. Returns uploaded and failed lists."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
+    credential_headers=[
+        "X-Microsoft-Refresh-Token",
+        "X-Microsoft-Client-Id",
+        "X-Microsoft-Client-Secret",
+        "X-Microsoft-Tenant-Id",
+    ],
+    permission_group="write_onedrive",
+    required_scopes=["https://graph.microsoft.com/Files.ReadWrite"],
+)
+@declare_schema(
+    {
+        "type": "object",
+        "properties": {
+            "attachments": {
+                "type": "array",
+                "description": "Files to upload, each {filename, content_base64, content_type}",
+                "maxItems": 20,
+                "items": {
+                    "type": ["object", "string"],
+                    "description": "An inline file; a reference only if a platform resolves it",
+                    "properties": {
+                        "filename": {"type": "string", "description": "Name to save as"},
+                        "content_base64": {
+                            "type": "string",
+                            "description": "Base64-encoded file content",
+                        },
+                        "content_type": {
+                            "type": "string",
+                            "description": "MIME type (guessed if omitted)",
+                        },
+                    },
+                },
+            },
+            "folder_path": {"type": "string", "description": "Destination folder path"},
+            "folder_id": {"type": "string", "description": "Destination folder item ID"},
+            "conflict_behavior": {
+                "type": "string",
+                "enum": ["rename", "replace", "fail"],
+                "default": "rename",
+                "description": "What to do when a name is taken",
+            },
+        },
+        "required": ["attachments"],
+    }
+)
+@declare_output_schema(
+    {
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "True when no file failed"},
+            "uploaded": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "size": {"type": ["integer", "null"]},
+                        "web_url": _NULLABLE_STR,
+                        "parent_id": _NULLABLE_STR,
+                        "parent_path": _NULLABLE_STR,
+                        "upload_method": {"type": "string", "enum": ["simple", "session"]},
+                    },
+                },
+            },
+            "failed": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "filename": {"type": "string"},
+                        "error": {"type": "string"},
+                    },
+                },
+            },
+            "error": _ERROR,
+        },
+        "required": ["success"],
+    }
+)
+async def onedrive_upload_files(
+    credentials: dict,
+    attachments: list,
+    folder_path: str | None = None,
+    folder_id: str | None = None,
+    conflict_behavior: str = "rename",
+) -> dict[str, Any]:
+    try:
+        conflict = check_conflict(conflict_behavior)
+        items = upload_many.inline_items(attachments)
+    except UploadInputError as exc:
+        return {"success": False, "error": str(exc)}
+
+    try:
+        token = await get_access_token(credentials)
+        result = await upload_many.upload_many(token, items, (folder_path, folder_id), conflict)
+    except Exception as exc:
+        return _failed("onedrive_upload_files", exc)
+
+    logger.info(
+        "onedrive_upload_files_complete",
+        uploaded=len(result["uploaded"]),
+        failed=len(result["failed"]),
+    )
+    return result
 
 
 # REVIEWED: readOnlyHint=True. Evidence: GET /me/drive/items/{item_id}

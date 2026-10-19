@@ -11,7 +11,7 @@ Every connector here talks to somebody else's API. You supply your own credentia
 ## What is here
 
 - **`magone-mcp-core`** (`src/magone_mcp_core/`) - a thin layer over the SDK. It adds the handful of things a connector catalogue needs and the SDK has no opinion about, and gets out of the way otherwise.
-- **`connectors/`** - one package per connector: 26 connectors, 280 tools. [`docs/TOOLS.md`](docs/TOOLS.md) lists every tool, generated from the code.
+- **`connectors/`** - one package per connector: 26 connectors, 281 tools. [`docs/TOOLS.md`](docs/TOOLS.md) lists every tool, generated from the code.
 - **`scripts/`** - the gates CI runs on every pull request, each of which you can run locally.
 
 `connectors/publication.json` records which connectors are ready to publish (19) and which are not yet (7), with the reason for each.
@@ -195,7 +195,7 @@ pip install -e ".[dev,all]"
 pytest tests/ connectors/ -q
 ```
 
-905 tests: 360 framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), 244 framework tests that import every connector, and 301 connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
+1,267 tests: 377 framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), 258 framework tests that import every connector, and 632 connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
 
 CI also runs, on every pull request: `ruff check` and `ruff format --check`; a golden-schema diff of every tool's input and output schema (`scripts/golden_schema_gate.py`); a boundary check that refuses platform reach-through (`scripts/boundary_gate.py`); the tool-contract linter (annotations, property descriptions, logged credentials); dependency, compile, code-health, credential-header, permission-group, publication, manifest and runner-label gates; and the official MCP conformance suite against every connector the change can affect. Each gate is a script under `scripts/` that runs locally the same way.
 
