@@ -1,5 +1,14 @@
+# Blank issues are off so every report arrives with the details a maintainer
+# needs. Questions, bugs and connector requests each have a template; anything
+# else belongs in one of the links below.
 blank_issues_enabled: false
 contact_links:
   - name: Report a security vulnerability
     url: https://github.com/magurelabs/magoneai-mcp/security/advisories/new
     about: Please report vulnerabilities privately, never in a public issue. See SECURITY.md.
+  - name: Read the documentation
+    url: https://github.com/magurelabs/magoneai-mcp/blob/main/SUPPORT.md
+    about: Where to find the configuration reference, the architecture overview and the connector guide.
+  - name: Contribute a connector
+    url: https://github.com/magurelabs/magoneai-mcp/blob/main/CONTRIBUTING.md
+    about: The boundary rule, how to run every gate locally, and the step-by-step guide.
