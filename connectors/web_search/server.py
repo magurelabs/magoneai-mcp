@@ -2,7 +2,7 @@
 
 Ported from the v1 mixin form by a codemod.
 
-4 tools, 4 of them proposed read-only. Every input schema
+5 tools, 5 of them proposed read-only. Every input schema
 is carried across verbatim via `declare_schema` rather than derived from type
 hints, so the wire contract is byte-identical to v1 and no live agent sees a
 changed parameter schema.
@@ -53,9 +53,31 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 import httpx
 import trafilatura
 
+from . import _research
+from ._scrape import (
+    BLOCKED_URL,
+    EMPTY,
+    FETCH_FAILED,
+    PDF_NO_TEXT,
+    PDF_PARSE_ERROR,
+    TOO_LARGE,
+    UNSUPPORTED,
+    ScrapeError,
+    extract_async,
+    fetch_url,
+    precheck_url,
+)
+
 SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
 
-CRAWL4AI_URL = os.getenv("CRAWL4AI_URL", "http://localhost:11235")
+# Empty means Crawl4AI is not deployed: the JavaScript-rendering fallback is
+# skipped rather than aimed at a localhost port nothing listens on. Every
+# deployment that runs Crawl4AI sets this explicitly.
+CRAWL4AI_URL = os.getenv("CRAWL4AI_URL", "")
+
+
+def _crawl4ai_configured() -> bool:
+    return bool(CRAWL4AI_URL.strip())
 
 _MARKDOWN_GENERATOR_CONFIG = {
     "type": "DefaultMarkdownGenerator",
@@ -388,9 +410,6 @@ def _truncate_content(content: str, max_chars: int) -> str:
 
 _MIN_CONTENT_LENGTH = 50
 
-_MAX_REDIRECTS = 5
-
-
 class RedirectBlocked(Exception):
     """A fetch was redirected to an address the SSRF check refuses."""
 
@@ -454,59 +473,15 @@ def _pinning_args(url: str, extra_args: list[str] | None) -> list[str]:
     return list(extra_args)
 
 
-async def _fetch_via_trafilatura(client, url: str, max_chars: int) -> str:
-    """Fast path: fetch with httpx + trafilatura (no JS rendering).
-
-    Redirects are followed by hand, not by httpx. `scrape_url` validates the
-    URL the model supplied, but a public host answering 302 with a link-local
-    Location defeats a check that only ran once, so every hop is validated
-    before it is requested. This is what `cloudflare_r2` already did; doing it
-    here too is the difference between one guard and a guard per connector.
-    """
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
-        for _ in range(_MAX_REDIRECTS + 1):
-            resp = await client.get(url, headers=headers, follow_redirects=False, timeout=15)
-            if resp.status_code not in (301, 302, 303, 307, 308):
-                break
-            location = resp.headers.get("location")
-            if not location:
-                return ""
-            url = urljoin(url, location)
-            try:
-                validate_url(url)
-            except (SSRFBlocked, InvalidURL) as exc:
-                logger.warning("scrape_url.redirect_blocked", target=url)
-                # Raised, not returned as "". An empty body looks like a
-                # JS-rendered page, and the fallback then hands the ORIGINAL
-                # URL to a headless browser that follows the same redirect
-                # itself: the block was one line from being undone.
-                raise RedirectBlocked(str(exc)) from exc
-        else:
-            return ""
-
-        if resp.status_code != 200:
-            return ""
-
-        content = trafilatura.extract(
-            resp.text,
-            include_links=True,
-            include_tables=True,
-            output_format="markdown",
-        )
-        return _truncate_content(content, max_chars) if content else ""
-    except RedirectBlocked:
-        raise
-    except Exception:
-        return ""
-
 async def _fetch_via_crawl4ai(url: str, max_chars: int) -> str:
-    """Fallback: fetch with Crawl4AI (renders JS via headless browser)."""
+    """Fallback: fetch with Crawl4AI (renders JS via headless browser).
+
+    Skipped (returns "") when CRAWL4AI_URL is unset.
+    """
     import httpx
 
+    if not _crawl4ai_configured():
+        return ""
     try:
         payload = {
             "urls": [url],
@@ -538,19 +513,35 @@ async def _fetch_via_crawl4ai(url: str, max_chars: int) -> str:
     except Exception:
         return ""
 
-async def _fetch_page_content(client, url: str, max_chars: int = 8000) -> str:
-    """Fetch a URL and extract meaningful content.
+async def _fetch_page_content(url: str, max_chars: int = 8000) -> tuple[str, str]:
+    """Fetch a URL and extract meaningful content. Returns (content, kind).
 
-    Tries trafilatura first (fast, no JS). If the result is too short
-    (likely a JS-rendered SPA), falls back to Crawl4AI which renders
-    JavaScript via a headless browser.
+    Direct fetch first (`_scrape.fetch_url`): every redirect hop is resolved,
+    checked against the framework's blocklist and the connection pinned to the
+    vetted address; servers that omit their intermediate certificate are
+    recovered through a validated AIA chain; PDFs are read as text. If that
+    yields too little (likely a JavaScript-rendered page), the Crawl4AI
+    fallback runs. Raises ScrapeError with an actionable code otherwise.
+
+    A blocked address never reaches the fallback: Crawl4AI's own browser would
+    follow the same redirect and undo the refusal.
     """
-    content = await _fetch_via_trafilatura(client, url, max_chars)
-    if len(content) >= _MIN_CONTENT_LENGTH:
-        return content
+    err: ScrapeError | None = None
+    try:
+        res = await fetch_url(url)
+        content, kind = await extract_async(res, max_chars)
+        if len(content) >= _MIN_CONTENT_LENGTH or kind != "html":
+            return content, kind
+        err = ScrapeError(EMPTY, f"no readable text content found at {url}")
+    except ScrapeError as e:
+        if e.code in (BLOCKED_URL, UNSUPPORTED, PDF_NO_TEXT, PDF_PARSE_ERROR, TOO_LARGE):
+            raise
+        err = e
 
-    # Fallback to Crawl4AI for JS-rendered pages
-    return await _fetch_via_crawl4ai(url, max_chars)
+    fallback = await _fetch_via_crawl4ai(url, max_chars)
+    if len(fallback) >= _MIN_CONTENT_LENGTH:
+        return fallback, "html"
+    raise err
 
 async def _fetch_via_crawl4ai_rich(
     url: str,
@@ -570,6 +561,8 @@ async def _fetch_via_crawl4ai_rich(
     """
     import httpx
 
+    if not _crawl4ai_configured():
+        return {"success": False, "error": "crawl4ai is not configured (CRAWL4AI_URL unset)"}
     try:
         browser_params: dict[str, Any] = {"headless": True}
         if extra_args:
@@ -859,6 +852,8 @@ async def perplexity_search(credentials: dict[str, str],
      'required': ['url']})
 @declare_output_schema({'properties': {'char_count': {'type': 'integer'},
                                        'content': {'type': 'string'},
+                                       'content_type': {'type': 'string'},
+                                       'error_code': {'type': 'string'},
                                        'final_url': {'type': 'string'},
                                        'links': {'items': {'type': 'string'}, 'type': 'array'},
                                        'markdown': {'type': 'string'},
@@ -872,21 +867,28 @@ async def scrape_url(credentials: dict[str, str],
     return_full: bool = False,
     extra_args: list[str] | None = None,
 ) -> dict[str, Any]:
-    import httpx
-
     # The URL comes from the model, so it is the connector's job to refuse an
     # address inside the trust boundary. Without this, a prompt injection in
     # any page the agent had already read could aim it at cloud instance
     # metadata or at the platform's own API, and the body came back as page
     # text. Both branches below are covered because only checking the one
     # with a test is how this kind of gap survives.
+    # Scheme, localhost and single-label in-cluster names (api, vault) are
+    # refused before any DNS lookup: a resolver inside a cluster answers them.
     try:
+        precheck_url(url)
         validate_url(url)
+    except ScrapeError as exc:
+        logger.warning("scrape_url.blocked", url=url)
+        return {
+            "error": f"Refused to scrape URL: address is blocked ({exc.message})",
+            "error_code": exc.code,
+        }
     except SSRFBlocked as exc:
         logger.warning("scrape_url.blocked", url=url)
-        return {"error": f"Refused to scrape URL: address is blocked ({exc})"}
+        return {"error": f"Refused to scrape URL: address is blocked ({exc})", "error_code": BLOCKED_URL}
     except InvalidURL as exc:
-        return {"error": f"Refused to scrape URL: {exc}"}
+        return {"error": f"Refused to scrape URL: {exc}", "error_code": FETCH_FAILED}
 
     try:
         pinned = _pinning_args(url, extra_args)
@@ -905,24 +907,111 @@ async def scrape_url(credentials: dict[str, str],
             return {"error": f"Failed to scrape URL: {result.get('error', 'unknown error')}"}
         return result
 
-    # Legacy / search-result path: unchanged. Same input, same output
-    # shape as before so existing callers see no behavior change.
+    # Search-result path: same input and success shape as before; the extra
+    # "content_type" key is additive. A failure carries an "error_code" the
+    # agent can act on (tls_error, http_403, timeout, pdf_no_text, ...).
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            content = await _fetch_page_content(client, url, max_chars)
+        content, kind = await _fetch_page_content(url, max_chars)
     except RedirectBlocked as exc:
-        return {"error": f"Refused to scrape URL: redirected to a blocked address ({exc})"}
-    except Exception as e:
-        return {"error": f"Failed to scrape URL: {str(e)}"}
-
-    if not content:
-        return {"error": f"No text content found at {url}"}
+        return {
+            "error": f"Refused to scrape URL: redirected to a blocked address ({exc})",
+            "error_code": BLOCKED_URL,
+        }
+    except ScrapeError as e:
+        if e.code == BLOCKED_URL:
+            return {
+                "error": f"Refused to scrape URL: address is blocked ({e.message})",
+                "error_code": e.code,
+            }
+        return {"error": f"Failed to scrape URL ({e.code}): {e.message}", "error_code": e.code}
 
     return {
         "url": url,
         "content": content,
         "char_count": len(content),
+        "content_type": kind,
     }
+
+
+
+async def run_web_search(
+    credentials: dict[str, str],
+    query: str,
+    num_results: int = 10,
+    language: str = "en",
+    region: str | None = None,
+    time_range: str = "",
+    safe_search: int = 1,
+    engines: list[str] | None = None,
+    categories: list[str] | None = None,
+) -> dict[str, Any]:
+    """search_web's provider dispatch, shared with web_research."""
+    # Empty / invalid time_range means ALL-TIME (no recency filter). Only an
+    # explicit day/week/month/year narrows results. Defaulting to a recency
+    # filter silently hides evergreen pages (profiles, company info, docs).:
+    if time_range not in _ALLOWED_TIME_RANGES:
+        time_range = ""
+    if safe_search not in _ALLOWED_SAFE_SEARCH:
+        safe_search = 1
+
+    # Serper is primary whenever a key is configured; SearXNG stays as the
+    # fallback for deployments without one. Same return shape either way.
+    #
+    # safe_search and region are forwarded rather than dropped: region is
+    # what makes a deployment outside the US return local sources instead of
+    # US ones, and silently ignoring a caller's SafeSearch on the provider
+    # that replaced SearXNG would be a quiet regression.
+    serper_key = _serper_key(credentials)
+    if _web_search_provider(credentials) == "serper" and serper_key:
+        return await _serper_web_search(
+            serper_key,
+            query,
+            num_results,
+            region,
+            language,
+            time_range,
+            safe_search,
+        )
+
+    lang = _prepare_language(language, region)
+    category_param = _prepare_categories(categories, "general")
+    engine_param = _prepare_engines(engines)
+
+    params = {
+        "q": query,
+        "format": "json",
+        "categories": category_param,
+        "language": lang,
+        "safesearch": safe_search,
+    }
+    if time_range:
+        params["time_range"] = time_range
+    if engine_param:
+        params["engines"] = engine_param
+    cooldown_engines = _engine_cooldown_list()
+    if cooldown_engines:
+        params["disabled_engines"] = ",".join(cooldown_engines)
+    try:
+        data = await _searxng_request(params)
+    except Exception as e:
+        if "ConnectError" in type(e).__name__:
+            return {
+                "error": (
+                    f"SearXNG not reachable at {SEARXNG_URL}. Point SEARXNG_URL at a "
+                    "SearXNG instance with the JSON output format enabled, or set "
+                    "SERPER_API_KEY to search through Serper instead."
+                )
+            }
+        return {"error": f"Search failed: {str(e)}"}
+
+    unresponsive = data.get("unresponsive_engines") or data.get("errors") or []
+    if isinstance(unresponsive, list):
+        for engine_name in unresponsive:
+            if isinstance(engine_name, str):
+                _record_engine_fail(engine_name)
+
+    results = _build_results(data.get("results", []), num_results)
+    return _finalize(results, query, "searxng", data.get("number_of_results"))
 
 
 
@@ -995,72 +1084,111 @@ async def search_web(credentials: dict[str, str],
     engines: list[str] | None = None,
     categories: list[str] | None = None,
 ) -> dict[str, Any]:
-    # Empty / invalid time_range means ALL-TIME (no recency filter). Only an
-    # explicit day/week/month/year narrows results. Defaulting to a recency
-    # filter silently hides evergreen pages (profiles, company info, docs).:
+    return await run_web_search(
+        credentials,
+        query,
+        num_results,
+        language,
+        region,
+        time_range,
+        safe_search,
+        engines,
+        categories,
+    )
+
+
+
+# credential_headers: ['X-Serper-Api-Key']
+# permission_group: 'default'  required_scopes: []
+# REVIEWED: readOnlyHint=True, destructiveHint=False. Every query goes through
+# run_web_search (a search read) and every page through _fetch_page_content
+# (GET only, SSRF-guarded); the only state touched is an in-process page cache.
+@server.tool(
+    name='web_research',
+    description=(
+        "Research a question on the web in ONE call: runs up to 5 search queries in "
+        "parallel, reads the best few pages in parallel (PDFs and official sites "
+        "included), and returns the most relevant passages from each page with its URL, "
+        "title and date, plus snippets of other results. Prefer this over search_web + "
+        "scrape_url. Put every entity and angle you need into the queries list (one query "
+        "per distinct sub-question, e.g. one per organisation), then answer from the "
+        "returned passages. Fast: returns within about 8 seconds with whatever is ready."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+    ),
+    credential_headers=['X-Serper-Api-Key'],
+    permission_group='default',
+)
+@declare_schema({'type': 'object',
+     'properties': {'queries': {'type': 'array',
+                                'items': {'type': 'string'},
+                                'minItems': 1,
+                                'maxItems': 5,
+                                'description': '1 to 5 specific search queries covering '
+                                               'everything needed.'},
+                    'max_pages': {'type': 'integer',
+                                  'description': 'How many pages to read (default 5, max 8).',
+                                  'default': 5},
+                    'region': {'type': 'string',
+                               'description': "Optional two-letter region for local "
+                                              "results, e.g. 'ae'."},
+                    'language': {'type': 'string',
+                                 'description': "Language code for results (default 'en').",
+                                 'default': 'en'},
+                    'time_range': {'type': 'string',
+                                   'description': 'Recency filter: day, week, month or '
+                                                  'year. Omit for all-time results; set it '
+                                                  'only for news-type questions.',
+                                   'default': ''}},
+     'required': ['queries']})
+@declare_output_schema({'properties': {'queries': {'type': 'array'},
+                                       'sources': {'type': 'array',
+                                                   'description': 'Pages read, most relevant '
+                                                                  'first: url, title, '
+                                                                  'source_domain, '
+                                                                  'published_date, snippet, '
+                                                                  'content_type, passages[].'},
+                                       'other_results': {'type': 'array',
+                                                         'description': 'Further results not '
+                                                                        'read: url, title, '
+                                                                        'snippet, '
+                                                                        'published_date.'},
+                                       'unread_pages': {'type': 'array'},
+                                       'timing_ms': {'type': 'object'},
+                                       'note': {'type': 'string'},
+                                       'errors': {'type': 'array'}},
+                        'type': 'object'})
+async def web_research(credentials: dict[str, str],
+    queries: list[str],
+    max_pages: int = _research.DEFAULT_MAX_PAGES,
+    region: str | None = None,
+    language: str = "en",
+    time_range: str = "",
+) -> dict[str, Any]:
+    if isinstance(queries, str):
+        queries = [queries]
     if time_range not in _ALLOWED_TIME_RANGES:
         time_range = ""
-    if safe_search not in _ALLOWED_SAFE_SEARCH:
-        safe_search = 1
 
-    # Serper is primary whenever a key is configured; SearXNG stays as the
-    # fallback for deployments without one. Same return shape either way.
-    #
-    # safe_search and region are forwarded rather than dropped: region is
-    # what makes a deployment outside the US return local sources instead of
-    # US ones, and silently ignoring a caller's SafeSearch on the provider
-    # that replaced SearXNG would be a quiet regression.
-    serper_key = _serper_key(credentials)
-    if _web_search_provider(credentials) == "serper" and serper_key:
-        return await _serper_web_search(
-            serper_key,
+    async def search(query: str) -> dict[str, Any]:
+        return await run_web_search(
+            credentials,
             query,
-            num_results,
-            region,
-            language,
-            time_range,
-            safe_search,
+            num_results=_research.RESULTS_PER_QUERY,
+            language=language,
+            region=region,
+            time_range=time_range,
         )
 
-    lang = _prepare_language(language, region)
-    category_param = _prepare_categories(categories, "general")
-    engine_param = _prepare_engines(engines)
-
-    params = {
-        "q": query,
-        "format": "json",
-        "categories": category_param,
-        "language": lang,
-        "safesearch": safe_search,
-    }
-    if time_range:
-        params["time_range"] = time_range
-    if engine_param:
-        params["engines"] = engine_param
-    cooldown_engines = _engine_cooldown_list()
-    if cooldown_engines:
-        params["disabled_engines"] = ",".join(cooldown_engines)
-    try:
-        data = await _searxng_request(params)
-    except Exception as e:
-        if "ConnectError" in type(e).__name__:
-            return {
-                "error": (
-                    f"SearXNG not reachable at {SEARXNG_URL}. Point SEARXNG_URL at a "
-                    "SearXNG instance with the JSON output format enabled, or set "
-                    "SERPER_API_KEY to search through Serper instead."
-                )
-            }
-        return {"error": f"Search failed: {str(e)}"}
-
-    unresponsive = data.get("unresponsive_engines") or data.get("errors") or []
-    if isinstance(unresponsive, list):
-        for engine_name in unresponsive:
-            if isinstance(engine_name, str):
-                _record_engine_fail(engine_name)
-
-    results = _build_results(data.get("results", []), num_results)
-    return _finalize(results, query, "searxng", data.get("number_of_results"))
+    return await _research.research(
+        list(queries or []),
+        search=search,
+        fetch=_fetch_page_content,
+        normalize=_normalize_url,
+        max_pages=max_pages,
+    )
 
 
 
