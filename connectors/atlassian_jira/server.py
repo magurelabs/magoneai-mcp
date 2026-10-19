@@ -631,7 +631,14 @@ def _attachment_file(item: Any, position: int) -> Tuple[str, bytes, Optional[str
 # Evidence: POST /rest/api/3/issue/{key}/attachments as multipart.
 @server.tool(
     name='addJiraIssueAttachment',
-    description="Attach a file to a Jira issue. Content is base64-encoded, so a binary file such as a PDF or image is sent the same way as text.",
+    description=(
+        "Attach one or more files to a Jira issue. Pass files uploaded to the "
+        "workflow (e.g. a Start node file or image field) or produced by "
+        "another tool through `attachments`, as their platform file_id or "
+        "storage key; the platform fetches the bytes from its storage, so "
+        "large files work. fileName + fileContentBase64 is only for a direct "
+        "caller that already holds the bytes."
+    ),
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
