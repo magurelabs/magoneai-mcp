@@ -41,6 +41,10 @@
     },
     "microsoft_sharepoint": { "status": "ready" },
     "microsoft_teams": { "status": "ready" },
+    "onedrive": {
+      "status": "blocked",
+      "reason": "Ported from v1 and runs in no cluster. Publishing a connector that has never run in any of our own environments is a claim we cannot support. Same rule as google_drive: deploy it somewhere first."
+    },
     "otp_verification": { "status": "ready" },
     "outlook_calendar": { "status": "ready" },
     "outlook_email": { "status": "ready" },

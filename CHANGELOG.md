@@ -49,6 +49,13 @@ ahead of the first release.
 - `linkedin` connector: 11 tools to post as a member or a company page, read a
   post's reactions and comments, and report on who engages with an
   organization's posts. Blocked from publication until it has run end to end.
+- `onedrive` connector: 12 tools to upload to, list, read, move, copy,
+  share, search and delete items in the signed-in user's own OneDrive, with
+  resumable upload sessions for files over 4 MB and its own Graph scopes
+  (`Files.ReadWrite`, `User.Read`, `offline_access`). Declares a 75 MiB
+  request body cap. `onedrive_upload_files` uploads up to 20 inline
+  `attachments` in one call, each failing alone. Blocked from publication
+  until it has run end to end.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
