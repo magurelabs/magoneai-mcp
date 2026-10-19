@@ -1,0 +1,96 @@
+# OpenSSF Scorecard: https://github.com/ossf/scorecard
+#
+# Scores this repository against the OpenSSF supply-chain checks (pinned
+# dependencies, token permissions, dangerous workflow patterns, branch
+# protection and so on), uploads the findings to code scanning, and publishes
+# the score that the README badge shows.
+#
+# It holds no secret. It runs on push to main and weekly, never on a pull
+# request, so a fork's code never runs with the OIDC permission it needs.
+#
+# Every action is pinned to a full commit SHA, with the release it corresponds
+# to in a trailing comment. When publishing, the Scorecard API rejects results
+# from a job that uses any action outside its allowlist or has a `run` step,
+# so the analysis job is only those four actions. Jobs run on GitHub-hosted
+# runners only; see the note at the top of ci.yml.
+
+name: Scorecard
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+# Nothing at workflow level may be writable; each job asks for what it needs.
+permissions:
+  contents: read
+
+jobs:
+  # Code scanning, and publishing to the Scorecard API, are available only to
+  # a public repository (or one with GitHub Code Security). Run against a
+  # private repository the upload fails, so the analysis waits for the
+  # repository to be public instead of turning main red until then. Read from
+  # the API because a scheduled run's event payload carries no repository.
+  visibility:
+    name: Repository visibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      public: ${{ steps.check.outputs.public }}
+    steps:
+      - name: Is this repository public
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          visibility="$(gh api "repos/$REPO" --jq .visibility)"
+          echo "visibility: $visibility"
+          if [ "$visibility" = "public" ]; then
+            echo "public=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "public=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  analysis:
+    name: Scorecard analysis
+    needs: visibility
+    if: needs.visibility.outputs.public == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Upload the SARIF results to code scanning.
+      security-events: write
+      # Publish the results to the Scorecard API, which the badge reads.
+      id-token: write
+      # Read workflow runs, for the CI-Tests check.
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Keep the results as an artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: scorecard-sarif
+          path: results.sarif
+          retention-days: 5
+
+      - name: Upload to code scanning
+        if: ${{ !cancelled() }}
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: results.sarif
