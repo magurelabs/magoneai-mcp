@@ -806,6 +806,162 @@
     },
     "type": "object"
   },
+  "linkedin/create_post": {
+    "properties": {
+      "post": {
+        "description": "The created post: id (URN), author, url, state",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/delete_post": {
+    "properties": {
+      "deleted": {
+        "type": "boolean"
+      },
+      "id": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/engagement_report": {
+    "properties": {
+      "per_post": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "posts_analyzed": {
+        "type": "integer"
+      },
+      "repeat_engagers": {
+        "description": "Engagers who interacted with 2+ of the analyzed posts",
+        "type": "array"
+      },
+      "top_engagers": {
+        "description": "Ranked by total engagement: actor, name (orgs only), reactions, comments, posts_engaged",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "totals": {
+        "description": "reactions, comments, unique_engagers across all posts",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/get_page_statistics": {
+    "properties": {
+      "follower_count": {
+        "type": "integer"
+      },
+      "statistics": {
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/get_post": {
+    "properties": {
+      "post": {
+        "description": "id, author, text, url, published_at",
+        "type": "object"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/get_post_engagement": {
+    "properties": {
+      "comments": {
+        "type": "integer"
+      },
+      "reactions_by_type": {
+        "type": "object"
+      },
+      "total_reactions": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/get_profile": {
+    "properties": {
+      "email": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "person_urn": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/list_organizations": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "organizations": {
+        "description": "Each: id, urn, name, role",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/list_post_comments": {
+    "properties": {
+      "comments": {
+        "description": "Each: actor (URN), text, likes, created_at",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "count": {
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/list_post_reactions": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "reactions": {
+        "description": "Each: actor (URN), type, created_at",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "linkedin/list_posts": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "posts": {
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
   "microsoft_sharepoint/sharepoint_download_file": {
     "properties": {
       "content_base64": {
