@@ -70,7 +70,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          ALL="atlassian_confluence atlassian_jira cloudflare_r2 csv_to_sql database docusign filesystem google_calendar google_drive google_gmail image_generation kapso_whatsapp linear linkedin microsoft_sharepoint microsoft_teams onedrive otp_verification outlook_calendar outlook_email surveymonkey trino twitter_intel vanna web_search zoom"
+          ALL="atlassian_confluence atlassian_jira cloudflare_r2 csv_to_sql database docusign filesystem google_calendar google_drive google_gmail image_generation kapso_whatsapp linear linkedin microsoft_sharepoint microsoft_teams onedrive otp_verification outlook_calendar outlook_email playwright surveymonkey trino twitter_intel vanna web_search zoom"
           to_json() { printf '%s' "$1" | tr ' ' '\n' | grep -v '^$' | sed 's/.*/"&"/' | paste -sd, - | sed 's/^/[/;s/$/]/'; }
 
           pick="$ALL"
@@ -322,7 +322,7 @@ jobs:
       # Every per-connector extra, because the matrix now covers all 26 and
       # eight of them need a third-party library. Installing only [dev] would
       # fail those at start-up for a reason this job is not about.
-      - run: pip install -e ".[dev,cloudflare_r2,csv_to_sql,database,otp_verification,outlook_email,trino,vanna,web_search]"
+      - run: pip install -e ".[dev,cloudflare_r2,csv_to_sql,database,otp_verification,outlook_email,playwright,trino,vanna,web_search]"
       - name: Start the connector
         env:
           CONNECTOR: ${{ matrix.connector }}

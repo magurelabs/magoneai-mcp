@@ -46,6 +46,10 @@
       "reason": "Ported from v1 and runs in no cluster. Publishing a connector that has never run in any of our own environments is a claim we cannot support. Same rule as google_drive: deploy it somewhere first."
     },
     "otp_verification": { "status": "ready" },
+    "playwright": {
+      "status": "blocked",
+      "reason": "It relays a browser container the operator runs (Microsoft's Playwright MCP server, on a private network with a shared artifacts volume), and this connector has run in no cluster yet. Run it end to end against that container first, and decide how the browser's network egress is fenced in a public deployment before presenting it."
+    },
     "outlook_calendar": { "status": "ready" },
     "outlook_email": { "status": "ready" },
     "surveymonkey": {

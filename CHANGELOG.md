@@ -56,6 +56,12 @@ ahead of the first release.
   request body cap. `onedrive_upload_files` uploads up to 20 inline
   `attachments` in one call, each failing alone. Blocked from publication
   until it has run end to end.
+- `playwright` connector: relays the browser tools of an operator-run
+  Microsoft Playwright MCP server (one browser session per caller run, idle
+  eviction, code-running tools refused), and returns the browser's files in
+  the tool result as MCP embedded resources: `publish_artifact`,
+  `list_artifacts` and `publish_test_report` (HTML, PDF and CSV). Blocked from
+  publication until it has run against that container in a cluster.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
