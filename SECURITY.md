@@ -4,6 +4,13 @@ Every connector in this repository holds a credential for somebody's
 third-party account. If you have found a way to misuse one, we would rather
 hear it from you than read it somewhere else.
 
+## Supported versions
+
+Nothing has been released yet. Until the first release, security fixes land
+on `main` only. After it, fixes go to the latest release of `magone-mcp-core`
+and of each published connector; older versions are not patched, so please
+upgrade. Versioning is described in [RELEASING.md](RELEASING.md).
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue.**
