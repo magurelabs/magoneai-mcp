@@ -1840,9 +1840,9 @@ async def download_attachment(credentials: Dict[str, str],
         err = validate_id(attachment_id, "attachment_id")
         if err:
             return {"success": False, "error": err}
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
@@ -2024,15 +2024,15 @@ async def get_email(credentials: Dict[str, str],
         err = validate_id(email_id, "email_id")
         if err:
             return {"success": False, "error": err}
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
 
         params = {
-            "$select": "id,internetMessageId,conversationId,internetMessageHeaders,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,hasAttachments,importance,webLink,attachments",
+            "$select": "id,internetMessageId,conversationId,internetMessageHeaders,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,hasAttachments,importance,webLink,attachments,categories",
             "$expand": "attachments($select=id,name,contentType,size)",
         }
 
@@ -2106,6 +2106,10 @@ async def get_email(credentials: Dict[str, str],
             ],
             "importance": result.get("importance"),
             "web_link": result.get("webLink"),
+            # Outlook's colored "Categorize" tags. An empty list means none is
+            # applied, not that the field was not fetched. set_email_categories
+            # adds and removes them.
+            "categories": result.get("categories") or [],
         }
     except Exception as e:
         logger.exception("get_email_error", error=str(e))
@@ -2546,9 +2550,9 @@ async def list_attachments(credentials: Dict[str, str],
         err = validate_id(email_id, "email_id")
         if err:
             return {"success": False, "error": err}
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
@@ -3301,9 +3305,9 @@ async def read_attachment(credentials: Dict[str, str],
             return {"success": False, "error": err}
         # Same allowlist gate as download_attachment: the credential decides
         # which shared mailboxes this connection may touch, never the caller.
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
