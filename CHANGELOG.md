@@ -51,6 +51,9 @@ ahead of the first release.
   organization's posts. Blocked from publication until it has run end to end.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
+- `outlook_email`: `set_email_categories` adds and removes Outlook categories
+  on a message, in the signed-in user's mailbox or an allowed shared mailbox,
+  and `get_email` returns a message's `categories`.
 - One Dockerfile that builds any connector as a non-root image, labelled with
   its MCP server name.
 - CI gates, each runnable locally: golden tool schemas, boundary, tool
@@ -79,10 +82,16 @@ ahead of the first release.
   characters instead of 100,000. Real results reach about 220,000 characters,
   and a tool with a declared output schema returns an oversized result as an
   error.
+- `outlook_email`: `reply_email` takes an optional `mailbox`, so a reply to a
+  message in an allowed shared mailbox is sent from that mailbox, with or
+  without attachments. Existing properties are unchanged.
 
 ### Fixed
 
 - `atlassian_jira`: `addJiraIssueAttachment`'s description points callers at
   `attachments` again instead of inviting model-written base64.
+- `outlook_email`: an empty `mailbox` on `get_email`, `list_attachments`,
+  `read_attachment` and `download_attachment` means the signed-in user's own
+  mailbox, as an omitted one does, instead of being refused as invalid.
 
 [Unreleased]: https://github.com/magurelabs/magoneai-mcp/commits/main

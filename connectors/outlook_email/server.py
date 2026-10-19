@@ -2,7 +2,7 @@
 
 Ported from the v1 mixin form by a codemod.
 
-27 tools, 15 of them proposed read-only. Every input schema
+28 tools, 15 of them proposed read-only. Every input schema
 is carried across verbatim via `declare_schema` rather than derived from type
 hints, so the wire contract is byte-identical to v1 and no live agent sees a
 changed parameter schema.
@@ -155,8 +155,12 @@ VALID_IMPORTANCE_LIST = ["low", "normal", "high"]
 def resolve_graph_scope(tool: Any, mailbox: Optional[str]) -> Tuple[Callable, str]:
     """(request_fn, base_path) for a mailbox-scoped Graph call. A shared mailbox
     (webhook-triggered flows - no signed-in user) routes app-only against
-    /users/{mailbox}; omitted, it's the delegated /me path. Shared by get_email,
-    list_attachments, download_attachment - all three need identical routing."""
+    /users/{mailbox}; omitted, it's the delegated /me path. Shared by the
+    mailbox-taking read tools, set_email_categories and reply_email (both its
+    plain path and reply_via_draft's attachment path), which all need identical
+    routing. The two request functions differ in one way a caller must respect:
+    only the delegated one takes `access_token`, because the app-only one
+    manages its own token."""
     if mailbox:
         return tool._graph_request_app_only, f"/users/{mailbox.strip()}"
     return tool._graph_request, "/me"
@@ -606,7 +610,7 @@ async def reply_via_draft(
     message_patch: Dict[str, Any],
     inline_attachments: List[Dict[str, Any]],
     large_attachments: List[Dict[str, Any]],
-    base_path: str = "/me",
+    mailbox: Optional[str] = None,
 ) -> Optional[str]:
     """Create a reply draft, attach, send. Returns the sent message id.
 
@@ -618,39 +622,44 @@ async def reply_via_draft(
 
     Any failure deletes the half-built draft, so a failed reply never leaves an
     orphan sitting in the user's Drafts folder.
+
+    Pass `mailbox` (an address) to run the whole sequence, including the
+    large-attachment upload and the cleanup, against a shared mailbox via
+    app-only auth (`/users/{mailbox}/...`) instead of the signed-in user's
+    `/me`. A reply triggered by a change notification has no signed-in user.
+    The caller has already checked `mailbox` against the allowlist.
     """
-    access_token = await graph._get_access_token(credentials)
+    request_fn, base_path = resolve_graph_scope(graph, mailbox)
+    is_shared = bool(mailbox)
+    access_token = None if is_shared else await graph._get_access_token(credentials)
+
+    async def _request(
+        method: str,
+        path: str,
+        json_data: Optional[Dict[str, Any]] = None,
+        prefer: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if is_shared:
+            return await request_fn(credentials, method, path, json_data=json_data, prefer=prefer)
+        return await request_fn(
+            credentials, method, path, json_data=json_data, access_token=access_token, prefer=prefer
+        )
+
     action = "createReplyAll" if reply_all else "createReply"
     draft_id: Optional[str] = None
     try:
-        created = await graph._graph_request(
-            credentials,
-            "POST",
-            f"{base_path}/messages/{email_id}/{action}",
-            access_token=access_token,
-            prefer=IMMUTABLE_ID_PREFER,
+        created = await _request(
+            "POST", f"{base_path}/messages/{email_id}/{action}", prefer=IMMUTABLE_ID_PREFER
         )
         draft_id = created.get("id")
         if not draft_id:
             raise ValueError("createReply returned no draft id")
 
         if message_patch:
-            await graph._graph_request(
-                credentials,
-                "PATCH",
-                f"{base_path}/messages/{draft_id}",
-                json_data=message_patch,
-                access_token=access_token,
-            )
+            await _request("PATCH", f"{base_path}/messages/{draft_id}", json_data=message_patch)
 
         for att in inline_attachments:
-            await graph._graph_request(
-                credentials,
-                "POST",
-                f"{base_path}/messages/{draft_id}/attachments",
-                json_data=att,
-                access_token=access_token,
-            )
+            await _request("POST", f"{base_path}/messages/{draft_id}/attachments", json_data=att)
 
         for large in large_attachments:
             await graph._upload_large_attachment(
@@ -660,18 +669,21 @@ async def reply_via_draft(
                 large["content"],
                 large["content_type"],
                 access_token=access_token,
+                request_fn=request_fn if is_shared else None,
+                base_path=base_path,
             )
 
-        await graph._graph_request(
-            credentials,
-            "POST",
-            f"{base_path}/messages/{draft_id}/send",
-            access_token=access_token,
-        )
+        await _request("POST", f"{base_path}/messages/{draft_id}/send")
         return draft_id
     except (ValueError, httpx.HTTPError):
         if draft_id:
-            await _cleanup_draft(graph, credentials, draft_id)
+            await _cleanup_draft(
+                graph,
+                credentials,
+                draft_id,
+                request_fn=request_fn if is_shared else None,
+                base_path=base_path,
+            )
         raise
 
 IMMUTABLE_ID_PREFER = 'IdType="ImmutableId"'
@@ -742,10 +754,21 @@ def _attachment_label(item: Any, position: int) -> str:
                 return value[:80]
     return f"#{position}"
 
-async def _cleanup_draft(graph: Any, credentials: Dict[str, str], draft_id: str) -> None:
-    """Best-effort delete of an unsent draft after a failed send."""
+async def _cleanup_draft(
+    graph: Any,
+    credentials: Dict[str, str],
+    draft_id: str,
+    request_fn: Optional[Callable] = None,
+    base_path: str = "/me",
+) -> None:
+    """Best-effort delete of an unsent draft after a failed send.
+
+    `request_fn` and `base_path` route the delete to a shared mailbox via
+    app-only auth instead of the default delegated `/me`; reply_via_draft is
+    the caller that passes them."""
     try:
-        await graph._graph_request(credentials, "DELETE", f"/me/messages/{draft_id}")
+        request = request_fn or graph._graph_request
+        await request(credentials, "DELETE", f"{base_path}/messages/{draft_id}")
     except Exception:
         graph.logger.warning("send_email_orphan_draft_cleanup_failed", draft_id=draft_id)
 
@@ -1342,6 +1365,8 @@ async def _upload_large_attachment(credentials: Dict[str, str],
     content: bytes,
     content_type: str,
     access_token: Optional[str] = None,
+    request_fn: Optional[Callable] = None,
+    base_path: str = "/me",
 ) -> Dict[str, Any]:
     """Attach a file too large to base64-inline into a create/send request.
 
@@ -1350,20 +1375,30 @@ async def _upload_large_attachment(credentials: Dict[str, str],
 
     Pass `access_token` to reuse one already fetched — useful when
     uploading several large attachments in one call, so each doesn't
-    trigger its own token refresh."""
-    session = await _graph_request(
-        credentials,
-        "POST",
-        f"/me/messages/{message_id}/attachments/createUploadSession",
-        json_data={
+    trigger its own token refresh.
+
+    Pass `request_fn` and `base_path` to create the upload session in a shared
+    mailbox via app-only auth (`/users/{mailbox}`) instead of the delegated
+    `/me`. `access_token` is not passed in that case: the app-only request
+    manages its own token."""
+    create_kwargs: Dict[str, Any] = {
+        "json_data": {
             "AttachmentItem": {
                 "attachmentType": "file",
                 "name": filename,
                 "size": len(content),
                 "contentType": content_type,
             }
-        },
-        access_token=access_token,
+        }
+    }
+    if request_fn is None:
+        request_fn = _graph_request
+        create_kwargs["access_token"] = access_token
+    session = await request_fn(
+        credentials,
+        "POST",
+        f"{base_path}/messages/{message_id}/attachments/createUploadSession",
+        **create_kwargs,
     )
     upload_url = session["uploadUrl"]
     total = len(content)
@@ -1474,8 +1509,13 @@ async def _graph_request_app_only(credentials: Dict[str, str],
     endpoint: str,
     json_data: Optional[Dict] = None,
     params: Optional[Dict] = None,
+    prefer: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Make a Graph API request using app-only OAuth.
+
+    Pass `prefer` to add a Graph `Prefer` header value, as `_graph_request`
+    does, e.g. IdType="ImmutableId" so a created message's id survives the
+    move to Sent Items.
 
     `endpoint` accepts either a relative path (e.g., "/drives/{id}/root/delta")
     or an absolute URL (e.g., a returned @odata.deltaLink). Both are supported
@@ -1506,6 +1546,8 @@ async def _graph_request_app_only(credentials: Dict[str, str],
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
     }
+    if prefer:
+        headers["Prefer"] = prefer
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         attempt = 0
@@ -1840,9 +1882,9 @@ async def download_attachment(credentials: Dict[str, str],
         err = validate_id(attachment_id, "attachment_id")
         if err:
             return {"success": False, "error": err}
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
@@ -2024,15 +2066,15 @@ async def get_email(credentials: Dict[str, str],
         err = validate_id(email_id, "email_id")
         if err:
             return {"success": False, "error": err}
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
 
         params = {
-            "$select": "id,internetMessageId,conversationId,internetMessageHeaders,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,hasAttachments,importance,webLink,attachments",
+            "$select": "id,internetMessageId,conversationId,internetMessageHeaders,subject,from,toRecipients,ccRecipients,receivedDateTime,isRead,body,hasAttachments,importance,webLink,attachments,categories",
             "$expand": "attachments($select=id,name,contentType,size)",
         }
 
@@ -2106,6 +2148,10 @@ async def get_email(credentials: Dict[str, str],
             ],
             "importance": result.get("importance"),
             "web_link": result.get("webLink"),
+            # Outlook's colored "Categorize" tags. An empty list means none is
+            # applied, not that the field was not fetched. set_email_categories
+            # adds and removes them.
+            "categories": result.get("categories") or [],
         }
     except Exception as e:
         logger.exception("get_email_error", error=str(e))
@@ -2546,9 +2592,9 @@ async def list_attachments(credentials: Dict[str, str],
         err = validate_id(email_id, "email_id")
         if err:
             return {"success": False, "error": err}
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
@@ -3068,6 +3114,102 @@ async def mark_emails(credentials: Dict[str, str],
         return {"success": False, "error": "Failed to mark emails"}
 
 
+# credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
+# permission_group: 'default'  required_scopes: []
+# REVIEWED: readOnlyHint=False, destructiveHint=True, traced to the handler.
+# Destructive: PATCH .../messages/{id} {"categories": [...]} replaces the whole
+# array, so a category named in `remove` is gone afterwards.
+# Evidence: GET then PATCH {base}/messages/{email_id}
+@server.tool(
+    name='set_email_categories',
+    description="Add and/or remove Outlook categories on an email - the colored tags shown under a message's subject in Outlook's own UI (e.g. a shared-inbox team's 'Unassigned'/'Assigned to Jane' triage labels). Pass `email_id` and at least one of `add` (category names to add) or `remove` (category names to remove, case-insensitive). Graph's categories field is replace-only, so this reads the message's current categories first and merges - any category not named in `remove` is preserved. A category name that doesn't already exist in the mailbox's master category list is still applied; Outlook just shows it in a default color until someone assigns one. Pass `mailbox` for app-only shared-mailbox access, same as get_email - requires the org's Azure app to have the application permission Mail.ReadWrite admin-consented.",
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
+    ),
+    credential_headers=['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes'],
+    permission_group='default',
+)
+@declare_schema({'type': 'object',
+     'properties': {'email_id': {'type': 'string',
+                                 'description': 'Message ID returned by list_emails or '
+                                                'search_emails'},
+                    'add': {'type': 'array',
+                            'items': {'type': 'string'},
+                            'description': 'Category names to add',
+                            'default': []},
+                    'remove': {'type': 'array',
+                               'items': {'type': 'string'},
+                               'description': 'Category names to remove (case-insensitive '
+                                              'match)',
+                               'default': []},
+                    'mailbox': {'type': 'string',
+                                'description': 'Shared mailbox address to update via '
+                                               'app-only auth, instead of /me. Omit to '
+                                               "update the signed-in user's own mailbox."}},
+     'required': ['email_id']})
+@declare_output_schema({'properties': {'categories': {'description': "The email's full category list after this "
+                                                                     'change',
+                                                      'items': {'type': 'string'},
+                                                      'type': 'array'},
+                                       'email_id': {'type': 'string'},
+                                       'success': {'type': 'boolean'}},
+                        'type': 'object'})
+async def set_email_categories(credentials: Dict[str, str],
+    email_id: str,
+    add: Optional[List[str]] = None,
+    remove: Optional[List[str]] = None,
+    mailbox: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Add/remove Outlook categories on a message, merging with whatever is already set."""
+    try:
+        err = validate_id(email_id, "email_id")
+        if err:
+            return {"success": False, "error": err}
+
+        add_clean = [c.strip() for c in (add or []) if c and c.strip()]
+        remove_clean = {c.strip().lower() for c in (remove or []) if c and c.strip()}
+        if not add_clean and not remove_clean:
+            return {"success": False, "error": "Provide at least one of add or remove"}
+
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
+            return {"success": False, "error": "mailbox must be a valid email address"}
+        if mailbox:
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
+
+        request, base = resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox)
+
+        current = await request(
+            credentials,
+            "GET",
+            f"{base}/messages/{email_id}",
+            params={"$select": "categories"},
+        )
+        existing = current.get("categories") or []
+
+        # Keep the existing order, drop anything named in `remove`
+        # (case-insensitively), then append each `add` not already present, so
+        # a repeated call with the same `add` changes nothing the second time.
+        new_categories = [c for c in existing if c.lower() not in remove_clean]
+        for c in add_clean:
+            if c not in new_categories:
+                new_categories.append(c)
+
+        await request(
+            credentials,
+            "PATCH",
+            f"{base}/messages/{email_id}",
+            json_data={"categories": new_categories},
+        )
+
+        return {"success": True, "email_id": email_id, "categories": new_categories}
+    except Exception as e:
+        logger.exception("set_email_categories_error", error=str(e))
+        return {"success": False, "error": "Failed to update email categories"}
+
+
 
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
 # permission_group: 'default'  required_scopes: []
@@ -3301,9 +3443,9 @@ async def read_attachment(credentials: Dict[str, str],
             return {"success": False, "error": err}
         # Same allowlist gate as download_attachment: the credential decides
         # which shared mailboxes this connection may touch, never the caller.
-        if mailbox is not None and not EMAIL_RE.match(mailbox.strip()):
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
             return {"success": False, "error": "mailbox must be a valid email address"}
-        if mailbox is not None:
+        if mailbox:
             err = check_mailbox_allowed(credentials, mailbox)
             if err:
                 return {"success": False, "error": err}
@@ -3406,10 +3548,10 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
 # permission_group: 'default'  required_scopes: []
 # REVIEWED: readOnlyHint=False, destructiveHint=False, traced to the handler.
-# Evidence: POST /me/messages/{email_id}/{action}
+# Evidence: POST {base}/messages/{email_id}/{action}, base /me or /users/{mailbox}
 @server.tool(
     name='reply_email',
-    description="Reply to an email, keeping the thread. Pass `email_id` (from list_emails or search_emails) and `body` (reply content). Optional: `reply_all` (true to reply to all recipients), `cc` (comma-separated extra CC recipients), `bcc` (comma-separated extra BCC recipients), `is_html` (true for HTML body), `attachments` (same three forms as send_email: a platform file_id/storage-key string, {\"file_id\": ...}, or a pre-fetched {filename, content_base64, content_type} - never encode content_base64 yourself), and `attachment_urls`. Returns `attachments` listing what was actually attached; if that list is absent or empty, nothing was attached and you must not claim otherwise.",
+    description="Reply to an email, keeping the thread. Pass `email_id` (from list_emails or search_emails) and `body` (reply content). Optional: `reply_all` (true to reply to all recipients), `cc` (comma-separated extra CC recipients), `bcc` (comma-separated extra BCC recipients), `is_html` (true for HTML body), `attachments` (same three forms as send_email: a platform file_id/storage-key string, {\"file_id\": ...}, or a pre-fetched {filename, content_base64, content_type} - never encode content_base64 yourself), `attachment_urls`, and `mailbox` (see its own description). Returns `attachments` listing what was actually attached; if that list is absent or empty, nothing was attached and you must not claim otherwise.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -3477,7 +3619,16 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
                                                        '25MB each)'},
                     'attachment_filename': {'type': 'string',
                                             'description': 'Custom filename for the first '
-                                                           "URL's downloaded file"}},
+                                                           "URL's downloaded file"},
+                    'mailbox': {'type': 'string',
+                                'description': 'Shared mailbox address to reply from via '
+                                               'app-only auth, instead of /me - for both '
+                                               'the plain and attachment reply paths. '
+                                               "Requires the org's Azure app to have the "
+                                               'application permission '
+                                               'Mail.Send/Mail.ReadWrite admin-consented, '
+                                               'same as get_email, and the mailbox must be '
+                                               "in this connection's allowed_mailboxes."}},
      'required': ['email_id', 'body']})
 @declare_output_schema({'properties': {'attachments': {'description': 'What was actually attached. Absent means '
                                                                       'nothing was.',
@@ -3501,6 +3652,7 @@ async def reply_email(credentials: Dict[str, str],
     attachments: Optional[List[Dict[str, Any]]] = None,
     attachment_urls: Optional[List[str]] = None,
     attachment_filename: Optional[str] = None,
+    mailbox: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Reply or reply-all to an email, optionally adding extra CC/BCC recipients."""
     try:
@@ -3510,6 +3662,16 @@ async def reply_email(credentials: Dict[str, str],
 
         if len(body) > MAX_BODY_SIZE:
             return {"success": False, "error": "Reply body exceeds 5MB limit"}
+
+        # Checked before either reply path: a Graph message id belongs to one
+        # mailbox, so the plain reply must go to the same mailbox as the
+        # attachment reply. "" is treated as omitted, like everywhere else.
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
+            return {"success": False, "error": "mailbox must be a valid email address"}
+        if mailbox:
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
 
         action = "replyAll" if reply_all else "reply"
 
@@ -3548,6 +3710,7 @@ async def reply_email(credentials: Dict[str, str],
                 patch,
                 inline,
                 large,
+                mailbox=mailbox,
             )
             return {
                 "success": True,
@@ -3568,10 +3731,11 @@ async def reply_email(credentials: Dict[str, str],
             if message:
                 json_data["message"] = message
 
-        await _graph_request(
+        request, base = resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox)
+        await request(
             credentials,
             "POST",
-            f"/me/messages/{email_id}/{action}",
+            f"{base}/messages/{email_id}/{action}",
             json_data=json_data,
         )
 
