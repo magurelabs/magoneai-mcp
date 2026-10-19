@@ -11,10 +11,10 @@ Every connector here talks to somebody else's API. You supply your own credentia
 ## What is here
 
 - **`magone-mcp-core`** (`src/magone_mcp_core/`) - a thin layer over the SDK. It adds the handful of things a connector catalogue needs and the SDK has no opinion about, and gets out of the way otherwise.
-- **`connectors/`** - one package per connector: 25 connectors, 269 tools. [`docs/TOOLS.md`](docs/TOOLS.md) lists every tool, generated from the code.
+- **`connectors/`** - one package per connector: 26 connectors, 272 tools. [`docs/TOOLS.md`](docs/TOOLS.md) lists every tool, generated from the code.
 - **`scripts/`** - the gates CI runs on every pull request, each of which you can run locally.
 
-`connectors/publication.json` records which connectors are ready to publish (19) and which are not yet (6), with the reason for each.
+`connectors/publication.json` records which connectors are ready to publish (19) and which are not yet (7), with the reason for each.
 
 ## Documentation
 

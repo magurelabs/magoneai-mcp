@@ -71,6 +71,10 @@ database = [
   "SQLAlchemy",
 ]
 otp_verification = ["asyncpg>=0.29.0"]
+# The test report: Jinja2 renders the HTML (autoescape on), fpdf2 the PDF with
+# the DejaVu fonts vendored in connectors/playwright/fonts. The browser itself
+# is the operator's Playwright MCP container, so nothing here installs one.
+playwright = ["jinja2>=3.1.0", "fpdf2>=2.8.0"]
 outlook_email = [
   "python-docx>=1.1.0",
   "openpyxl>=3.1.0",
@@ -91,7 +95,7 @@ web_search = ["trafilatura>=1.8.0"]
 # failures shipped: eleven connectors that would not import, and twenty-five
 # tools that raised NameError on call while importing perfectly.
 all = [
-  "magone-mcp-core[csv_to_sql,database,otp_verification,outlook_email,trino,vanna,web_search]",
+  "magone-mcp-core[csv_to_sql,database,otp_verification,outlook_email,playwright,trino,vanna,web_search]",
 ]
 
 [project.urls]
