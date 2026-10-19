@@ -46,6 +46,9 @@ ahead of the first release.
   tests and an optional dependency extra. [docs/TOOLS.md](docs/TOOLS.md) lists
   every tool, and `connectors/publication.json` records which connectors are
   ready to publish and why the others are not yet.
+- `linkedin` connector: 11 tools to post as a member or a company page, read a
+  post's reactions and comments, and report on who engages with an
+  organization's posts. Blocked from publication until it has run end to end.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - One Dockerfile that builds any connector as a non-root image, labelled with

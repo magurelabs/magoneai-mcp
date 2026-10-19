@@ -3676,6 +3676,239 @@
       "type": "object"
     }
   },
+  "linkedin/create_post": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "author": {
+          "description": "Who posts: 'me' (the member), a numeric organization id, or a full URN. Default: LINKEDIN_ORG_ID env if set, else the member.",
+          "type": "string"
+        },
+        "draft": {
+          "default": false,
+          "description": "Create as DRAFT instead of publishing (default false)",
+          "type": "boolean"
+        },
+        "image_alt_text": {
+          "description": "Alt text for the attached image",
+          "type": "string"
+        },
+        "image_url": {
+          "description": "Optional public https image URL to upload and attach (max 20MB). Must resolve to a public address; internal hosts are refused.",
+          "type": "string"
+        },
+        "link": {
+          "description": "Optional article/website URL to attach as a link preview",
+          "type": "string"
+        },
+        "link_title": {
+          "description": "Optional title for the attached link",
+          "type": "string"
+        },
+        "text": {
+          "description": "Post text (commentary). Hashtags like #ai work as-is.",
+          "type": "string"
+        },
+        "visibility": {
+          "default": "PUBLIC",
+          "description": "Post visibility (default PUBLIC)",
+          "enum": [
+            "PUBLIC",
+            "CONNECTIONS",
+            "LOGGED_IN"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    }
+  },
+  "linkedin/delete_post": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "post": {
+          "description": "Post URN, share URL, or numeric share id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "post"
+      ],
+      "type": "object"
+    }
+  },
+  "linkedin/engagement_report": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "organization": {
+          "description": "Numeric organization id or urn:li:organization:... Default: LINKEDIN_ORG_ID env.",
+          "type": "string"
+        },
+        "post_count": {
+          "default": 10,
+          "description": "How many recent posts to analyze (default 10, max 20)",
+          "type": "integer"
+        },
+        "top_n": {
+          "default": 20,
+          "description": "How many top engagers to return (default 20)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "linkedin/get_page_statistics": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "organization": {
+          "description": "Numeric organization id or urn:li:organization:... Default: LINKEDIN_ORG_ID env.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "linkedin/get_post": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "post": {
+          "description": "Post URN (urn:li:share:123), share URL, or numeric id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "post"
+      ],
+      "type": "object"
+    }
+  },
+  "linkedin/get_post_engagement": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "post": {
+          "description": "Post URN, share URL, or numeric share id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "post"
+      ],
+      "type": "object"
+    }
+  },
+  "linkedin/get_profile": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "linkedin/list_organizations": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {},
+      "type": "object"
+    }
+  },
+  "linkedin/list_post_comments": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 50,
+          "description": "Max comments to return (default 50, max 500)",
+          "type": "integer"
+        },
+        "post": {
+          "description": "Post URN, share URL, or numeric share id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "post"
+      ],
+      "type": "object"
+    }
+  },
+  "linkedin/list_post_reactions": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 100,
+          "description": "Max reactions to return (default 100, max 500)",
+          "type": "integer"
+        },
+        "post": {
+          "description": "Post URN, share URL, or numeric share id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "post"
+      ],
+      "type": "object"
+    }
+  },
+  "linkedin/list_posts": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "author": {
+          "description": "'me', a numeric organization id, or a full URN. Default: LINKEDIN_ORG_ID env, else the member.",
+          "type": "string"
+        },
+        "limit": {
+          "default": 10,
+          "description": "Max posts to return (default 10, max 50)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
   "microsoft_sharepoint/sharepoint_download_file": {
     "annotations": {
       "destructiveHint": false,
