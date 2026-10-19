@@ -25,10 +25,18 @@ SERVER_VERSION = "2.0.0"
 # Ported bodies reference `self.logger`, which was the v1 server's own logger.
 logger = structlog.get_logger(f"mcp.{SERVER_NAME}")
 
+# addJiraIssueAttachment takes up to 10 files per call as base64, which
+# inflates them by a third: 50 MB of files is about 67 MB of request body plus
+# the JSON-RPC envelope. The framework's 10 MiB default refused any call whose
+# files added up to more than about 7.5 MB, before the tool ever saw it.
+# v1 ran this connector at 70 MB. MCP_MAX_BODY_BYTES still overrides it.
+MAX_REQUEST_BODY_BYTES = 70 * 1024 * 1024
+
 server = ConnectorServer(
     name=SERVER_NAME,
     version=SERVER_VERSION,
     description="",
+    max_body_bytes=MAX_REQUEST_BODY_BYTES,
 )
 
 
@@ -623,7 +631,14 @@ def _attachment_file(item: Any, position: int) -> Tuple[str, bytes, Optional[str
 # Evidence: POST /rest/api/3/issue/{key}/attachments as multipart.
 @server.tool(
     name='addJiraIssueAttachment',
-    description="Attach a file to a Jira issue. Content is base64-encoded, so a binary file such as a PDF or image is sent the same way as text.",
+    description=(
+        "Attach one or more files to a Jira issue. Pass files uploaded to the "
+        "workflow (e.g. a Start node file or image field) or produced by "
+        "another tool through `attachments`, as their platform file_id or "
+        "storage key; the platform fetches the bytes from its storage, so "
+        "large files work. fileName + fileContentBase64 is only for a direct "
+        "caller that already holds the bytes."
+    ),
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,

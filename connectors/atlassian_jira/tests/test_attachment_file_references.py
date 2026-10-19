@@ -38,6 +38,18 @@ def test_the_tool_still_declares_an_attachments_parameter():
     assert tool.parameters["required"] == ["issueIdOrKey"]
 
 
+def test_the_description_steers_to_attachments_not_model_base64():
+    """The tool description is what a model reads first. It once said "Content
+    is base64-encoded", which invites the model to write the base64 itself:
+    output tokens cap that at a few tens of KB, and a hand-encoded file arrives
+    corrupt. It must name `attachments` and keep base64 for direct callers."""
+    description = server.mcp._tool_manager._tools["addJiraIssueAttachment"].description
+    assert "`attachments`" in description
+    assert "file_id" in description
+    assert "only for a direct caller that already holds the bytes" in description
+    assert "Content is base64-encoded" not in description
+
+
 def test_a_resolved_item_becomes_name_bytes_and_mime():
     name, content, mime = _attachment_file(
         {"filename": "report.pdf", "content_base64": B64, "content_type": "application/pdf"}, 0

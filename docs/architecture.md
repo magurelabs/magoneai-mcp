@@ -86,9 +86,11 @@ left to its defaults:
   `MCP_ALLOWED_ORIGINS`. `MCP_ALLOWED_HOSTS=*` turns the check off, and the
   server logs a warning when it starts that way.
 - **Request body cap.** The SDK buffers the whole body before parsing it, so
-  the body is bounded: 10 MiB by default (`MCP_MAX_BODY_BYTES`), answered
-  `413` when exceeded. Base64 attachments are about a third larger than the
-  file they carry.
+  the body is bounded: 10 MiB by default, answered `413` when exceeded. Base64
+  attachments are about a third larger than the file they carry, so a
+  connector whose tools carry several of them declares a larger default with
+  `ConnectorServer(max_body_bytes=...)`. `MCP_MAX_BODY_BYTES` overrides
+  either.
 
 `GET /healthz` answers `{status, name, version, tools}` for a container or
 Kubernetes probe. It sits outside the Host check, because a probe arrives by
@@ -168,8 +170,11 @@ an argument.
 
 Nothing in MCP bounds what one tool returns, so a single search over a large
 page could spend a model's whole context. The budget bounds the **text** a
-tool result carries to `MCP_MAX_RESULT_CHARS` (default 100,000 characters,
-about 25k tokens; values below 1,000 are raised to 1,000).
+tool result carries to `MCP_MAX_RESULT_CHARS` (default 1,000,000 characters,
+about 250k tokens; values below 1,000 are raised to 1,000). The default is
+set above the largest results real tools produce, so it stops a runaway
+result rather than a legitimate one; a deployment that wants a tighter bound
+sets the variable.
 
 It is measured on the exact text the client receives, after the result is
 shaped. When a result is cut:

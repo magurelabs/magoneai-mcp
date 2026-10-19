@@ -168,8 +168,8 @@ The variables most deployments touch. [docs/configuration.md](docs/configuration
 |---|---|---|
 | `MCP_MODE` | `platform` | `platform`, `hosted` or `local`. An unrecognised value falls back to `platform`, so a typo cannot disable authentication. |
 | `MCP_READ_ONLY` | unset | `1` refuses every tool that is not marked `readOnlyHint`. |
-| `MCP_MAX_RESULT_CHARS` | `100000` | Outbound budget per tool result. |
-| `MCP_MAX_BODY_BYTES` | `10485760` | Largest request body accepted, in bytes (10 MiB). A larger one is answered `413` before it is parsed. Base64 attachments are a third bigger than the file they carry. |
+| `MCP_MAX_RESULT_CHARS` | `1000000` | Outbound budget per tool result. |
+| `MCP_MAX_BODY_BYTES` | `10485760`, or the connector's own default | Largest request body accepted, in bytes (10 MiB). A larger one is answered `413` before it is parsed. A connector may declare a larger default (`atlassian_jira` 70 MiB, `outlook_email` 75 MiB); this overrides it. Base64 attachments are a third bigger than the file they carry. |
 | `MCP_ALLOW_INSECURE_BIND` | unset | `1` lets `local` mode bind beyond loopback. |
 | `MCP_ALLOWED_HOSTS` | loopback only | Comma-separated Host names callers use, e.g. `mcp-jira,mcp-jira.tools.svc.cluster.local`. A bare name is accepted with or without a port. `*` disables the check. |
 | `MCP_ALLOWED_ORIGINS` | loopback only | Comma-separated browser origins allowed to call the server. A server-to-server call sends no Origin and is unaffected. |

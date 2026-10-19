@@ -137,3 +137,48 @@ class TestWhatACutMustKeep:
 class TestTheFloor:
     def test_a_budget_below_the_floor_is_raised_to_it_not_reset(self):
         assert Budget.from_env({"MCP_MAX_RESULT_CHARS": "500"}).max_result_chars == 1_000
+
+
+class TestTheDefault:
+    """The default fits what real tools return, and still bounds a runaway one.
+
+    It was 100,000 characters. v1 had no outbound cap, and real results from
+    tools that worked there measure around 220,000; with a declared output
+    schema an oversized result is an error, so those calls started failing.
+    """
+
+    @staticmethod
+    def default_server(env: dict[str, str]) -> ConnectorServer:
+        server = ConnectorServer(name="default-budget", version="0.0.0", env=env)
+
+        @server.tool(name="sized", description="Return n characters.", annotations=READ)
+        @declare_output_schema({"type": "object"})
+        async def sized(n: int) -> dict[str, Any]:
+            """A declared-output result of about n characters."""
+            return {"blob": "z" * n}
+
+        return server
+
+    async def sized(self, n: int, env: dict[str, str] | None = None):
+        async with Client(self.default_server(env or {}).mcp) as client:
+            return await client.call_tool("sized", {"n": n})
+
+    async def test_a_220k_structured_result_passes_whole_by_default(self):
+        result = await self.sized(220_000)
+
+        assert result.is_error is False
+        assert result.structured_content == {"blob": "z" * 220_000}
+
+    async def test_a_result_over_the_default_is_an_error_not_a_truncation(self):
+        result = await self.sized(1_100_000)
+
+        assert result.is_error is True
+        assert result.structured_content is None
+        assert len(sent_text(result)) <= 1_000_000
+        assert "Narrow the request" in sent_text(result)
+
+    async def test_the_environment_still_sets_a_tighter_budget(self):
+        result = await self.sized(220_000, env={"MCP_MAX_RESULT_CHARS": "100000"})
+
+        assert result.is_error is True
+        assert len(sent_text(result)) <= 100_000

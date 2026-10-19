@@ -24,8 +24,13 @@ enumerate its hostnames. That is an explicit decision rather than a default.
 The same module owns the request body cap, the other transport-level setting
 the SDK picks a default for. Its 4 MiB default answers `413` to a tool call
 that v1 accepted, because base64 inflates an attachment by a third: a 3.5 MB
-file arrives as a body of about 4.7 MB. So the default here is v1's 10 MiB,
-and `MCP_MAX_BODY_BYTES` moves it for a deployment that needs more or less.
+file arrives as a body of about 4.7 MB. So the default here is v1's 10 MiB.
+
+A connector whose tools carry larger files declares its own default
+(`ConnectorServer(max_body_bytes=...)`), as v1's connectors did: a Jira or
+Outlook call carrying several base64 attachments is legitimately tens of
+megabytes. `MCP_MAX_BODY_BYTES` still wins over either, for a deployment that
+needs more or less.
 """
 
 from collections.abc import Mapping
@@ -42,20 +47,22 @@ DISABLED = "*"
 DEFAULT_MAX_BODY_BYTES = 10 * 1024 * 1024
 
 
-def max_body_bytes(env: Mapping[str, str]) -> int:
-    """The largest request body accepted, from MCP_MAX_BODY_BYTES.
+def max_body_bytes(env: Mapping[str, str], default: int = DEFAULT_MAX_BODY_BYTES) -> int:
+    """The largest request body accepted.
 
-    An unparseable or non-positive value falls back to the default rather than
-    raising, like the result budget: a typo in a size should not stop a server
-    from starting, and zero or a negative number cannot mean "accept nothing"
-    on an endpoint whose every request has a body.
+    `MCP_MAX_BODY_BYTES` when it is set to a positive integer, otherwise
+    `default`, which is the connector's own declared default or the
+    framework's. An unparseable or non-positive value falls back to `default`
+    rather than raising, like the result budget: a typo in a size should not
+    stop a server from starting, and zero or a negative number cannot mean
+    "accept nothing" on an endpoint whose every request has a body.
     """
     raw = str(env.get("MCP_MAX_BODY_BYTES", "")).strip()
     try:
         value = int(raw)
     except ValueError:
-        return DEFAULT_MAX_BODY_BYTES
-    return value if value > 0 else DEFAULT_MAX_BODY_BYTES
+        return default
+    return value if value > 0 else default
 
 
 def _entries(raw: str | None) -> list[str]:

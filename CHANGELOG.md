@@ -65,5 +65,21 @@ ahead of the first release.
   DCO sign-off check.
 - OpenSSF Scorecard and CodeQL analysis workflows, and Dependabot updates for
   GitHub Actions, Python dependencies and the container base image.
+- A connector can declare its own request body cap with
+  `ConnectorServer(max_body_bytes=...)`; `MCP_MAX_BODY_BYTES` still overrides
+  it. `atlassian_jira` declares 70 MiB and `outlook_email` 75 MiB, so a call
+  carrying several base64 attachments is no longer refused with `413`.
+
+### Changed
+
+- The default outbound budget (`MCP_MAX_RESULT_CHARS`) is 1,000,000
+  characters instead of 100,000. Real results reach about 220,000 characters,
+  and a tool with a declared output schema returns an oversized result as an
+  error.
+
+### Fixed
+
+- `atlassian_jira`: `addJiraIssueAttachment`'s description points callers at
+  `attachments` again instead of inviting model-written base64.
 
 [Unreleased]: https://github.com/magurelabs/magoneai-mcp/commits/main

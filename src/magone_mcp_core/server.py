@@ -94,9 +94,22 @@ class ConnectorServer:
         required_scopes: list[str] | None = None,
         budget: Budget | None = None,
         env: dict[str, str] | None = None,
+        max_body_bytes: int | None = None,
     ) -> None:
         self.name = name
         self.version = version
+        # The connector's own default for the request body cap, for tools that
+        # legitimately carry large base64 payloads. MCP_MAX_BODY_BYTES still
+        # overrides it; see `transport.max_body_bytes`.
+        if max_body_bytes is not None and (
+            isinstance(max_body_bytes, bool)
+            or not isinstance(max_body_bytes, int)
+            or max_body_bytes <= 0
+        ):
+            raise ValueError("max_body_bytes must be a positive integer number of bytes")
+        from .transport import DEFAULT_MAX_BODY_BYTES
+
+        self._default_max_body_bytes = max_body_bytes or DEFAULT_MAX_BODY_BYTES
         # Two things, deliberately not one. `_env` is a snapshot, which is
         # right for values read once at start-up (mode, bind host, budget).
         # `_injected_env` is None unless a caller supplied an environment, and
@@ -548,6 +561,16 @@ class ConnectorServer:
     def annotations_for(self, name: str) -> ToolAnnotations | None:
         return self._annotations.get(name)
 
+    def max_body_bytes(self) -> int:
+        """The request body cap this server enforces.
+
+        `MCP_MAX_BODY_BYTES` if set, else the connector's declared default,
+        else the framework's 10 MiB.
+        """
+        from .transport import max_body_bytes
+
+        return max_body_bytes(self._env, self._default_max_body_bytes)
+
     # -- running ----------------------------------------------------------
 
     def on_shutdown(self, fn: Callable[[], Any]) -> Callable[[], Any]:
@@ -585,14 +608,15 @@ class ConnectorServer:
           answers "Missing session ID". Requests on the `2026-07-28` envelope
           are stateless whatever this says; this makes the older ones so too.
         - `max_request_body_size`: the SDK's 4 MiB default answered 413 to a
-          base64 attachment that v1's 10 MB limit accepted. See `transport.py`.
+          base64 attachment that v1's 10 MB limit accepted. A connector can
+          declare a larger default. See `transport.py`.
         """
-        from .transport import max_body_bytes, transport_security
+        from .transport import transport_security
 
         app = self.mcp.streamable_http_app(
             stateless_http=True,
             transport_security=transport_security(self._env),
-            max_request_body_size=max_body_bytes(self._env),
+            max_request_body_size=self.max_body_bytes(),
         )
         service_token = str(self._env.get("MCP_SERVICE_TOKEN", "")).strip()
         if service_token and self.mode == "platform":
@@ -628,7 +652,7 @@ class ConnectorServer:
     def run(self, host: str = "0.0.0.0", port: int = 8000) -> None:  # noqa: S104
         import uvicorn
 
-        from .transport import configured_hosts, host_check_disabled, max_body_bytes
+        from .transport import configured_hosts, host_check_disabled
 
         problem = self.authentication_problem()
         if problem:
@@ -663,6 +687,6 @@ class ConnectorServer:
             port=port,
             read_only=self._read_only(),
             max_result_chars=self.budget.max_result_chars,
-            max_body_bytes=max_body_bytes(self._env),
+            max_body_bytes=self.max_body_bytes(),
         )
         uvicorn.run(self.app(), host=host, port=port)

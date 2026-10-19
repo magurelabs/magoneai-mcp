@@ -75,12 +75,13 @@ class TestBudget:
         assert out["content"].startswith("y")
 
     def test_env_parsing_falls_back_rather_than_raising(self) -> None:
-        assert Budget.from_env({"MCP_MAX_RESULT_CHARS": "nonsense"}).max_result_chars == 100_000
+        assert Budget.from_env({"MCP_MAX_RESULT_CHARS": "nonsense"}).max_result_chars == 1_000_000
         # Below the floor is raised TO the floor, not reset to the default:
-        # someone who asked for a tight budget must not silently get 100,000.
+        # someone who asked for a tight budget must not silently get 1,000,000.
         assert Budget.from_env({"MCP_MAX_RESULT_CHARS": "5"}).max_result_chars == 1_000
         assert Budget.from_env({"MCP_MAX_RESULT_CHARS": "20000"}).max_result_chars == 20_000
-        assert Budget.from_env({}).max_result_chars == 100_000
+        assert Budget.from_env({}).max_result_chars == 1_000_000
+        assert Budget().max_result_chars == 1_000_000
 
 
 class TestReadOnly:
