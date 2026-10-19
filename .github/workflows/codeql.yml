@@ -1,0 +1,86 @@
+# CodeQL static analysis for the Python code in this repository.
+#
+# Findings go to the repository's code scanning alerts. No secret is used.
+# `pull_request`, never `pull_request_target`, for the reason given at the top
+# of ci.yml: a fork's pull request runs with a read-only token and no secrets.
+#
+# Every action is pinned to a full commit SHA, with the release it corresponds
+# to in a trailing comment. Jobs run on GitHub-hosted runners only.
+#
+# Uses this advanced configuration rather than code scanning's "default
+# setup"; enabling default setup as well would make GitHub reject these
+# uploads.
+
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 5 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Code scanning is available only to a public repository (or one with
+  # GitHub Code Security). Run against a private repository the upload fails,
+  # so analysis waits for the repository to be public rather than reporting a
+  # failure on every pull request until then. Read from the API because a
+  # scheduled run's event payload carries no repository.
+  visibility:
+    name: Repository visibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      public: ${{ steps.check.outputs.public }}
+    steps:
+      - name: Is this repository public
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          visibility="$(gh api "repos/$REPO" --jq .visibility)"
+          echo "visibility: $visibility"
+          if [ "$visibility" = "public" ]; then
+            echo "public=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "public=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  analyze:
+    name: Analyze (python)
+    needs: visibility
+    if: needs.visibility.outputs.public == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Upload results to code scanning.
+      security-events: write
+      # Read workflow run metadata, which the upload needs.
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      # Python needs no build: `build-mode: none` analyses the source as is.
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: python
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyse
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: /language:python

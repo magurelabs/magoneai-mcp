@@ -8,12 +8,16 @@
 # visible as the thing the gate exists to catch.
 /scripts/                    @cyproto
 /.github/workflows/          @cyproto
+/.github/dependabot.yml      @cyproto
 
 # The golden baseline is the tool contract. A diff here changes what live
 # agents are told they may pass.
 /tests/golden/               @cyproto
 
-# Licensing and disclosure.
+# Licensing, disclosure and how the project is run.
 /LICENSE                     @cyproto
 /NOTICE                      @cyproto
 /SECURITY.md                 @cyproto
+/GOVERNANCE.md               @cyproto
+/MAINTAINERS.md              @cyproto
+/CODEOWNERS                  @cyproto

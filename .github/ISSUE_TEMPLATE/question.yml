@@ -1,0 +1,38 @@
+name: Question
+description: Ask how to use a connector or the framework.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please check the README, docs/configuration.md and docs/architecture.md first, and search existing issues.
+
+        Never paste a token, API key, refresh token or private URL into an issue. Redact them.
+  - type: input
+    id: connector
+    attributes:
+      label: Connector
+      description: The directory under `connectors/`, or `magone-mcp-core` for the framework.
+      placeholder: e.g. outlook_calendar
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: What you are trying to do, what you tried, and what happened.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: MCP_MODE
+      options:
+        - local
+        - platform
+        - hosted
+        - not sure
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version, operating system, how you run it (source checkout or container), and the MCP client you used.
+      placeholder: Python 3.11.9, macOS 15, container, MCP Inspector
