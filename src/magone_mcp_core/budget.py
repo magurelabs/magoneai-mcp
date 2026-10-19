@@ -19,9 +19,17 @@ from typing import Any
 
 from mcp.types import CallToolResult, TextContent
 
-# Roughly 25k tokens at 4 characters per token. Large enough for a real page of
-# results, small enough that one tool cannot monopolise a context window.
-DEFAULT_MAX_RESULT_CHARS = 100_000
+# One million characters, roughly 250k tokens at 4 characters per token.
+#
+# The default was 100,000 and that was wrong for this catalogue: v1 had no
+# outbound cap at all, and real results from tools that worked there (a Jira
+# search, a thread with its bodies, a page of rows) measure around 220,000
+# characters. A tool with a declared output schema cannot be cut and still
+# conform, so a result over the budget comes back as an error, which turned
+# those working calls into failures. The bound still matters, so a runaway
+# result cannot take a whole context window or a process's memory with it;
+# a deployment that wants a tighter one sets MCP_MAX_RESULT_CHARS.
+DEFAULT_MAX_RESULT_CHARS = 1_000_000
 
 # Never truncate below this, or the notice is longer than the content.
 MIN_MAX_RESULT_CHARS = 1_000
@@ -54,8 +62,8 @@ class Budget:
         except ValueError:
             return cls()
         # Clamped UP to the floor, never reset to the default. Someone who set
-        # 500 wanted a tight budget; silently giving them 100,000 is the one
-        # outcome that is certainly wrong.
+        # 500 wanted a tight budget; silently giving them the default is the
+        # one outcome that is certainly wrong.
         return cls(max_result_chars=max(value, MIN_MAX_RESULT_CHARS))
 
 

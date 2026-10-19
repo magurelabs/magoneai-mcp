@@ -170,8 +170,11 @@ an argument.
 
 Nothing in MCP bounds what one tool returns, so a single search over a large
 page could spend a model's whole context. The budget bounds the **text** a
-tool result carries to `MCP_MAX_RESULT_CHARS` (default 100,000 characters,
-about 25k tokens; values below 1,000 are raised to 1,000).
+tool result carries to `MCP_MAX_RESULT_CHARS` (default 1,000,000 characters,
+about 250k tokens; values below 1,000 are raised to 1,000). The default is
+set above the largest results real tools produce, so it stops a runaway
+result rather than a legitimate one; a deployment that wants a tighter bound
+sets the variable.
 
 It is measured on the exact text the client receives, after the result is
 shaped. When a result is cut:
