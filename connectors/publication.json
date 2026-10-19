@@ -35,6 +35,10 @@
     "image_generation": { "status": "ready" },
     "kapso_whatsapp": { "status": "ready" },
     "linear": { "status": "ready" },
+    "linkedin": {
+      "status": "blocked",
+      "reason": "Ported from the earlier implementation and not yet verified against a live deployment. Same rule as google_drive: run it end to end first."
+    },
     "microsoft_sharepoint": { "status": "ready" },
     "microsoft_teams": { "status": "ready" },
     "otp_verification": { "status": "ready" },
