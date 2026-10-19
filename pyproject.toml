@@ -82,7 +82,7 @@ trino = ["trino>=0.328.0"]
 # `vanna.legacy`, the pre-2.0 API that 2.x keeps under a new name, and a
 # module named legacy is the first thing a release is entitled to move. 2.0.1
 # is the version the v1 image ran.
-vanna = ["asyncpg>=0.29.0", "openai>=2.15.0,<3", "vanna==2.0.1"]
+vanna = ["asyncpg>=0.29.0", "openai>=2.15.0,<4", "vanna==2.0.1"]
 web_search = ["trafilatura>=1.8.0"]
 
 # Every connector dependency at once. Not for users - a deployment installs
