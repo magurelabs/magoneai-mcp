@@ -1580,6 +1580,81 @@
     ],
     "type": "object"
   },
+  "onedrive/onedrive_upload_files": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "failed": {
+        "items": {
+          "properties": {
+            "error": {
+              "type": "string"
+            },
+            "filename": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "success": {
+        "description": "True when no file failed",
+        "type": "boolean"
+      },
+      "uploaded": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "parent_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "parent_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "size": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "upload_method": {
+              "enum": [
+                "simple",
+                "session"
+              ],
+              "type": "string"
+            },
+            "web_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
   "otp_verification/check_verification_status": {
     "properties": {
       "error": {

@@ -4718,6 +4718,64 @@
       "type": "object"
     }
   },
+  "onedrive/onedrive_upload_files": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachments": {
+          "description": "Files to upload, each {filename, content_base64, content_type}",
+          "items": {
+            "description": "An inline file; a reference only if a platform resolves it",
+            "properties": {
+              "content_base64": {
+                "description": "Base64-encoded file content",
+                "type": "string"
+              },
+              "content_type": {
+                "description": "MIME type (guessed if omitted)",
+                "type": "string"
+              },
+              "filename": {
+                "description": "Name to save as",
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "string"
+            ]
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "conflict_behavior": {
+          "default": "rename",
+          "description": "What to do when a name is taken",
+          "enum": [
+            "rename",
+            "replace",
+            "fail"
+          ],
+          "type": "string"
+        },
+        "folder_id": {
+          "description": "Destination folder item ID",
+          "type": "string"
+        },
+        "folder_path": {
+          "description": "Destination folder path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachments"
+      ],
+      "type": "object"
+    }
+  },
   "otp_verification/check_verification_status": {
     "annotations": {
       "destructiveHint": false,
