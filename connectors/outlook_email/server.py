@@ -2,7 +2,7 @@
 
 Ported from the v1 mixin form by a codemod.
 
-27 tools, 15 of them proposed read-only. Every input schema
+28 tools, 15 of them proposed read-only. Every input schema
 is carried across verbatim via `declare_schema` rather than derived from type
 hints, so the wire contract is byte-identical to v1 and no live agent sees a
 changed parameter schema.
@@ -3070,6 +3070,102 @@ async def mark_emails(credentials: Dict[str, str],
     except Exception as e:
         logger.exception("mark_emails_error", error=str(e))
         return {"success": False, "error": "Failed to mark emails"}
+
+
+# credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
+# permission_group: 'default'  required_scopes: []
+# REVIEWED: readOnlyHint=False, destructiveHint=True, traced to the handler.
+# Destructive: PATCH .../messages/{id} {"categories": [...]} replaces the whole
+# array, so a category named in `remove` is gone afterwards.
+# Evidence: GET then PATCH {base}/messages/{email_id}
+@server.tool(
+    name='set_email_categories',
+    description="Add and/or remove Outlook categories on an email - the colored tags shown under a message's subject in Outlook's own UI (e.g. a shared-inbox team's 'Unassigned'/'Assigned to Jane' triage labels). Pass `email_id` and at least one of `add` (category names to add) or `remove` (category names to remove, case-insensitive). Graph's categories field is replace-only, so this reads the message's current categories first and merges - any category not named in `remove` is preserved. A category name that doesn't already exist in the mailbox's master category list is still applied; Outlook just shows it in a default color until someone assigns one. Pass `mailbox` for app-only shared-mailbox access, same as get_email - requires the org's Azure app to have the application permission Mail.ReadWrite admin-consented.",
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
+    ),
+    credential_headers=['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes'],
+    permission_group='default',
+)
+@declare_schema({'type': 'object',
+     'properties': {'email_id': {'type': 'string',
+                                 'description': 'Message ID returned by list_emails or '
+                                                'search_emails'},
+                    'add': {'type': 'array',
+                            'items': {'type': 'string'},
+                            'description': 'Category names to add',
+                            'default': []},
+                    'remove': {'type': 'array',
+                               'items': {'type': 'string'},
+                               'description': 'Category names to remove (case-insensitive '
+                                              'match)',
+                               'default': []},
+                    'mailbox': {'type': 'string',
+                                'description': 'Shared mailbox address to update via '
+                                               'app-only auth, instead of /me. Omit to '
+                                               "update the signed-in user's own mailbox."}},
+     'required': ['email_id']})
+@declare_output_schema({'properties': {'categories': {'description': "The email's full category list after this "
+                                                                     'change',
+                                                      'items': {'type': 'string'},
+                                                      'type': 'array'},
+                                       'email_id': {'type': 'string'},
+                                       'success': {'type': 'boolean'}},
+                        'type': 'object'})
+async def set_email_categories(credentials: Dict[str, str],
+    email_id: str,
+    add: Optional[List[str]] = None,
+    remove: Optional[List[str]] = None,
+    mailbox: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Add/remove Outlook categories on a message, merging with whatever is already set."""
+    try:
+        err = validate_id(email_id, "email_id")
+        if err:
+            return {"success": False, "error": err}
+
+        add_clean = [c.strip() for c in (add or []) if c and c.strip()]
+        remove_clean = {c.strip().lower() for c in (remove or []) if c and c.strip()}
+        if not add_clean and not remove_clean:
+            return {"success": False, "error": "Provide at least one of add or remove"}
+
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
+            return {"success": False, "error": "mailbox must be a valid email address"}
+        if mailbox:
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
+
+        request, base = resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox)
+
+        current = await request(
+            credentials,
+            "GET",
+            f"{base}/messages/{email_id}",
+            params={"$select": "categories"},
+        )
+        existing = current.get("categories") or []
+
+        # Keep the existing order, drop anything named in `remove`
+        # (case-insensitively), then append each `add` not already present, so
+        # a repeated call with the same `add` changes nothing the second time.
+        new_categories = [c for c in existing if c.lower() not in remove_clean]
+        for c in add_clean:
+            if c not in new_categories:
+                new_categories.append(c)
+
+        await request(
+            credentials,
+            "PATCH",
+            f"{base}/messages/{email_id}",
+            json_data={"categories": new_categories},
+        )
+
+        return {"success": True, "email_id": email_id, "categories": new_categories}
+    except Exception as e:
+        logger.exception("set_email_categories_error", error=str(e))
+        return {"success": False, "error": "Failed to update email categories"}
 
 
 
