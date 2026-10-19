@@ -17,7 +17,7 @@
 
 # Pinned by digest: a tag moves, and "what base is this image on" should be a
 # fact in the repository rather than a question for the registry.
-FROM python:3.11-slim@sha256:da047cb8f9d1d98e5c070f5300ba9f7274e33b8fc0e5be5ed88740aed1b95ba9 AS base
+FROM python:3.14-slim@sha256:a2b82f3c48559aa0a8446d9af49826b6e2b2016f4cd2afabfe6013ec53729170 AS base
 
 ARG CONNECTOR
 # The registry name from the connector's server.json, e.g.
