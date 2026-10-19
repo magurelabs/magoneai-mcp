@@ -5785,6 +5785,340 @@
       "type": "object"
     }
   },
+  "playwright/list_artifacts": {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 50,
+          "description": "Maximum number of files to return.",
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "since_minutes": {
+          "default": 60,
+          "description": "Only files modified within this many minutes.",
+          "maximum": 10080,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "playwright/publish_artifact": {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "filename": {
+          "description": "Optional name to return it under; the extension is kept.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Path of the file exactly as Playwright printed it, e.g. '../../artifacts/video-1.webm', '/artifacts/page-1.png' or the whole '[Video](...)' link.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "playwright/publish_test_report": {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "include_videos": {
+          "default": false,
+          "description": "Embed the recordings in the HTML report. Off by default: one recording usually exceeds the result size budget.",
+          "type": "boolean"
+        },
+        "report": {
+          "description": "The test report: what was tested, the test cases, the issues found.",
+          "properties": {
+            "console_errors": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 500,
+              "title": "Console Errors",
+              "type": "array"
+            },
+            "environment": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Environment"
+            },
+            "issues": {
+              "items": {
+                "properties": {
+                  "actual": {
+                    "maxLength": 20000,
+                    "title": "Actual",
+                    "type": "string"
+                  },
+                  "console_errors": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "title": "Console Errors",
+                    "type": "array"
+                  },
+                  "expected": {
+                    "maxLength": 20000,
+                    "title": "Expected",
+                    "type": "string"
+                  },
+                  "id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "screenshot_paths": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "title": "Screenshot Paths",
+                    "type": "array"
+                  },
+                  "severity": {
+                    "enum": [
+                      "Blocker",
+                      "Major",
+                      "Minor"
+                    ],
+                    "title": "Severity",
+                    "type": "string"
+                  },
+                  "steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "title": "Steps",
+                    "type": "array"
+                  },
+                  "test_case_id": {
+                    "default": "",
+                    "maxLength": 200,
+                    "title": "Test Case Id",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 20000,
+                    "minLength": 1,
+                    "title": "Title",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "severity",
+                  "title",
+                  "expected",
+                  "actual"
+                ],
+                "title": "Issue",
+                "type": "object"
+              },
+              "maxItems": 500,
+              "title": "Issues",
+              "type": "array"
+            },
+            "summary": {
+              "maxLength": 20000,
+              "title": "Summary",
+              "type": "string"
+            },
+            "test_cases": {
+              "items": {
+                "properties": {
+                  "actual": {
+                    "maxLength": 20000,
+                    "title": "Actual",
+                    "type": "string"
+                  },
+                  "category": {
+                    "enum": [
+                      "positive",
+                      "negative",
+                      "edge"
+                    ],
+                    "title": "Category",
+                    "type": "string"
+                  },
+                  "expected": {
+                    "maxLength": 20000,
+                    "title": "Expected",
+                    "type": "string"
+                  },
+                  "id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "priority": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Priority"
+                  },
+                  "screenshot_paths": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "title": "Screenshot Paths",
+                    "type": "array"
+                  },
+                  "status": {
+                    "enum": [
+                      "pass",
+                      "fail",
+                      "blocked",
+                      "skipped"
+                    ],
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "steps": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "title": "Steps",
+                    "type": "array"
+                  },
+                  "title": {
+                    "maxLength": 20000,
+                    "minLength": 1,
+                    "title": "Title",
+                    "type": "string"
+                  },
+                  "video_chapter": {
+                    "anyOf": [
+                      {
+                        "maxLength": 200,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Video Chapter"
+                  },
+                  "video_path": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Video Path"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "category",
+                  "expected",
+                  "actual",
+                  "status"
+                ],
+                "title": "TestCase",
+                "type": "object"
+              },
+              "maxItems": 500,
+              "title": "Test Cases",
+              "type": "array"
+            },
+            "tested_at": {
+              "format": "date-time",
+              "title": "Tested At",
+              "type": "string"
+            },
+            "title": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Title",
+              "type": "string"
+            },
+            "url": {
+              "maxLength": 4000,
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "url",
+            "summary"
+          ],
+          "title": "TestReport",
+          "type": "object"
+        },
+        "video_path": {
+          "description": "The recording, exactly as browser_stop_video printed it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "report"
+      ],
+      "type": "object"
+    }
+  },
   "surveymonkey/surveymonkey_add_contacts_bulk": {
     "annotations": {
       "destructiveHint": true,
