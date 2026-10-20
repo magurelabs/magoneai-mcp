@@ -26,6 +26,24 @@ _MAX_BACKOFF_SECONDS = 60.0
 _UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024
 
 
+class GraphAuthError(ValueError):
+    """The caller has no usable Microsoft credentials: a missing refresh token or
+    OAuth app credentials, a failed token refresh, or a 401 from Graph. Tools
+    surface its message so the caller can tell "not connected" from a failure."""
+
+
+def graph_failure(action: str, exc: Exception) -> Dict[str, Any]:
+    """Error result for a tool whose Graph call raised.
+
+    A credential problem keeps its message, in the "<action>: <reason>" shape the
+    calendar connector uses, so the caller sees the mailbox is not connected
+    instead of an opaque failure it would retry. Anything else stays a bare
+    `action`, so Graph internals do not leak."""
+    if isinstance(exc, GraphAuthError):
+        return {"success": False, "error": f"{action}: {exc}"}
+    return {"success": False, "error": action}
+
+
 class GraphNotFoundError(ValueError):
     """Raised only for an actual Graph 404 — distinguishes a real "resource
     doesn't exist" from other errors whose message text happens to mention
