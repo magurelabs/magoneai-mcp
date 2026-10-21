@@ -286,6 +286,50 @@ def rank_passages(
     return pages
 
 
+def focus_text(text: str, focus: str, max_chars: int) -> tuple[str, bool]:
+    """Keep the passages of `text` that match `focus`, within `max_chars`.
+
+    Passages are ranked with BM25 against the focus terms, the best ones are
+    kept until the budget is spent, and they are returned in document order
+    joined by a blank line, so the result still reads top to bottom. Returns
+    (text, matched). When no passage shares a term with the focus, the head of
+    the page is returned instead and matched is False.
+    """
+    terms = _terms(focus or "")
+    # Passages smaller than the budget, so several matches can fit.
+    passages = split_passages(text, size=max(200, min(PASSAGE_CHARS, max_chars // 3)))
+    if not terms or not passages:
+        return _head(text, max_chars), False
+    bm = BM25([_terms(p) for p in passages])
+    ranked = sorted(
+        ((bm.score(terms, i), i) for i in range(len(passages))), key=lambda x: x[0], reverse=True
+    )
+    chosen: list[int] = []
+    used = 0
+    for score, i in ranked:
+        if score <= 0:
+            break
+        size = len(passages[i]) + (2 if chosen else 0)
+        if used + size > max_chars:
+            if not chosen:
+                # The best match alone is over budget: keep its head.
+                return _head(passages[i], max_chars), True
+            continue
+        chosen.append(i)
+        used += size
+    if not chosen:
+        return _head(text, max_chars), False
+    return "\n\n".join(passages[i] for i in sorted(chosen)), True
+
+
+def _head(text: str, max_chars: int) -> str:
+    """The first max_chars of text, cut at the last full stop when one is near."""
+    if len(text) <= max_chars:
+        return text
+    cut = text.rfind(".", 0, max_chars)
+    return text[: cut + 1] if cut > max_chars // 2 else text[:max_chars]
+
+
 def budget(pages: list[dict], max_chars: int) -> list[dict]:
     """Trim passages so the whole payload stays within max_chars."""
     used = 0
