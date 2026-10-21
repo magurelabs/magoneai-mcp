@@ -8007,9 +8007,13 @@
           },
           "type": "array"
         },
+        "focus": {
+          "description": "What you need from the page, in a few words (for example the entity and the fact). The whole page is read and only the sections that match are returned, in page order. Ignored when return_full=true.",
+          "type": "string"
+        },
         "max_chars": {
           "default": 8000,
-          "description": "Max characters to return, stopping at the last full stop (default 8000). Ignored when return_full=true.",
+          "description": "Max characters to return, stopping at the last full stop (default 8000, capped by the deployment). Ignored when return_full=true.",
           "type": "integer"
         },
         "return_full": {

@@ -1539,6 +1539,9 @@
       "final_url": {
         "type": "string"
       },
+      "focused": {
+        "type": "boolean"
+      },
       "links": {
         "items": {
           "type": "string"
@@ -1547,6 +1550,9 @@
       },
       "markdown": {
         "type": "string"
+      },
+      "source_char_count": {
+        "type": "integer"
       },
       "status_code": {
         "type": "integer"
