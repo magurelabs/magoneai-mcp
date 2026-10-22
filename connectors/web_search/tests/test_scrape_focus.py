@@ -47,6 +47,7 @@ def _run_scrape(content: str, **kw):
 def test_focus_returns_matching_passage_from_deep_in_the_page():
     out, fetch = _run_scrape(PAGE, focus="inspection rating overall", max_chars=600)
     assert out["focused"] is True
+    assert out["matched_terms"] == ["inspection", "overall"]
     assert "Very Good overall" in out["content"]
     assert len(out["content"]) <= 600
     assert out["source_char_count"] == len(PAGE)
@@ -83,12 +84,12 @@ def test_focus_text_keeps_document_order_within_budget():
     text = _page(
         ["alpha beta." + pad, "gamma delta." + pad, "alpha gamma." + pad, "epsilon." + pad]
     )
-    out, matched = _research.focus_text(text, "alpha gamma", 3000)
+    out, matched, _ = _research.focus_text(text, "alpha gamma", 3000)
     assert matched
     assert out.index("alpha beta") < out.index("gamma delta") < out.index("alpha gamma")
     assert "epsilon" not in out
 
 
 def test_focus_text_respects_budget():
-    out, matched = _research.focus_text(PAGE, "section operations staffing", 500)
+    out, matched, _ = _research.focus_text(PAGE, "section operations staffing", 500)
     assert matched and len(out) <= 500

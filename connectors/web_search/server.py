@@ -875,6 +875,8 @@ async def perplexity_search(credentials: dict[str, str],
                                        'focused': {'type': 'boolean'},
                                        'source_char_count': {'type': 'integer'},
                                        'links': {'items': {'type': 'string'}, 'type': 'array'},
+                                       'matched_terms': {'items': {'type': 'string'},
+                                                         'type': 'array'},
                                        'markdown': {'type': 'string'},
                                        'status_code': {'type': 'integer'},
                                        'title': {'type': 'string'},
@@ -958,13 +960,14 @@ async def scrape_url(credentials: dict[str, str],
             "char_count": len(content),
             "content_type": kind,
         }
-    selected, matched = _research.focus_text(content, focus, limit)
+    selected, focused, matched_terms = _research.focus_text(content, focus, limit)
     return {
         "url": url,
         "content": selected,
         "char_count": len(selected),
         "content_type": kind,
-        "focused": matched,
+        "focused": focused,
+        "matched_terms": matched_terms,
         "source_char_count": len(content),
     }
 
