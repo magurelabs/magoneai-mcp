@@ -1551,6 +1551,12 @@
       "markdown": {
         "type": "string"
       },
+      "matched_terms": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
       "source_char_count": {
         "type": "integer"
       },
