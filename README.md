@@ -55,7 +55,7 @@ Each tool declares the request headers it may receive, for example `X-Linear-Api
 {"linear_api_key": "lin_api_..."}
 ```
 
-A header on the request overrides the file. `docs/TOOLS.md` shows how many credential headers each tool takes; the tool's `credential_headers=` in `connectors/<name>/server.py` names them.
+The file wins: a header cannot override a key the file sets, and can fill only keys the file leaves unset. If the file holds a secret, the host, port, URL, endpoint, connection string and allowlist keys (for example `X-Db-Host`, `X-Allowed-Mailboxes`) are never taken from a header, so a caller cannot point your secret at a server of their choosing. With no file, headers supply everything. `docs/TOOLS.md` shows how many credential headers each tool takes; the tool's `credential_headers=` in `connectors/<name>/server.py` names them.
 
 `web_search` needs no key: it uses a SearXNG instance at `SEARXNG_URL` (default `http://localhost:8888`, JSON output enabled), or Serper when `SERPER_API_KEY` is set.
 

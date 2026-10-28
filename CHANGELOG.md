@@ -88,6 +88,13 @@ ahead of the first release.
 
 ### Fixed
 
+- `magone-mcp-core`: when `MCP_CREDENTIALS_PATH` supplies values, the file now
+  wins over request headers. A header can no longer override a key the file
+  sets, and once the file holds a secret it can no longer supply a host, port,
+  URL, endpoint, connection string or allowlist, so a caller who sent only a
+  host header could no longer make the server present the file's password
+  there. Header-only deployments are unchanged. This reverses the previous
+  rule that a header overrides the file.
 - `atlassian_jira`: `addJiraIssueAttachment`'s description points callers at
   `attachments` again instead of inviting model-written base64.
 - `outlook_email`: an empty `mailbox` on `get_email`, `list_attachments`,
