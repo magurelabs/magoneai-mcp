@@ -1,0 +1,86 @@
+# Jobs run on GitHub-hosted runners only. See the note at the top of ci.yml;
+# `scripts/runner_label_gate.py` checks this file too.
+#
+# Every action is pinned to a full commit SHA, with the release it corresponds
+# to in a trailing comment.
+
+# Tell the downstream image build that a reviewed commit landed.
+#
+# A downstream build packages the connectors in this repository into container
+# images. It used to find out about a merge by polling this repository. This
+# workflow replaces the poll with a single notification per merge: it sends
+# the commit SHA and the branch name, and nothing else. The downstream build
+# checks for itself that the SHA is reachable from `main` or `prod` here
+# before it builds anything, so this message is a hint, never an authority.
+#
+# Why this is safe to run in a public repository:
+#
+# - `push` to `main` and `prod` only. Both branches are protected: a commit
+#   reaches them only through a reviewed, approved merge. Never
+#   `pull_request`, `pull_request_target` or `workflow_run`, so no
+#   contributor's branch ever runs this job.
+# - The credential lives in the `platform-dispatch` environment, which only
+#   `main` and `prod` may deploy to. A workflow edited on any other branch
+#   cannot read it, whatever the file on that branch says.
+# - The credential is a GitHub App key whose installation reaches one
+#   downstream repository, and the token minted here is narrowed further to
+#   `contents: write` on that repository, which is the permission the
+#   repository dispatch endpoint requires. It is revoked when the job ends.
+# - This job checks out nothing and runs no code from this repository. Its
+#   only inputs are the commit SHA and branch name GitHub supplies, passed
+#   through environment variables rather than expanded into the script.
+#
+# In a fork the secrets do not exist, so the job says so and succeeds.
+
+name: Notify downstream build
+
+on:
+  push:
+    branches: [main, prod]
+
+permissions: {}
+
+# A notification is cheap and each one names its own SHA, so they are allowed
+# to run side by side; nothing here needs to be serialised.
+
+jobs:
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: platform-dispatch
+    permissions: {}
+    env:
+      # Mapped to env because the `secrets` context is not available in a
+      # step-level `if`; `env` is.
+      HAS_APP: ${{ secrets.PLATFORM_DISPATCH_APP_CLIENT_ID != '' && secrets.PLATFORM_DISPATCH_APP_PRIVATE_KEY != '' }}
+    steps:
+      - name: Skip when the credential is absent
+        if: ${{ env.HAS_APP != 'true' }}
+        run: |
+          echo "::notice::The platform-dispatch credential is not configured here (for example, in a fork). Nothing to notify."
+
+      - name: Mint a short-lived token for the downstream repository
+        id: app
+        if: ${{ env.HAS_APP == 'true' }}
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.PLATFORM_DISPATCH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PLATFORM_DISPATCH_APP_PRIVATE_KEY }}
+          owner: magurelabs
+          repositories: magoneai-mcp-platform
+          permission-contents: write
+
+      - name: Send the commit downstream
+        if: ${{ env.HAS_APP == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          COMMIT_SHA: ${{ github.sha }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh api --method POST repos/magurelabs/magoneai-mcp-platform/dispatches \
+            -f event_type=public-merged \
+            -f "client_payload[sha]=$COMMIT_SHA" \
+            -f "client_payload[ref]=$BRANCH"
+          echo "Notified the downstream build of $BRANCH at $COMMIT_SHA." >> "$GITHUB_STEP_SUMMARY"
