@@ -2,22 +2,22 @@
 # boundary or a contract that other code depends on being stable.
 
 # The framework. Every connector inherits whatever changes here.
-/src/magone_mcp_core/        @cyproto
+/src/magone_mcp_core/        @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
 
 # The gates themselves. A change that weakens a gate should be at least as
 # visible as the thing the gate exists to catch.
-/scripts/                    @cyproto
-/.github/workflows/          @cyproto
-/.github/dependabot.yml      @cyproto
+/scripts/                    @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/.github/workflows/          @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/.github/dependabot.yml      @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
 
 # The golden baseline is the tool contract. A diff here changes what live
 # agents are told they may pass.
-/tests/golden/               @cyproto
+/tests/golden/               @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
 
 # Licensing, disclosure and how the project is run.
-/LICENSE                     @cyproto
-/NOTICE                      @cyproto
-/SECURITY.md                 @cyproto
-/GOVERNANCE.md               @cyproto
-/MAINTAINERS.md              @cyproto
-/CODEOWNERS                  @cyproto
+/LICENSE                     @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/NOTICE                      @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/SECURITY.md                 @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/GOVERNANCE.md               @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/MAINTAINERS.md              @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1
+/CODEOWNERS                  @cyproto @akram-magure @Pranav2509 @PradumanS @HarshJaiswani1

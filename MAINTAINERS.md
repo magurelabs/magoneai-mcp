@@ -10,9 +10,17 @@ request. Report security issues privately as described in
 
 ## Current maintainers
 
-| GitHub | Areas |
-|---|---|
-| [@cyproto](https://github.com/cyproto) | everything: framework, connectors, gates, CI, releases, security |
+| GitHub | Name | Areas |
+|---|---|---|
+| [@cyproto](https://github.com/cyproto) | Yash | everything: framework, connectors, gates, CI, releases, security |
+| [@akram-magure](https://github.com/akram-magure) | Akram | review across the repository |
+| [@Pranav2509](https://github.com/Pranav2509) | Pranav Agrawal | review across the repository |
+| [@PradumanS](https://github.com/PradumanS) | Praduman | review across the repository |
+| [@HarshJaiswani1](https://github.com/HarshJaiswani1) | - | review across the repository |
+
+Every maintainer is a code owner of every path in [CODEOWNERS](CODEOWNERS), so
+a change by one maintainer can be approved by another. Security and conduct
+reports reach all of them, not one person.
 
 ## Emeritus maintainers
 
