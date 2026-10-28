@@ -322,6 +322,12 @@ literals that embed an IPv4 address (IPv4-mapped, 6to4, Teredo, NAT64) are
 decoded and the embedded address judged too. The linter fails a tool that
 takes a `url`-like parameter and never calls it.
 
+`validate_url()` resolves the name once and the HTTP client resolves it again
+when it connects, so a tool that fetches the URL also calls
+`net.reject_blocked_peer(response)` as soon as the response headers arrive. It
+judges the address the socket actually reached, and a redirect is validated
+again before it is followed.
+
 ## Provenance
 
 `provenance.py`
