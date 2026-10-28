@@ -206,9 +206,9 @@ rules every tool follows:
   schema. The description is what the model reads to decide what to pass; a
   property without one is a guess.
 - **Declare a permission group** with `permission_group=` (and
-  `required_scopes=` when the vendor uses scopes). A connection can then select
-  a group, for example only the reads. A tool that names no group falls in
-  `default`.
+  `required_scopes=` when the vendor uses scopes). A host that enforces
+  selection can then offer a connection one group, for example only the reads.
+  A tool that names no group falls in `default`.
 - **Fetch a caller-supplied URL only through `validate_url`** from
   `magone_mcp_core`. The linter fails a tool that takes a `url`-like parameter
   and never calls it.

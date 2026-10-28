@@ -118,6 +118,9 @@ fails a tool whose group stayed a comment - a group that is not declared cannot
 narrow anything, and the failure is silent in the direction that serves every
 tool to every connection.
 
+A group is a label a host can select on, not a permission the server enforces
+on its own: see [Tool selection is a hint](#tool-selection-is-a-hint-not-a-guarantee).
+
 ### Keeping a schema exactly as written
 
 A tool that already exists, and whose schema agents already rely on, should not have that schema regenerated. Derivation invents a `title`, adds one to every property, and drops every `description` - a silent behaviour change for any agent reading the description to decide what to pass.
@@ -151,7 +154,6 @@ Each of these exists because doing it per connector meant it was done differentl
 |---|---|
 | **Outbound budget** | Bounds what a single tool result may return, and says so in the result when it truncates. A silently shortened list is worse than an error, because the model treats it as complete. |
 | **Read-only mode** | `MCP_READ_ONLY=1` filters non-read tools out of `tools/list` *and refuses them on `tools/call`*. The call check is the control; the listing filter is a convenience. |
-| **Per-connection tool selection** | A connection is served, and may call, only the tools it selected: `X-MCP-Enabled-Tools` names them outright, `X-MCP-Enabled-Groups` names permission groups. Neither header present means no selection was made and nothing is filtered, so a caller that sends neither is unaffected. Names win over groups. As with read-only mode, the listing filter is a convenience and the call check is the control. |
 | **SSRF validation** | One implementation. IPv6 literals are unwrapped to the IPv4 they encode (IPv4-mapped, 6to4, Teredo, NAT64) before any membership test, because `ip in network` is False across address families. |
 | **Credential-safe logging** | Tool arguments are logged by key only. Upstream error bodies are scrubbed and truncated before they reach a log line, because a vendor's 401 frequently echoes the token. |
 | **Authenticated callers** | `platform` mode requires the caller's `X-Service-Token` to match `MCP_SERVICE_TOKEN`, or a token verifier; `hosted` mode requires a token verifier, which validates audience and expiry and answers 401 with an RFC 9728 challenge. A server with neither refuses to start rather than serving unauthenticated. The inbound token is never forwarded upstream. The shared service token is the interim control: it proves the caller holds a secret, not which tenant it is. |
@@ -159,6 +161,16 @@ Each of these exists because doing it per connector meant it was done differentl
 | **Host and Origin allowlist** | DNS-rebinding protection is always on. Loopback is always accepted; every other name a caller uses (a service name, an ingress host) must be listed in `MCP_ALLOWED_HOSTS`, or the request is answered `421`. |
 | **Text arguments stay text** | An argument whose published schema admits a string (`"type": "string"`, a type list or `anyOf`/`oneOf` that includes one, or no type at all) reaches the handler as the string that was sent. The SDK's pre-parse would otherwise `json.loads` it whenever the annotation is not exactly `str`, turning `"null"` into `None` and `'{"a":1}'` into a dict. Object, array, number and boolean parameters keep the SDK's behaviour. |
 | **Health endpoint** | `GET /healthz` answers `{status, name, version, tools}` for a container or Kubernetes probe. Hosts discover the catalogue over MCP (`server/discover`, `tools/list`), not from this endpoint. |
+
+### Tool selection is a hint, not a guarantee
+
+A caller can narrow one connection to part of a connector: `X-MCP-Enabled-Tools` names tools outright, `X-MCP-Enabled-Groups` names permission groups, and names win when both are sent. The server then filters `tools/list` and refuses a call outside the selection.
+
+Those headers come from the caller, on the very request they narrow. A request that sends neither is served every tool, and nothing stops a client from leaving them out or widening them. Selection therefore restricts nothing on its own. It is only a control when a trusted intermediary you run, such as the host application or a gateway, sets the headers itself and never passes through values chosen by the end client. Do not put a connector in front of a client you do not trust and rely on these headers to limit it.
+
+Groups also only narrow anything where a connector declares more than one. Seven do: `atlassian_confluence`, `atlassian_jira`, `csv_to_sql`, `filesystem`, `linkedin`, `trino` and `vanna`. In the other 18 every tool is in `default`, so selecting by group there is all or nothing; select by tool name instead.
+
+The control that does restrict writes, whatever the caller sends, is `MCP_READ_ONLY=1` set on the server. Every tool not annotated `readOnlyHint=true` is dropped from `tools/list` and refused on `tools/call`, and a tool with no annotations counts as a write.
 
 ## Configuration
 
@@ -195,7 +207,7 @@ pip install -e ".[dev,all]"
 pytest tests/ connectors/ -q
 ```
 
-905 tests: 360 framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), 244 framework tests that import every connector, and 301 connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
+1005 tests: 377 framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), 251 framework tests that import every connector, and 377 connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
 
 CI also runs, on every pull request: `ruff check` and `ruff format --check`; a golden-schema diff of every tool's input and output schema (`scripts/golden_schema_gate.py`); a boundary check that refuses platform reach-through (`scripts/boundary_gate.py`); the tool-contract linter (annotations, property descriptions, logged credentials); dependency, compile, code-health, credential-header, permission-group, publication, manifest and runner-label gates; and the official MCP conformance suite against every connector the change can affect. Each gate is a script under `scripts/` that runs locally the same way.
 
@@ -205,11 +217,11 @@ Each of the 19 publishable connectors carries a `server.json` (schema `2025-12-1
 
 **Writing a manifest is not publishing.** Nothing here has been pushed to any registry. `.github/workflows/publish.yml` builds and validates everything it would publish, and its publish jobs run only on a manual dispatch inside a protected `release` environment, with every push step still commented out.
 
-## Status of the port
+## History
 
-Most connectors here were ported from an earlier, unreleased framework, referred to in code comments as **v1**. `filesystem`, `vanna` and `csv_to_sql` were recovered from built v1 images and reworked so the caller supplies its own connection and keys per call.
+The connectors originated in Magure's internal platform and are released here by Magure, Inc. Code comments call that earlier framework **v1**.
 
-Every ported tool's input schema is carried across byte for byte with `declare_schema` and checked on every pull request, because that is the part that would silently change behaviour for an agent already running. Handler bodies were carried across unchanged; `scripts/port_status.py` counts names a body refers to that do not resolve, and fails if that number rises above zero.
+Every carried-over tool's input schema is kept byte for byte with `declare_schema` and checked on every pull request, because that is the part that would silently change behaviour for an agent already running. Handler bodies were carried across unchanged; `scripts/port_status.py` counts names a body refers to that do not resolve, and fails if that number rises above zero.
 
 ## Contributing
 
