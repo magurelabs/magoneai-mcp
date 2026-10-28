@@ -56,7 +56,7 @@ guarded handler              (one per tool, built by ConnectorServer.tool)
   1. read-only check         refuse a non-read tool when MCP_READ_ONLY is set
   2. selection check         refuse a tool this connection did not select
   3. log the call            tool name and argument KEYS only
-  4. build `credentials`     from MCP_CREDENTIALS_PATH, then the tool's declared headers
+  4. build `credentials`     from MCP_CREDENTIALS_PATH (wins), then the tool's declared headers
   5. call the handler
   6. provenance marking      for fields declared untrusted
   7. shape the result        refusal -> isError, extra content block, structured output
@@ -158,7 +158,14 @@ The framework builds `credentials` per call (`credentials.py`):
 2. then each **declared** header present on the request, keyed by the header
    name without the leading `X-`, lower-cased, with `-` replaced by `_`.
 
-A header overrides the file. An undeclared header is never passed, so a tool
+When the file yields values, **the file wins**. A header cannot override a key
+the file sets, and it can fill only a key the file leaves unset. Target keys
+(a host, port, URL or endpoint, a DSN or connection string, a scheme or TLS
+setting, and allowlists such as `X-Allowed-Mailboxes`) are not filled from
+headers at all once the file supplies any secret, because otherwise a caller
+who sent only `X-Db-Host` would make the server present the file's password to
+a host of their choosing. With no file, or an empty one, headers supply
+everything as before. An undeclared header is never passed, so a tool
 that needs one vendor's key never sees another vendor's token that happens to
 be on the same request. The `credentials` parameter is supplied by the
 framework and removed from the advertised schema; a client never sends it as

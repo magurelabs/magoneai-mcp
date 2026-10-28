@@ -27,7 +27,7 @@ Read by every connector.
 | `MCP_MAX_BODY_BYTES` | `10485760` (10 MiB), or the connector's own default | start-up | Largest request body accepted. A larger one is answered `413` before it is parsed. A connector whose tools carry attachments may declare a larger default with `ConnectorServer(max_body_bytes=...)`: `atlassian_jira` declares 70 MiB and `outlook_email` 75 MiB. This variable overrides either. An unparseable or non-positive value falls back to the connector's default. Base64 attachments are about a third larger than the file. |
 | `MCP_MAX_RESULT_CHARS` | `1000000` | start-up | Outbound budget: the most text one tool result may carry. Larger results are cut, visibly; a tool with a declared output schema cannot be cut and still conform, so its oversized result is returned as an error instead. Values below `1000` are raised to `1000`; an unparseable value falls back to the default. |
 | `MCP_READ_ONLY` | off | every call | Refuses every tool not marked `readOnlyHint=True`, and hides them from `tools/list`. Read per call, so changing it needs no restart. |
-| `MCP_CREDENTIALS_PATH` | unset | path at start-up, file per call | Path to a JSON object of credentials for a server you run yourself, keyed like the `credentials` dict (`{"linear_api_key": "..."}`). A request header overrides the file. A missing or unreadable file is treated as empty. |
+| `MCP_CREDENTIALS_PATH` | unset | path at start-up, file per call | Path to a JSON object of credentials for a server you run yourself, keyed like the `credentials` dict (`{"linear_api_key": "..."}`). When the file has values it wins: a request header cannot override a key the file sets, and can fill only a key the file leaves unset, never a host, port, URL, endpoint, connection string or allowlist once the file holds a secret. A missing or unreadable file is treated as empty. |
 | `MCP_LOG_RAW_UPSTREAM_ERRORS` | off | per log line | Logs unscrubbed upstream error bodies. Honoured only when `MCP_MODE=local`. |
 
 ## Process
@@ -61,7 +61,8 @@ Not environment variables, but configuration a caller sends per request.
 Credentials always arrive per call (as headers, or from
 `MCP_CREDENTIALS_PATH`). Where a connector also reads a credential from the
 environment, that is a **fallback** for a standalone server one person runs;
-the per-call value wins whenever it is present.
+the per-call value wins whenever it is present. (A credentials file is the
+exception: it wins over headers, see `MCP_CREDENTIALS_PATH` above.)
 
 ### `web_search`
 
