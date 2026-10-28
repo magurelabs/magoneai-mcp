@@ -7,6 +7,11 @@
 # No third-party action and no secret: it reads the commits the pull request
 # already contains. `pull_request`, never `pull_request_target`, for the reason
 # given at the top of ci.yml.
+#
+# Dependabot cannot sign off, so its pull requests would fail a required
+# check they have no way to pass. The job still runs, so "Sign-off" reports a
+# result, and the check step is skipped when the pull request's author is
+# dependabot[bot]. Its pull requests still need a maintainer's review.
 
 name: DCO
 
@@ -22,11 +27,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Dependabot cannot sign off, so its pull requests are not checked
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        run: echo "Pull request by dependabot[bot]; sign-off check skipped."
+      - if: github.event.pull_request.user.login != 'dependabot[bot]'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           # The range below needs both ends and everything between them.
           fetch-depth: 0
       - name: Every commit is signed off by its author
+        if: github.event.pull_request.user.login != 'dependabot[bot]'
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
