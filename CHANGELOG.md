@@ -99,5 +99,10 @@ ahead of the first release.
   (the old one stops working) instead of returning the stored one, and the raw
   identifier is no longer written to the log on lockout. Rows written before
   this change hold plaintext codes, never match, and expire on their own.
+- `outlook_email`: `attachment_urls` on `send_email`, `create_draft` and
+  `reply_email` now use the framework's SSRF check instead of a private copy
+  that missed carrier-grade NAT, IPv6 site-local and IPv4-in-IPv6 forms, and
+  the address actually connected to is checked as well as the name. Redirects
+  are validated again at each hop. Added `magone_mcp_core.net.reject_blocked_peer`.
 
 [Unreleased]: https://github.com/magurelabs/magoneai-mcp/commits/main
