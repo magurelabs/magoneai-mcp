@@ -93,5 +93,11 @@ ahead of the first release.
 - `outlook_email`: an empty `mailbox` on `get_email`, `list_attachments`,
   `read_attachment` and `download_attachment` means the signed-in user's own
   mailbox, as an omitted one does, instead of being refused as invalid.
+- `otp_verification`: codes come from the operating system's CSPRNG instead of
+  SQL `RANDOM()`, are stored only as a salted hash, and are compared in
+  constant time. Asking again while a code is live now issues a replacement
+  (the old one stops working) instead of returning the stored one, and the raw
+  identifier is no longer written to the log on lockout. Rows written before
+  this change hold plaintext codes, never match, and expire on their own.
 
 [Unreleased]: https://github.com/magurelabs/magoneai-mcp/commits/main
