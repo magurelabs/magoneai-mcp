@@ -71,6 +71,10 @@ database = [
   "SQLAlchemy",
 ]
 otp_verification = ["asyncpg>=0.29.0"]
+# zoneinfo reads the operating system's zone database first. Slim images and
+# some CI runners ship one without the legacy aliases (Asia/Calcutta,
+# Asia/Katmandu) that calendars still send, so the IANA data comes from PyPI.
+outlook_calendar = ["tzdata>=2024.1"]
 outlook_email = [
   "python-docx>=1.1.0",
   "openpyxl>=3.1.0",
@@ -91,7 +95,7 @@ web_search = ["trafilatura>=1.8.0"]
 # failures shipped: eleven connectors that would not import, and twenty-five
 # tools that raised NameError on call while importing perfectly.
 all = [
-  "magone-mcp-core[csv_to_sql,database,otp_verification,outlook_email,trino,vanna,web_search]",
+  "magone-mcp-core[csv_to_sql,database,otp_verification,outlook_calendar,outlook_email,trino,vanna,web_search]",
 ]
 
 [project.urls]
