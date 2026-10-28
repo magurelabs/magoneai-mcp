@@ -60,7 +60,9 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement, the maintainers
-listed in [CODEOWNERS](CODEOWNERS). Report privately through GitHub: use the
+listed in [MAINTAINERS.md](MAINTAINERS.md). A report goes to all of them, never
+to one person alone, and a maintainer the report concerns takes no part in
+handling it. Report privately through GitHub: use the
 repository's private reporting channel described in [SECURITY.md](SECURITY.md)
 and say that the report concerns conduct rather than a vulnerability, or, if
 you cannot use it, open an issue asking a maintainer to contact you privately,

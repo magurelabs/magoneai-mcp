@@ -32,10 +32,14 @@ report that arrives a week later.
 
 | | |
 |---|---|
-| Acknowledgement | within 2 working days |
-| Initial assessment | within 5 working days |
-| Fix or a dated plan | within 30 days for high severity |
+| Acknowledgement | within 5 working days |
+| Initial assessment | within 15 working days |
+| Fix or a dated plan | within 60 days for high severity |
 | Public disclosure | coordinated with you, by default 90 days after the report |
+
+The project is maintained by a small team, listed in
+[MAINTAINERS.md](MAINTAINERS.md). A report reaches all of them, so it does not
+wait on any one person.
 
 If we are going to miss one of these, we will tell you before the date rather
 than after it.

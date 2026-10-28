@@ -52,8 +52,8 @@ Not environment variables, but configuration a caller sends per request.
 |---|---|
 | `X-Service-Token` | The shared secret, in `platform` mode with `MCP_SERVICE_TOKEN` set. |
 | `Authorization: Bearer ...` | An access token, when the server has a token verifier. |
-| `X-MCP-Enabled-Tools` | Comma-separated tool names this connection may use. Wins over groups. |
-| `X-MCP-Enabled-Groups` | Comma-separated permission groups this connection may use. |
+| `X-MCP-Enabled-Tools` | Comma-separated tool names this connection may use. Wins over groups. A caller-supplied hint: it restricts anything only when a trusted host or gateway sets it (see [architecture.md](architecture.md#per-connection-tool-selection)). |
+| `X-MCP-Enabled-Groups` | Comma-separated permission groups this connection may use. Same caveat; and most connectors have only the `default` group. |
 | a tool's credential headers | For example `X-Linear-Api-Key`. Each tool declares the ones it may receive; [TOOLS.md](TOOLS.md) shows how many each tool takes and `credential_headers=` in `connectors/<name>/server.py` names them. |
 
 ## Connectors

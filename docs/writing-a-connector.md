@@ -140,7 +140,7 @@ What each part is doing, and why it is required:
 | `credential_headers=["X-Example-Api-Key"]` | the only headers this tool may receive. The framework turns them into `credentials["example_api_key"]` per call and hides `credentials` from the advertised schema. The caller's own key, on every call; never one key for everyone |
 | `annotations=` with both hints | `readOnlyHint` decides whether `MCP_READ_ONLY=1` offers the tool. The linter fails a tool missing either hint, or claiming both |
 | `Field(description=...)` on every parameter | the description is what the model reads to decide what to pass |
-| `permission_group=`, `required_scopes=` | lets a connection select only the reads, and tells a client which vendor scopes a selection needs |
+| `permission_group=`, `required_scopes=` | lets a host that enforces selection offer a connection only the reads, and tells a client which vendor scopes a selection needs. Selection is a caller-supplied hint, not a server-side control; `MCP_READ_ONLY=1` is the one that restricts writes |
 | `{"error": "..."}` or `ValueError` | reported to the caller with `isError`. Any other exception is masked as a generic failure |
 | `upstream_error()` | a vendor's error body often echoes the token that failed |
 

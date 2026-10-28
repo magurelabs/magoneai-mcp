@@ -267,6 +267,17 @@ Each tool's group comes from `permission_group=` on its decorator (default
 listed tool as `_meta` (`io.magone/permission_group`,
 `io.magone/required_scopes`), so a client can build a selection UI.
 
+**This is a caller-supplied hint, not an access control.** The headers arrive
+on the request they narrow, so whoever sends the request decides the
+selection, and a request with neither header is served every tool. Selection
+restricts anything only when a trusted intermediary (the host application or
+a gateway) sets the headers itself and does not pass through values from the
+end client. Groups narrow only where a connector declares more than one:
+`atlassian_confluence`, `atlassian_jira`, `csv_to_sql`, `filesystem`,
+`linkedin`, `trino` and `vanna`. Every other connector puts all its tools in
+`default`. To restrict writes whatever the caller sends, set `MCP_READ_ONLY=1`
+on the server (see [Read-only mode](#read-only-mode)).
+
 ## Annotations
 
 Every tool declares MCP tool annotations (see "Tools" in the
