@@ -763,8 +763,8 @@ async def _cleanup_draft(
     """Best-effort delete of an unsent draft after a failed send.
 
     `request_fn` and `base_path` route the delete to a shared mailbox via
-    app-only auth instead of the default delegated `/me`; reply_via_draft is
-    the caller that passes them."""
+    app-only auth instead of the default delegated `/me`; reply_via_draft and
+    send_email (with `mailbox`) are the callers that pass them."""
     try:
         request = request_fn or graph._graph_request
         await request(credentials, "DELETE", f"{base_path}/messages/{draft_id}")
@@ -775,16 +775,21 @@ async def send_via_sendmail(
     graph: Any,
     credentials: Dict[str, str],
     message_body: Dict[str, Any],
+    request_fn: Optional[Callable] = None,
+    base_path: str = "/me",
 ) -> Optional[str]:
-    """Send via /me/sendMail (used when save_to_sent is False).
+    """Send via {base_path}/sendMail (used when save_to_sent is False).
 
     Graph returns 202 with no body, so no message id is available; returns
-    None. saveToSentItems is False here by construction.
+    None. saveToSentItems is False here by construction. `request_fn`/`base_path`
+    default to the delegated `/me` path; a shared mailbox passes the app-only
+    request function and `/users/{mailbox}`.
     """
-    await graph._graph_request(
+    request = request_fn or graph._graph_request
+    await request(
         credentials,
         "POST",
-        "/me/sendMail",
+        f"{base_path}/sendMail",
         json_data={"message": message_body, "saveToSentItems": False},
     )
     return None
@@ -794,6 +799,8 @@ async def send_via_draft(
     credentials: Dict[str, str],
     message_body: Dict[str, Any],
     large_attachments: List[Dict[str, Any]],
+    request_fn: Optional[Callable] = None,
+    base_path: str = "/me",
 ) -> Optional[str]:
     """Create a draft (requesting an immutable id), stream any large
     attachments into it, then send it. Returns the immutable message id.
@@ -801,19 +808,28 @@ async def send_via_draft(
     On any failure the partially-built draft is deleted before re-raising, so
     no orphan draft is left behind. Sending a draft always lands it in Sent
     Items, so this path is only used when save_to_sent is True.
+
+    With `request_fn`/`base_path` (a shared mailbox, app-only) the token is
+    managed by that request function, and large attachments are not supported
+    here - the chunked upload helper is delegated `/me` only, so the tool
+    refuses them before calling this.
     """
-    # Fetch the token once and reuse it across create + upload(s) + send
-    # instead of refreshing on each call.
-    access_token = await graph._get_access_token(credentials)
+    delegated = request_fn is None
+    request = request_fn or graph._graph_request
+    extra: Dict[str, Any] = {}
+    if delegated:
+        # Fetch the token once and reuse it across create + upload(s) + send
+        # instead of refreshing on each call.
+        extra["access_token"] = await graph._get_access_token(credentials)
     draft_id: Optional[str] = None
     try:
-        created = await graph._graph_request(
+        created = await request(
             credentials,
             "POST",
-            "/me/messages",
+            f"{base_path}/messages",
             json_data=message_body,
-            access_token=access_token,
             prefer=IMMUTABLE_ID_PREFER,
+            **extra,
         )
         draft_id = created.get("id")
         for large in large_attachments:
@@ -823,18 +839,18 @@ async def send_via_draft(
                 large["filename"],
                 large["content"],
                 large["content_type"],
-                access_token=access_token,
+                access_token=extra.get("access_token"),
             )
-        await graph._graph_request(
+        await request(
             credentials,
             "POST",
-            f"/me/messages/{draft_id}/send",
-            access_token=access_token,
+            f"{base_path}/messages/{draft_id}/send",
+            **extra,
         )
         return draft_id
     except (ValueError, httpx.HTTPError):
         if draft_id:
-            await _cleanup_draft(graph, credentials, draft_id)
+            await _cleanup_draft(graph, credentials, draft_id, request_fn, base_path)
         raise
 
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -3763,7 +3779,7 @@ async def send_draft(credentials: Dict[str, str],
 # Evidence: POST /me/sendMail (via send_via_sendmail())
 @server.tool(
     name='send_email',
-    description="Send an email. Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `bcc`, `is_html` (true for HTML body), `importance` (low/normal/high), `save_to_sent` (default: true), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. Attachments over 3MB require save_to_sent=true. Returns `message_id` (an immutable id for the sent message) when save_to_sent=true; it is null when save_to_sent=false (Graph provides no id for that path).",
+    description="Send an email. Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `bcc`, `is_html` (true for HTML body), `importance` (low/normal/high), `save_to_sent` (default: true), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. Attachments over 3MB require save_to_sent=true. Optional `mailbox` (a shared mailbox address listed in the connection allowed_mailboxes) sends as that mailbox via app-only auth instead of the signed-in account; omit it to send as the signed-in user (attachments over 3MB are not supported with `mailbox`). Returns `message_id` (an immutable id for the sent message) when save_to_sent=true; it is null when save_to_sent=false (Graph provides no id for that path).",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -3798,6 +3814,12 @@ async def send_draft(credentials: Dict[str, str],
                     'attachment_filename': {'type': 'string',
                                             'description': 'Custom filename for the first '
                                                            "URL's downloaded file"},
+                    'mailbox': {'type': 'string',
+                                'description': 'Shared mailbox address to send AS via '
+                                               "app-only auth, instead of the signed-in "
+                                               "account. Must be in this connection's "
+                                               'allowed_mailboxes. Omit (or leave empty) '
+                                               'to send as the signed-in user.'},
                     'attachments': {'type': 'array',
                                     'items': {'anyOf': [{'type': 'string',
                                                          'description': 'Platform file_id '
@@ -3848,6 +3870,7 @@ async def send_email(credentials: Dict[str, str],
     attachment_urls: Optional[List[str]] = None,
     attachment_filename: Optional[str] = None,
     attachments: Optional[List[Dict[str, Any]]] = None,
+    mailbox: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Send an email with optional attachments.
 
@@ -3855,8 +3878,20 @@ async def send_email(credentials: Dict[str, str],
     (with an immutable id) and then sent, so a durable `message_id` can be
     returned. When save_to_sent is False it goes via /me/sendMail and no id
     is available, so `message_id` is null.
+
+    `mailbox` (empty/whitespace counts as omitted) sends AS that shared
+    mailbox - app-only auth against /users/{mailbox} - after checking it
+    against the connection's allowed_mailboxes; omitted, behaviour is the
+    unchanged delegated /me path.
     """
     try:
+        mailbox = (mailbox or "").strip() or None
+        if mailbox is not None:
+            if not EMAIL_RE.match(mailbox):
+                return {"success": False, "error": "mailbox must be a valid email address"}
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
         error = validate_send_inputs(subject, body, importance)
         if error:
             return {"success": False, "error": error}
@@ -3890,6 +3925,16 @@ async def send_email(credentials: Dict[str, str],
         # Attachments over the inline limit require a draft-then-send flow,
         # which always saves to Sent Items - so save_to_sent=false can't be
         # honored alongside them.
+        if large_attachments and mailbox is not None:
+            return {
+                "success": False,
+                "error": (
+                    "attachments over "
+                    f"{INLINE_ATTACHMENT_LIMIT // (1024 * 1024)}MB are not supported "
+                    "when sending from a shared mailbox"
+                ),
+            }
+
         if large_attachments and not save_to_sent:
             return {
                 "success": False,
@@ -3899,13 +3944,20 @@ async def send_email(credentials: Dict[str, str],
                 ),
             }
 
+        # Shared mailbox: app-only against /users/{mailbox}. Omitted: the
+        # delegated /me path, exactly as before.
+        request_fn, base_path = (
+            resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox) if mailbox else (None, "/me")
+        )
         try:
             if save_to_sent:
                 message_id = await send_via_draft(
-                    _GRAPH_SCOPE_OWNER, credentials, message_body, large_attachments
+                    _GRAPH_SCOPE_OWNER, credentials, message_body, large_attachments, request_fn, base_path
                 )
             else:
-                message_id = await send_via_sendmail(_GRAPH_SCOPE_OWNER, credentials, message_body)
+                message_id = await send_via_sendmail(
+                    _GRAPH_SCOPE_OWNER, credentials, message_body, request_fn, base_path
+                )
         except (ValueError, httpx.HTTPError) as e:
             return {"success": False, "error": f"Failed to send email: {e}"}
 
@@ -3920,7 +3972,14 @@ async def send_email(credentials: Dict[str, str],
             result["attachments"] = attachments_info
             result["message"] = f"Email sent with {len(attachments_info)} attachment(s)"
 
-        logger.info("send_email_sent", message_id=message_id, save_to_sent=save_to_sent)
+        if mailbox:
+            result["mailbox"] = mailbox
+        logger.info(
+            "send_email_sent",
+            message_id=message_id,
+            save_to_sent=save_to_sent,
+            mailbox=mailbox,
+        )
         return result
     except Exception as e:
         logger.exception("send_email_error", error=str(e))
