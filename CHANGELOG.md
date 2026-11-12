@@ -97,6 +97,9 @@ ahead of the first release.
   rule that a header overrides the file.
 - `atlassian_jira`: `addJiraIssueAttachment`'s description points callers at
   `attachments` again instead of inviting model-written base64.
+- `atlassian_jira`: an attachment that arrives as an unresolved file reference
+  is refused with a message that tells a direct caller to send the file's
+  bytes inline, instead of naming only the platform that resolves references.
 - `outlook_email`: an empty `mailbox` on `get_email`, `list_attachments`,
   `read_attachment` and `download_attachment` means the signed-in user's own
   mailbox, as an omitted one does, instead of being refused as invalid.

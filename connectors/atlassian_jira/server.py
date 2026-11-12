@@ -613,8 +613,9 @@ def _attachment_file(item: Any, position: int) -> Tuple[str, bytes, Optional[str
     if not isinstance(item, dict) or "content_base64" not in item:
         raise ValueError(
             f"{label} is an unresolved file reference; it must arrive as "
-            "{filename, content_base64, content_type}. File references are only "
-            "resolved when the tool is called through the MagOneAI platform."
+            "{filename, content_base64, content_type}. A file reference is resolved "
+            "only by a host that supports it, such as MagOneAI; when calling the tool "
+            "directly, send the file's bytes inline in that form."
         )
     content_b64 = item.get("content_base64")
     if not isinstance(content_b64, str) or not content_b64.strip():
