@@ -4947,6 +4947,73 @@
     },
     "schema": {
       "properties": {
+        "attachment_filename": {
+          "description": "Filename for a single attachment_urls entry",
+          "type": "string"
+        },
+        "attachment_urls": {
+          "description": "HTTPS URLs of files to attach",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "attachments": {
+          "description": "Files to attach (max 10). Three accepted forms per item: (1) a platform file_id UUID or storage key as a plain string, (2) {\"file_id\": \"<uuid-or-key>\"}, or (3) a pre-fetched {filename, content_base64, content_type}. Forms 1 and 2 are replaced with form 3 by the platform before this tool runs, so pass the identifier as-is: never put it in `filename`, and never send an empty `content_base64`. DO NOT ENCODE `content_base64` YOURSELF. Form 3 exists for bytes the platform has already fetched, not for base64 you write: a hand-encoded attachment arrives as a file that opens and is silently corrupt. If you hold no file_id or storage key, send the mail without an attachment and say so - do not improvise one, and do not retype data from the conversation into a file.",
+          "items": {
+            "anyOf": [
+              {
+                "description": "Platform file_id (UUID) or storage key",
+                "type": "string"
+              },
+              {
+                "properties": {
+                  "file_id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file_id"
+                ],
+                "type": "object"
+              },
+              {
+                "properties": {
+                  "content_base64": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "filename": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content_base64"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "bcc": {
+          "default": "",
+          "description": "BCC recipients, comma-separated",
+          "type": "string"
+        },
+        "body": {
+          "default": "",
+          "description": "Replaces the forwarded content with this body",
+          "type": "string"
+        },
+        "cc": {
+          "default": "",
+          "description": "CC recipients, comma-separated",
+          "type": "string"
+        },
         "comment": {
           "default": "",
           "description": "Comment above forwarded content",
@@ -4954,6 +5021,25 @@
         },
         "email_id": {
           "description": "Message ID returned by list_emails or search_emails",
+          "type": "string"
+        },
+        "is_html": {
+          "default": false,
+          "description": "Body is HTML",
+          "type": "boolean"
+        },
+        "keep_original_attachments": {
+          "default": false,
+          "description": "Keep the files Graph copies from the original message (default false when any override above is used)",
+          "type": "boolean"
+        },
+        "mailbox": {
+          "description": "Send as this shared mailbox (app-only); empty uses the signed-in account",
+          "type": "string"
+        },
+        "subject": {
+          "default": "",
+          "description": "Overrides the subject",
           "type": "string"
         },
         "to": {
@@ -5291,6 +5377,10 @@
         "is_read": {
           "description": "true=mark read, false=mark unread",
           "type": "boolean"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to update via app-only auth, instead of /me. Omit to update the signed-in user's own mailbox.",
+          "type": "string"
         }
       },
       "required": [
@@ -5513,6 +5603,11 @@
           "default": false,
           "description": "Reply to all recipients",
           "type": "boolean"
+        },
+        "to": {
+          "default": "",
+          "description": "Replaces the default To (the original sender) with these comma-separated addresses; the reply stays on the same thread. Empty keeps the normal reply-to-sender behaviour. Ignores reply_all.",
+          "type": "string"
         }
       },
       "required": [
@@ -5671,6 +5766,10 @@
           "default": false,
           "description": "Body is HTML",
           "type": "boolean"
+        },
+        "mailbox": {
+          "description": "Shared mailbox address to send AS via app-only auth, instead of the signed-in account. Must be in this connection's allowed_mailboxes. Omit (or leave empty) to send as the signed-in user.",
+          "type": "string"
         },
         "save_to_sent": {
           "default": true,
