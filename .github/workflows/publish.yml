@@ -113,11 +113,14 @@ jobs:
           for connector in $ready; do
             echo "::group::$connector"
             name=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "connectors/$connector/server.json")
+            # The tag is the one the manifest names (docker.io/magoneai/mcp-<name>:<version>),
+            # so what is built here is exactly what the registry entry points at.
+            image=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['packages'][0]['identifier'])" "connectors/$connector/server.json")
             docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" \
-              -t "magoneai/mcp-$connector:dry-run" .
+              -t "$image" .
             # The registry's ownership check, run here first: the label must
             # equal the manifest's name, or the publish is refused.
-            label=$(docker inspect "magoneai/mcp-$connector:dry-run" \
+            label=$(docker inspect "$image" \
               --format '{{index .Config.Labels "io.modelcontextprotocol.server.name"}}')
             if [ "$label" != "$name" ]; then
               echo "::error::$connector: image label '$label' != server.json name '$name'"
@@ -227,8 +230,9 @@ jobs:
       #     ready=$(python -c "import json,pathlib;d=json.loads(pathlib.Path('connectors/publication.json').read_text());print(' '.join(sorted(n for n,e in d['connectors'].items() if e.get('status')=='ready')))")
       #     for connector in $ready; do
       #       name=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "connectors/$connector/server.json")
-      #       docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" -t "magoneai/mcp-$connector:dry-run" .
-      #       docker push "magoneai/mcp-$connector:dry-run"
+      #       image=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['packages'][0]['identifier'])" "connectors/$connector/server.json")
+      #       docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" -t "$image" .
+      #       docker push "$image"
       #     done
 
   publish-registry:

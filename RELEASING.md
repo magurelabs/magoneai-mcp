@@ -11,12 +11,18 @@ Releases are cut by a maintainer (see [MAINTAINERS.md](MAINTAINERS.md)).
 | Artifact | Where | Version source |
 |---|---|---|
 | `magone-mcp-core` wheel and sdist (the framework only; connectors run from a checkout) | PyPI | `version` in `pyproject.toml`, and `__version__` in `src/magone_mcp_core/__init__.py` |
-| One container image per publishable connector | container registry | the connector's `SERVER_VERSION` |
+| One container image per publishable connector, `docker.io/magoneai/mcp-<SERVER_NAME>:<SERVER_VERSION>` | Docker Hub | the connector's `SERVER_VERSION`, the image tag its `server.json` names |
 | One MCP Registry entry per publishable connector (`connectors/<name>/server.json`) | MCP Registry | the connector's `SERVER_VERSION`, copied into `server.json` by `scripts/gen_server_json.py` |
 
 A connector is publishable only when `connectors/publication.json` marks it
 `ready`; a `blocked` connector has no `server.json` and is never built for
 publication.
+
+Connector images go to Docker Hub under the `magoneai` namespace, one
+repository per connector named after its `SERVER_NAME` (for example
+`magoneai/mcp-web-search`), tagged with its `SERVER_VERSION`. The tag is not
+typed anywhere: `scripts/gen_server_json.py` writes it into the connector's
+`server.json`, and the publish workflow reads it from there.
 
 ## Versioning
 

@@ -51,6 +51,10 @@ ahead of the first release.
   organization's posts. Blocked from publication until it has run end to end.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
+- Each `server.json` names the connector's Docker Hub image,
+  `docker.io/magoneai/mcp-<name>:<version>`, as an `oci` package, so a
+  registry entry can be installed. The publish workflow builds and pushes
+  exactly that tag.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
   on a message, in the signed-in user's mailbox or an allowed shared mailbox,
   and `get_email` returns a message's `categories`.
