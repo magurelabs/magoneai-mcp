@@ -139,7 +139,7 @@ pytest connectors/ -q                           # each connector's own suite
 | Runner labels | a workflow would run on a self-hosted runner in a public repository |
 | Boundary | a connector reached into platform infrastructure |
 | Tool contract | a missing or contradictory annotation, an undescribed declared property, a logged credential, a stale docstring census, or a URL fetched without the SSRF check |
-| Lint / Format | `ruff check` / `ruff format --check`, pinned to the version in `pyproject.toml` |
+| Lint / Format | `ruff check` / `ruff format --check`, pinned to the version in `pyproject.toml`. Ruff skips `connectors/` (`extend-exclude` in `pyproject.toml`); Code health and Port status check that code instead |
 | Code health | an undefined name, a function defined twice, a constant reassigned, an unresolvable relative import |
 | Port status | a ported handler refers to a name that does not resolve |
 | Framework / Connector tests | a test failed |
