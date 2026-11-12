@@ -6,11 +6,9 @@ opens the platform's Postgres, writes to the platform's object store, or reads
 a tenant id out of a header, the answer is no and it does not belong in the
 public repository.
 
-An audit of v1 found 62 boundary violations across 22 infrastructure
-reach-throughs, including a connector issuing mirror-deletes against the platform's own
-knowledge base. None of them looked wrong when written. Each was the shortest
-path to a working feature, and the aggregate was a connector layer that was not
-a connector layer.
+Reaching into a platform's database or storage is often the shortest path
+to a working feature. No single reach-through looks wrong when written;
+together they make a connector layer that is not a connector layer.
 
 A grep is a blunt instrument and this one is deliberately blunt. It is not
 trying to understand the code; it is making a reach-through impossible to add
@@ -36,7 +34,7 @@ FORBIDDEN: list[tuple[str, str]] = [
     (r"\bMINIO_[A-Z_]+\b", "object-store credentials belong to the platform, not a connector"),
     (r"\bDATABASE_URL\b", "DATABASE_URL is the platform's own database"),
     (r"\bMAGONE_API_URL\b", "a connector does not call the platform back"),
-    (r"\bMCP_SERVICE_TOKEN\b", "the shared fleet token is retired; use a verified token"),
+    (r"\bMCP_SERVICE_TOKEN\b", "a connector must not read the server's own service token"),
     (r"\bfrom\s+minio\b|\bimport\s+minio\b", "storage access goes through a content handle"),
     (r"X-Project-Id", "tenancy comes from a verified token, never from a header"),
     (r"MCP_WEBHOOK_RELAY", "a webhook receiver belongs in the platform, not a connector"),
