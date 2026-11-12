@@ -229,7 +229,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions are under the [Developer C
 
 ## Security
 
-See [SECURITY.md](SECURITY.md). Please report vulnerabilities privately through GitHub's private vulnerability reporting rather than by opening an issue.
+See [SECURITY.md](SECURITY.md). Please report vulnerabilities privately, through GitHub's private vulnerability reporting or to security@magureinc.com, rather than by opening an issue.
 
 ## Licence
 

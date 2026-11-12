@@ -28,8 +28,9 @@ with an offer to open the pull request.
 
 ## Report a security vulnerability
 
-Not in an issue. Follow [SECURITY.md](SECURITY.md) and use GitHub's private
-vulnerability reporting.
+Not in an issue. Follow [SECURITY.md](SECURITY.md): use GitHub's private
+vulnerability reporting, or email
+[security@magureinc.com](mailto:security@magureinc.com) if you cannot.
 
 ## Problems with a vendor's API
 
