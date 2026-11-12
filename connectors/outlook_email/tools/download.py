@@ -21,9 +21,10 @@ MAX_REDIRECTS = 5
 MAX_CONCURRENT_DOWNLOADS = 3
 # Many hosts (Cloudflare-fronted CDNs, Wikimedia) reject requests whose
 # User-Agent is missing or a scripting-library default (e.g. python-httpx),
-# returning 403. Present a browser-like UA so legitimate attachment URLs
-# download instead of being blocked at the edge.
-DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; MagOneAI/1.0; +https://magureinc.com)"
+# returning 403. The connector sends its own descriptive one instead, with a
+# URL to read about it, which is what those hosts' policies ask a client for.
+# It is `server.USER_AGENT`, read at call time because server.py imports this
+# module.
 
 
 def _sanitize_filename(filename: str) -> str:
@@ -66,11 +67,13 @@ async def download_file(url: str, budget: Optional[SizeBudget] = None) -> tuple[
 async def _fetch_file(url: str, budget: Optional[SizeBudget] = None) -> tuple[bytes, str, str]:
     """Single download attempt. Handles redirects manually, validating each hop
     before connecting and the address actually connected to once it is."""
+    from ..server import USER_AGENT
+
     # Disable auto-follow - we check each redirect target for SSRF before following
     async with httpx.AsyncClient(
         timeout=60.0,
         follow_redirects=False,
-        headers={"User-Agent": DEFAULT_USER_AGENT},
+        headers={"User-Agent": USER_AGENT},
     ) as client:
         current_url = url
         for _ in range(MAX_REDIRECTS):

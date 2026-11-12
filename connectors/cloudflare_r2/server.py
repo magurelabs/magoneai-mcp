@@ -315,7 +315,9 @@ async def upload_and_link(
 
 _MAX_REDIRECTS = 5
 
-_DEFAULT_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; magoneai-cloudflare-r2/1.0)"}
+# One pattern across connectors: the connector, its version, and where to read about it.
+USER_AGENT = f"magoneai-{SERVER_NAME}/{SERVER_VERSION} (+https://github.com/magurelabs/magoneai-mcp)"
+_DEFAULT_HEADERS = {"User-Agent": USER_AGENT}
 
 def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:
     """The shared check (`magone_mcp_core.net`), not a private copy.

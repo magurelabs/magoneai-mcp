@@ -25,6 +25,9 @@ SERVER_VERSION = "2.0.0"
 # Ported bodies reference `self.logger`, which was the v1 server's own logger.
 logger = structlog.get_logger(f"mcp.{SERVER_NAME}")
 
+# One pattern across connectors: the connector, its version, and where to read about it.
+USER_AGENT = f"magoneai-{SERVER_NAME}/{SERVER_VERSION} (+https://github.com/magurelabs/magoneai-mcp)"
+
 server = ConnectorServer(
     name=SERVER_NAME,
     version=SERVER_VERSION,
@@ -101,7 +104,7 @@ async def request(
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
-                    "User-Agent": "magoneai-surveymonkey-mcp/1.0",
+                    "User-Agent": USER_AGENT,
                 },
             )
     except httpx.ConnectError as exc:
