@@ -36,7 +36,7 @@ fails locally instead of at a registry.
 
 Each manifest names the connector's Docker Hub image as an `oci` package, so a
 registry entry is installable rather than a description of a repository. The
-image is `docker.io/magoneai/mcp-<SERVER_NAME>:<SERVER_VERSION>`, the same tag
+image is `docker.io/magureai/mcp-<SERVER_NAME>:<SERVER_VERSION>`, the same tag
 `.github/workflows/publish.yml` builds and pushes, which reads it from here.
 The version is in the tag, not in a separate `version` field. The image starts
 in `platform` mode, so the two variables that mode needs are declared.
@@ -56,7 +56,7 @@ PUBLICATION = CONNECTORS / "publication.json"
 SCHEMA_URL = "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
 NAMESPACE = "io.github.magurelabs"
 REPOSITORY_URL = "https://github.com/magurelabs/magoneai-mcp"
-IMAGE_NAMESPACE = "docker.io/magoneai"
+IMAGE_NAMESPACE = "docker.io/magureai"
 
 NAME_PATTERN = re.compile(r"^[a-zA-Z0-9.-]+/[a-zA-Z0-9._-]+$")
 DESCRIPTION_MAX = 100

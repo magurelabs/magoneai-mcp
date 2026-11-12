@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "docker.io/magoneai/mcp-microsoft-sharepoint:2.0.0",
+      "identifier": "docker.io/magureai/mcp-microsoft-sharepoint:2.0.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:8000/mcp"

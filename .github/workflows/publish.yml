@@ -113,7 +113,7 @@ jobs:
           for connector in $ready; do
             echo "::group::$connector"
             name=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "connectors/$connector/server.json")
-            # The tag is the one the manifest names (docker.io/magoneai/mcp-<name>:<version>),
+            # The tag is the one the manifest names (docker.io/magureai/mcp-<name>:<version>),
             # so what is built here is exactly what the registry entry points at.
             image=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['packages'][0]['identifier'])" "connectors/$connector/server.json")
             docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" \

@@ -12,7 +12,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "docker.io/magoneai/mcp-outlook-calendar:2.0.0",
+      "identifier": "docker.io/magureai/mcp-outlook-calendar:2.0.0",
       "transport": {
         "type": "streamable-http",
         "url": "http://localhost:8000/mcp"
