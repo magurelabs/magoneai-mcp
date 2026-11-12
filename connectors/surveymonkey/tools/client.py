@@ -54,6 +54,10 @@ async def request(
     it's a network problem, not a bug (this is exactly what happened
     debugging a real deployment - the fix belongs here, not in a resend).
     """
+    # Read at call time: server.py imports this module, so a top-level
+    # import of server.py from here would be circular.
+    from ..server import USER_AGENT
+
     token = _token(credentials)
     timeout = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
     try:
@@ -66,7 +70,7 @@ async def request(
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
-                    "User-Agent": "magoneai-surveymonkey-mcp/1.0",
+                    "User-Agent": USER_AGENT,
                 },
             )
     except httpx.ConnectError as exc:

@@ -78,6 +78,10 @@ ahead of the first release.
 
 ### Changed
 
+- `cloudflare_r2`, `outlook_email` and `surveymonkey` send the User-Agent
+  `magoneai-<server name>/<version> (+<repository URL>)` on their outbound
+  requests, in place of three different hand-written strings, so the version
+  in it follows the connector's.
 - The default outbound budget (`MCP_MAX_RESULT_CHARS`) is 1,000,000
   characters instead of 100,000. Real results reach about 220,000 characters,
   and a tool with a declared output schema returns an oversized result as an
