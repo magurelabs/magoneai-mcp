@@ -113,7 +113,7 @@ packages = ["src/magone_mcp_core"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 # Ported connector code is generated, and its bodies are carried across from v1
 # unchanged on purpose: reformatting them would defeat the property that makes
 # the port reviewable, which is that the body is the body. Their real gate is
