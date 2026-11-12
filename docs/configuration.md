@@ -129,6 +129,15 @@ Fallbacks for the per-call credentials of the same name:
 | `LINEAR_API_KEY` | empty | API key fallback. |
 | `LINEAR_GRAPHQL_URL` | `https://api.linear.app/graphql` | GraphQL endpoint; override for testing. |
 
+### `linkedin`
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LINKEDIN_ORG_ID` | empty | Default post author when a call passes no `author`: the organization with this id is used instead of the authenticated member. It is process-wide, so on a server shared by several callers it changes the author for **every** caller; leave it unset there and have each call pass `author`. |
+| `LINKEDIN_VERSION` | `202606` | Versioned-API month (`YYYYMM`) sent with each request. |
+| `LINKEDIN_API_BASE` | `https://api.linkedin.com` | API base URL; override for testing or a proxy. |
+| `LINKEDIN_TOKEN_URL` | `https://www.linkedin.com/oauth/v2/accessToken` | OAuth token endpoint; override for testing or a proxy. |
+
 ### `outlook_email`
 
 | Variable | Default | Meaning |
