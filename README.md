@@ -219,7 +219,7 @@ Each of the 19 publishable connectors carries a `server.json` (schema `2025-12-1
 
 ## History
 
-The connectors originated in Magure's internal platform and are released here by Magure, Inc. Code comments call that earlier framework **v1**.
+The connectors originated in Magure's internal platform and are released here by Magure Tech Middle East Ltd. Code comments call that earlier framework **v1**.
 
 Every carried-over tool's input schema is kept byte for byte with `declare_schema` and checked on every pull request, because that is the part that would silently change behaviour for an agent already running. Handler bodies were carried across unchanged; `scripts/port_status.py` counts names a body refers to that do not resolve, and fails if that number rises above zero.
 
