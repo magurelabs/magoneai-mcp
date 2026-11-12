@@ -7,7 +7,7 @@
 #
 #   docker build --build-arg CONNECTOR=web_search \
 #     --build-arg SERVER_NAME=io.github.magurelabs/web-search -t magone-mcp-web-search .
-#   docker run --rm -p 8000:8000 magone-mcp-web-search
+#   docker run --rm -p 8000:8000 -e MCP_MODE=local -e MCP_ALLOW_INSECURE_BIND=1 magone-mcp-web-search
 #
 # The connector's own extra is installed, so a connector that needs a
 # third-party library gets it and one that does not stays small. That mapping

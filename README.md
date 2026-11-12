@@ -37,15 +37,48 @@ Requires Python 3.11 or later. The published wheel ships only `magone-mcp-core`;
 git clone https://github.com/magurelabs/magoneai-mcp
 cd magoneai-mcp
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -e ".[web_search]"
-MCP_MODE=local python -m connectors.web_search
+pip install -e .
+MCP_MODE=local python -m connectors.linear
 ```
 
-Replace `web_search` with any directory under `connectors/`. A connector that needs a third-party library declares it as an extra of the same name; a connector without one needs only `pip install -e .`. Several at once: `pip install -e ".[database,outlook_email]"`.
+This starts the `linear` connector, which needs nothing but a [Linear API key](https://linear.app/settings/account/security) to make a real call. On start it logs one `[error]` line, `local_bind_clamped_to_loopback`. That is expected: `local` mode is unauthenticated, so the server refuses to listen beyond `127.0.0.1` and says so loudly.
 
-The server speaks MCP over Streamable HTTP at `http://127.0.0.1:8000/mcp` (`PORT` changes the port). `local` mode is unauthenticated and therefore bound to loopback. There is no stdio transport yet, so point your client at the URL.
+The server speaks MCP over Streamable HTTP at `http://127.0.0.1:8000/mcp` (`PORT` changes the port). There is no stdio transport yet, so point your client at the URL. `GET /healthz` answers `{status, name, version, tools}`.
 
-`GET /healthz` answers `{status, name, version, tools}`.
+From a second terminal in the same virtualenv, list the tools and make one call with the official SDK's client:
+
+```python
+import asyncio
+import os
+
+from mcp import ClientSession
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
+
+
+async def main() -> None:
+    headers = {"X-Linear-Api-Key": os.environ["LINEAR_API_KEY"]}
+    async with (
+        create_mcp_http_client(headers=headers) as http,
+        streamable_http_client("http://127.0.0.1:8000/mcp", http_client=http) as (read, write),
+        ClientSession(read, write) as session,
+    ):
+        await session.initialize()
+        tools = await session.list_tools()
+        print([tool.name for tool in tools.tools])
+        result = await session.call_tool("get_viewer", {})
+        print(result.structured_content or result.content)
+
+
+asyncio.run(main())
+```
+
+```bash
+LINEAR_API_KEY=lin_api_... python client.py
+```
+
+`get_viewer` returns the account the key belongs to. Any MCP client works the same way: point it at the URL and send the connector's credential headers.
+
+Replace `linear` with any directory under `connectors/`. A connector that needs a third-party library declares it as an extra of the same name, for example `pip install -e ".[web_search]"`; a connector without one needs only `pip install -e .`. Several at once: `pip install -e ".[database,outlook_email]"`. Some connectors also need a service of their own: `web_search` needs a [SearXNG](https://docs.searxng.org/) instance or a Serper key (see below), and its `scrape_url` tool needs [Crawl4AI](https://docs.crawl4ai.com/) ([configuration](docs/configuration.md#web_search)).
 
 ### Credentials
 
