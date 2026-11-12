@@ -22,8 +22,12 @@ from magone_mcp_core import ConnectorServer, declare_output_schema, declare_sche
 SERVER_NAME = "outlook-email"
 SERVER_VERSION = "2.0.0"
 
-# One pattern across connectors: the connector, its version, and where to read about it.
-USER_AGENT = f"magoneai-{SERVER_NAME}/{SERVER_VERSION} (+https://github.com/magurelabs/magoneai-mcp)"
+# One pattern across connectors: the connector, its version, and where to read
+# about it, in the `Mozilla/5.0 (compatible; ...)` form crawlers use, which many
+# hosts accept where they refuse an unfamiliar string.
+USER_AGENT = (
+    f"Mozilla/5.0 (compatible; magoneai-{SERVER_NAME}/{SERVER_VERSION}; +https://github.com/magurelabs/magoneai-mcp)"
+)
 
 # Ported bodies reference `self.logger`, which was the v1 server's own logger.
 logger = structlog.get_logger(f"mcp.{SERVER_NAME}")

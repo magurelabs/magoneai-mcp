@@ -67,7 +67,7 @@ exception: it wins over headers, see `MCP_CREDENTIALS_PATH` above.)
 ### `web_search`
 
 Pages are fetched with the User-Agent
-`magoneai-web-search/<version> (+https://github.com/magurelabs/magoneai-mcp)`,
+`Mozilla/5.0 (compatible; magoneai-web-search/<version>; +https://github.com/magurelabs/magoneai-mcp)`,
 so a site can see who is asking and address the connector by name in
 robots.txt. `scrape_url` with `return_full=true`, the crawl path, checks the
 site's robots.txt first and refuses a page it disallows; a single-page fetch

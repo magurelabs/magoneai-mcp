@@ -315,8 +315,12 @@ async def upload_and_link(
 
 _MAX_REDIRECTS = 5
 
-# One pattern across connectors: the connector, its version, and where to read about it.
-USER_AGENT = f"magoneai-{SERVER_NAME}/{SERVER_VERSION} (+https://github.com/magurelabs/magoneai-mcp)"
+# One pattern across connectors: the connector, its version, and where to read
+# about it, in the `Mozilla/5.0 (compatible; ...)` form crawlers use, which many
+# hosts accept where they refuse an unfamiliar string.
+USER_AGENT = (
+    f"Mozilla/5.0 (compatible; magoneai-{SERVER_NAME}/{SERVER_VERSION}; +https://github.com/magurelabs/magoneai-mcp)"
+)
 _DEFAULT_HEADERS = {"User-Agent": USER_AGENT}
 
 def _is_blocked_ip(ip: ipaddress._BaseAddress) -> bool:

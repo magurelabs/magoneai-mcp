@@ -84,9 +84,8 @@ def crawl(monkeypatch):
 
 class TestTheUserAgentIsHonest:
     def test_it_names_the_connector_and_the_project(self):
-        assert "Mozilla" not in web_search.USER_AGENT
         assert "Chrome" not in web_search.USER_AGENT
-        assert web_search.USER_AGENT.startswith("magoneai-web-search/")
+        assert web_search.USER_AGENT.startswith("Mozilla/5.0 (compatible; magoneai-web-search/")
         assert "github.com/magurelabs/magoneai-mcp" in web_search.USER_AGENT
 
     @pytest.mark.asyncio

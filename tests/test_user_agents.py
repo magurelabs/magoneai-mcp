@@ -1,7 +1,7 @@
 """Every connector that sets a User-Agent uses one pattern.
 
 A site owner reading a log should see the same shape from every connector:
-`magoneai-<SERVER_NAME>/<SERVER_VERSION> (+<repository>)`.
+`Mozilla/5.0 (compatible; magoneai-<SERVER_NAME>/<SERVER_VERSION>; +<repository>)`.
 """
 
 import importlib
@@ -26,8 +26,8 @@ except ImportError as exc:  # pragma: no cover - depends on the install
 def test_the_pattern(connector):
     module = modules[connector]
     assert module.USER_AGENT == (
-        f"magoneai-{module.SERVER_NAME}/{module.SERVER_VERSION} "
-        "(+https://github.com/magurelabs/magoneai-mcp)"
+        f"Mozilla/5.0 (compatible; magoneai-{module.SERVER_NAME}/{module.SERVER_VERSION}; "
+        "+https://github.com/magurelabs/magoneai-mcp)"
     )
 
 
