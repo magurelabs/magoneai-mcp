@@ -105,8 +105,10 @@ two deliberate actions by someone with that authority, and no fewer:
      with the step.
    - **Docker Hub** needs `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in the
      `release` environment's secrets.
-   - **MCP Registry** needs `MCP_REGISTRY_TOKEN` in the `release`
-     environment's secrets.
+   - **MCP Registry** needs no secret: `mcp-publisher login github-oidc`
+     proves the `io.github.magurelabs` namespace with the job's GitHub OIDC
+     token. Uncomment the job's `id-token: write` permission along with the
+     step.
 
 ## After a release
 
