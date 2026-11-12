@@ -146,6 +146,10 @@ Fallbacks for the per-call credentials of the same name:
 
 ### `twitter_intel`
 
+This connector uses twitterapi.io, an unofficial third-party provider that is
+not affiliated with X Corp, rather than the official X API. If you run it, you
+are responsible for complying with the terms of X and of twitterapi.io.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `TWITTERAPIIO_API_KEY` | empty | API key fallback. |

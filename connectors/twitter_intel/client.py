@@ -1,5 +1,9 @@
 """Thin async client for the twitterapi.io REST API.
 
+twitterapi.io is an unofficial third-party provider, not the official X API,
+and is not affiliated with X Corp. Whoever runs this is responsible for
+complying with the terms of X and of twitterapi.io.
+
 Centralizes the base URL, auth header, cursor pagination, and error
 mapping so tool code deals only in normalized tweet dicts.
 

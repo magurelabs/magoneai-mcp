@@ -49,7 +49,10 @@
       "reason": "Not yet verified against a live deployment, and at 40 tools it is the largest connector in the catalogue. Same rule as google_drive: run it end to end before presenting it as a flagship."
     },
     "trino": { "status": "ready" },
-    "twitter_intel": { "status": "ready" },
+    "twitter_intel": {
+      "status": "blocked",
+      "reason": "Uses twitterapi.io, an unofficial third-party X/Twitter data provider that is not affiliated with X Corp, rather than the official X API. Not published until it is ported to the X API or the provider's terms are reviewed."
+    },
     "vanna": {
       "status": "blocked",
       "reason": "Recovered from a v1 build and reworked for per-call credentials and caller-owned training storage. Not yet verified against a live deployment. Same rule as google_drive: run it end to end first."

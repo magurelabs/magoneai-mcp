@@ -32,7 +32,9 @@ The project's short name is **`magoneai`**. The others each have a reason:
 - **`connectors/`** - one package per connector: 25 connectors, 269 tools. [`docs/TOOLS.md`](docs/TOOLS.md) lists every tool, generated from the code.
 - **`scripts/`** - the gates CI runs on every pull request, each of which you can run locally.
 
-`connectors/publication.json` records which connectors are ready to publish (19) and which are not yet (6), with the reason for each.
+`connectors/publication.json` records which connectors are ready to publish (18) and which are not yet (7), with the reason for each.
+
+> **`twitter_intel` uses an unofficial provider.** It calls [twitterapi.io](https://twitterapi.io), a third-party service, not the official X API. Neither the connector nor the provider is affiliated with or endorsed by X Corp. It is blocked from publication; if you run it yourself, you are responsible for complying with the terms of X and of twitterapi.io.
 
 ## Documentation
 
@@ -264,7 +266,7 @@ CI also runs, on every pull request: `ruff check` and `ruff format --check`; a g
 
 ## Publication
 
-Each of the 19 publishable connectors carries a `server.json` (schema `2025-12-11`), derived from the connector's own `SERVER_NAME` and `SERVER_VERSION` so a manifest cannot describe a server other than the one that runs. `scripts/gen_server_json.py --check` regenerates and diffs them, and `scripts/publication_gate.py` fails if a blocked connector ever gains one.
+Each of the 18 publishable connectors carries a `server.json` (schema `2025-12-11`), derived from the connector's own `SERVER_NAME` and `SERVER_VERSION` so a manifest cannot describe a server other than the one that runs. `scripts/gen_server_json.py --check` regenerates and diffs them, and `scripts/publication_gate.py` fails if a blocked connector ever gains one.
 
 **Writing a manifest is not publishing.** Nothing here has been pushed to any registry. `.github/workflows/publish.yml` builds and validates everything it would publish, and its publish jobs run only on a manual dispatch inside a protected `release` environment, with every push step still commented out.
 

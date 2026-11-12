@@ -85,6 +85,10 @@ ahead of the first release.
 - `outlook_email`: `reply_email` takes an optional `mailbox`, so a reply to a
   message in an allowed shared mailbox is sent from that mailbox, with or
   without attachments. Existing properties are unchanged.
+- `twitter_intel` is blocked from publication and carries no `server.json`. It
+  calls twitterapi.io, an unofficial third-party provider not affiliated with
+  X Corp, rather than the official X API. It still runs from a checkout, and
+  whoever runs it is responsible for the terms of X and of twitterapi.io.
 
 ### Fixed
 
