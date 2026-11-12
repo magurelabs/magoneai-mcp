@@ -384,6 +384,21 @@ depends on; is the documentation still true.
 A pull request that has had no activity from its author for 30 days after a
 review may be closed. It can always be reopened.
 
+### After a merge
+
+Magure builds its own MagOneAI images from this repository in a private
+downstream build. When a commit lands on `main` or `prod`
+(both protected, so a commit reaches them only through a reviewed merge),
+[`notify-platform.yml`](.github/workflows/notify-platform.yml) sends that
+private build the commit SHA and branch name, and nothing else. The private
+build checks for itself that the commit is on one of those branches before it
+builds anything.
+
+You do not need to do anything about it. It never runs on a pull request, it
+holds the only credential involved in a protected environment, and in a fork
+the credential does not exist, so the job reports that and passes. The
+workflow file explains each of those safeguards.
+
 ## Labels
 
 | Label | Used for |
