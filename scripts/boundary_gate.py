@@ -66,7 +66,13 @@ FORBIDDEN: list[tuple[str, str]] = [
 
 # Directories where a match is documentation or a test fixture rather than a
 # reach-through. Kept short: every entry here is a place the gate is blind.
-EXEMPT_PARTS = {"tests", "docs", "__pycache__", ".git", "scripts"}
+#
+# `server.json` is the generated registry manifest. It declares the variables
+# the container image is started with, MCP_SERVICE_TOKEN among them, because a
+# platform-mode server needs one; that is the server's own configuration, not
+# a connector reading it. Its whole content comes from gen_server_json.py, and
+# `--check` there fails on any hand edit, so the gate loses nothing it could see.
+EXEMPT_PARTS = {"tests", "docs", "__pycache__", ".git", "scripts", "server.json"}
 
 SCANNED_SUFFIXES = {".py", ".toml", ".yaml", ".yml", ".json", ".sh", ".env", ".example"}
 
