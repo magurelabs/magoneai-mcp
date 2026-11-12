@@ -240,7 +240,7 @@ pip install -e ".[dev,all]"
 pytest tests/ connectors/ -q
 ```
 
-1005 tests: 377 framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), 251 framework tests that import every connector, and 377 connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
+The tests are in three groups: framework tests that need only `[dev]` (`pytest tests/ -m "not requires_connectors"`), framework tests that import every connector, and connector tests under `connectors/*/tests`. Every gate is tested by injecting the defect it exists for.
 
 CI also runs, on every pull request: `ruff check` and `ruff format --check`; a golden-schema diff of every tool's input and output schema (`scripts/golden_schema_gate.py`); a boundary check that refuses platform reach-through (`scripts/boundary_gate.py`); the tool-contract linter (annotations, property descriptions, logged credentials); dependency, compile, code-health, credential-header, permission-group, publication, manifest and runner-label gates; and the official MCP conformance suite against every connector the change can affect. Each gate is a script under `scripts/` that runs locally the same way.
 
