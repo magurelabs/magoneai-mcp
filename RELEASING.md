@@ -42,6 +42,11 @@ and its version describes its **tool contract**:
 - **minor**: a tool or an optional parameter added;
 - **patch**: a fix that changes no schema.
 
+Connectors start at **2.0.0** while the core starts at 0.1.0. A connector's
+version continues from its earlier one (see [History](README.md#history)), so
+2.0.0 is not a first release; the core has no earlier version. The first
+registry entry for each connector says 2.0.0, and no 1.x was ever published.
+
 ## Tags
 
 - `vX.Y.Z` tags a `magone-mcp-core` release.
