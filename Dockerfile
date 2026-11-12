@@ -44,7 +44,7 @@ WORKDIR /app
 
 # Dependency metadata first, so a change to connector source does not
 # invalidate the dependency layer.
-COPY pyproject.toml README.md LICENSE ./
+COPY pyproject.toml README.md LICENSE NOTICE ./
 COPY src/ ./src/
 
 # The core, then the connector's own extra when pyproject declares one. The
