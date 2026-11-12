@@ -85,6 +85,14 @@ ahead of the first release.
 - `outlook_email`: `reply_email` takes an optional `mailbox`, so a reply to a
   message in an allowed shared mailbox is sent from that mailbox, with or
   without attachments. Existing properties are unchanged.
+- `outlook_email`: `send_email` and `mark_emails` take an optional `mailbox`
+  and act as that allowed shared mailbox (app-only). `reply_email` takes an
+  optional `to` that replaces the default recipient while keeping the thread.
+  `forward_email` takes optional `body`, `is_html`, `subject`, `cc`, `bcc`,
+  `attachments`, `attachment_urls`, `attachment_filename`,
+  `keep_original_attachments` and `mailbox`, and builds the forward as a draft
+  (createForward) when any of them is given. All new properties are optional;
+  a call that passes none of them behaves as before.
 
 ### Fixed
 
