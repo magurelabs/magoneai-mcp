@@ -3,7 +3,8 @@ Copyright 2026 Magure Tech Middle East Ltd
 
 This product includes software developed at Magure Tech Middle East Ltd.
 
-Vendor names appear in connector names and documentation nominatively, to
-identify which third-party API a connector talks to. No connector is
-affiliated with or endorsed by the vendor whose API it wraps, and no vendor
-logos or marks are included in this repository.
+All product names and trademarks are the property of their respective owners.
+They appear in connector names and documentation only to identify which
+third-party API a connector talks to. No connector is affiliated with or
+endorsed by the owner of the API it wraps, and no vendor logos are included
+in this repository.
