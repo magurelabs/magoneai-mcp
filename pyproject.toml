@@ -95,7 +95,7 @@ web_search = ["trafilatura>=1.8.0"]
 # failures shipped: eleven connectors that would not import, and twenty-five
 # tools that raised NameError on call while importing perfectly.
 all = [
-  "magone-mcp-core[csv_to_sql,database,otp_verification,outlook_calendar,outlook_email,trino,vanna,web_search]",
+  "magone-mcp-core[cloudflare_r2,csv_to_sql,database,otp_verification,outlook_calendar,outlook_email,trino,vanna,web_search]",
 ]
 
 [project.urls]
