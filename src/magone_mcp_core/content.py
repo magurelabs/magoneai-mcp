@@ -123,7 +123,9 @@ def safe_display_name(filename: str, fallback: str = "file") -> str:
     return f"{clean_stem[: 120 - len(clean_extension) - 1]}.{clean_extension[:20]}"
 
 
-class Direction(str, Enum):
+# Not StrEnum: these are exported and handed to caller-written signers, and
+# StrEnum would change what str() of a member returns.
+class Direction(str, Enum):  # noqa: UP042
     """What a handle permits. A handle is never both.
 
     `write` and `read`: an upload handle cannot be read back.
@@ -133,7 +135,7 @@ class Direction(str, Enum):
     DOWNLOAD = "download"
 
 
-class HandleState(str, Enum):
+class HandleState(str, Enum):  # noqa: UP042
     """The handle state model. `finalized` is set by the platform once it has
     registered the object the handle produced."""
 
