@@ -162,7 +162,7 @@ from magone_mcp_core import declare_schema
 async def search_web(query: str) -> dict: ...
 ```
 
-Use it for ported tools. Use type hints for new ones.
+Use it for [ported](#glossary) tools. Use type hints for new ones.
 
 ## What the framework guarantees
 
@@ -174,7 +174,7 @@ Each of these exists because doing it per connector meant it was done differentl
 | **Read-only mode** | `MCP_READ_ONLY=1` filters non-read tools out of `tools/list` *and refuses them on `tools/call`*. The call check is the control; the listing filter is a convenience. |
 | **SSRF validation** | One implementation. IPv6 literals are unwrapped to the IPv4 they encode (IPv4-mapped, 6to4, Teredo, NAT64) before any membership test, because `ip in network` is False across address families. |
 | **Credential-safe logging** | Tool arguments are logged by key only. Upstream error bodies are scrubbed and truncated before they reach a log line, because a vendor's 401 frequently echoes the token. |
-| **Authenticated callers** | `platform` mode requires the caller's `X-Service-Token` to match `MCP_SERVICE_TOKEN`, or a token verifier; `hosted` mode requires a token verifier, which validates audience and expiry and answers 401 with an RFC 9728 challenge. A server with neither refuses to start rather than serving unauthenticated. The inbound token is never forwarded upstream. The shared service token is the interim control: it proves the caller holds a secret, not which tenant it is. |
+| **Authenticated callers** | `platform` mode requires the caller's `X-Service-Token` to match `MCP_SERVICE_TOKEN`, or a token verifier; `hosted` mode requires a token verifier, which validates audience and expiry and answers 401 with an RFC 9728 challenge. A server with neither refuses to start rather than serving unauthenticated. The inbound token is never forwarded upstream. The shared service token is the [interim control](#glossary): it proves the caller holds a secret, not which tenant it is. |
 | **Loopback default** | `local` mode is unauthenticated, so it will not bind beyond loopback without `MCP_ALLOW_INSECURE_BIND=1`. |
 | **Host and Origin allowlist** | DNS-rebinding protection is always on. Loopback is always accepted; every other name a caller uses (a service name, an ingress host) must be listed in `MCP_ALLOWED_HOSTS`, or the request is answered `421`. |
 | **Text arguments stay text** | An argument whose published schema admits a string (`"type": "string"`, a type list or `anyOf`/`oneOf` that includes one, or no type at all) reaches the handler as the string that was sent. The SDK's pre-parse would otherwise `json.loads` it whenever the annotation is not exactly `str`, turning `"null"` into `None` and `'{"a":1}'` into a dict. Object, array, number and boolean parameters keep the SDK's behaviour. |
@@ -240,6 +240,22 @@ Each of the 19 publishable connectors carries a `server.json` (schema `2025-12-1
 The connectors originated in Magure's internal platform and are released here by Magure, Inc. Code comments call that earlier framework **v1**.
 
 Every carried-over tool's input schema is kept byte for byte with `declare_schema` and checked on every pull request, because that is the part that would silently change behaviour for an agent already running. Handler bodies were carried across unchanged; `scripts/port_status.py` counts names a body refers to that do not resolve, and fails if that number rises above zero.
+
+Moving a connector from v1 to this framework is a **port**: a *ported* tool kept its v1 schema byte for byte, and *pre-port* means as it was in v1.
+
+## Glossary
+
+Terms the code, comments and docs use without stopping to define them.
+
+| Term | Meaning |
+|---|---|
+| **v1**, **port**, **ported**, **pre-port** | Terms code comments use about where a connector came from; see [History](#history). |
+| **gate** | A check under `scripts/` that CI runs on every pull request and fails on a specific defect, for example `boundary_gate.py`. Each runs locally the same way. |
+| **golden baseline** | The recorded copy of every tool's input and output schema in `tests/golden/`. `golden_schema_gate.py` fails on any difference, so a contract change has to be approved explicitly. |
+| **publication**, **ready**, **blocked** | Whether a connector may be published to the MCP Registry and as an image. `connectors/publication.json` marks each one `ready` or `blocked`, with the reason. |
+| **platform** | A host that runs these connectors for many users, such as Magure's own. `platform` mode is the auth mode for that setting. |
+| **interim control** | The shared `MCP_SERVICE_TOKEN` in `platform` mode: it proves the caller knows a secret, not which tenant it is. A token verifier proves both, which is why `hosted` mode requires one. |
+| **playground** | Running a connector yourself with a credentials file (`MCP_CREDENTIALS_PATH`) instead of per-call headers. |
 
 ## Contributing
 
