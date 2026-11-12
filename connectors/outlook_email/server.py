@@ -610,6 +610,8 @@ async def reply_via_draft(
     inline_attachments: List[Dict[str, Any]],
     large_attachments: List[Dict[str, Any]],
     mailbox: Optional[str] = None,
+    action: Optional[str] = None,
+    drop_draft_attachments: bool = False,
 ) -> Optional[str]:
     """Create a reply draft, attach, send. Returns the sent message id.
 
@@ -627,6 +629,12 @@ async def reply_via_draft(
     app-only auth (`/users/{mailbox}/...`) instead of the signed-in user's
     `/me`. A reply triggered by a change notification has no signed-in user.
     The caller has already checked `mailbox` against the allowlist.
+
+    `action` overrides the Graph draft-creating action (default createReply /
+    createReplyAll by `reply_all`); forward_email passes "createForward".
+    `drop_draft_attachments` deletes whatever files Graph copied onto the draft
+    from the source message, so the caller's explicit attachment list is the
+    whole truth (a forward whose author unticked a file must not carry it).
     """
     request_fn, base_path = resolve_graph_scope(graph, mailbox)
     is_shared = bool(mailbox)
@@ -644,7 +652,7 @@ async def reply_via_draft(
             credentials, method, path, json_data=json_data, access_token=access_token, prefer=prefer
         )
 
-    action = "createReplyAll" if reply_all else "createReply"
+    action = action or ("createReplyAll" if reply_all else "createReply")
     draft_id: Optional[str] = None
     try:
         created = await _request(
@@ -652,10 +660,19 @@ async def reply_via_draft(
         )
         draft_id = created.get("id")
         if not draft_id:
-            raise ValueError("createReply returned no draft id")
+            raise ValueError(f"{action} returned no draft id")
 
         if message_patch:
             await _request("PATCH", f"{base_path}/messages/{draft_id}", json_data=message_patch)
+
+        if drop_draft_attachments:
+            existing = await _request(
+                "GET", f"{base_path}/messages/{draft_id}/attachments?$select=id"
+            )
+            for att in (existing or {}).get("value", []):
+                await _request(
+                    "DELETE", f"{base_path}/messages/{draft_id}/attachments/{att['id']}"
+                )
 
         for att in inline_attachments:
             await _request("POST", f"{base_path}/messages/{draft_id}/attachments", json_data=att)
@@ -763,8 +780,8 @@ async def _cleanup_draft(
     """Best-effort delete of an unsent draft after a failed send.
 
     `request_fn` and `base_path` route the delete to a shared mailbox via
-    app-only auth instead of the default delegated `/me`; reply_via_draft is
-    the caller that passes them."""
+    app-only auth instead of the default delegated `/me`; reply_via_draft and
+    send_email are the callers that pass them."""
     try:
         request = request_fn or graph._graph_request
         await request(credentials, "DELETE", f"{base_path}/messages/{draft_id}")
@@ -775,16 +792,21 @@ async def send_via_sendmail(
     graph: Any,
     credentials: Dict[str, str],
     message_body: Dict[str, Any],
+    request_fn: Optional[Callable] = None,
+    base_path: str = "/me",
 ) -> Optional[str]:
-    """Send via /me/sendMail (used when save_to_sent is False).
+    """Send via {base_path}/sendMail (used when save_to_sent is False).
 
     Graph returns 202 with no body, so no message id is available; returns
-    None. saveToSentItems is False here by construction.
+    None. saveToSentItems is False here by construction. `request_fn` and
+    `base_path` default to the delegated `/me` path; a shared mailbox passes
+    the app-only request function and `/users/{mailbox}`.
     """
-    await graph._graph_request(
+    request = request_fn or graph._graph_request
+    await request(
         credentials,
         "POST",
-        "/me/sendMail",
+        f"{base_path}/sendMail",
         json_data={"message": message_body, "saveToSentItems": False},
     )
     return None
@@ -794,6 +816,8 @@ async def send_via_draft(
     credentials: Dict[str, str],
     message_body: Dict[str, Any],
     large_attachments: List[Dict[str, Any]],
+    request_fn: Optional[Callable] = None,
+    base_path: str = "/me",
 ) -> Optional[str]:
     """Create a draft (requesting an immutable id), stream any large
     attachments into it, then send it. Returns the immutable message id.
@@ -801,19 +825,28 @@ async def send_via_draft(
     On any failure the partially-built draft is deleted before re-raising, so
     no orphan draft is left behind. Sending a draft always lands it in Sent
     Items, so this path is only used when save_to_sent is True.
+
+    With `request_fn`/`base_path` (a shared mailbox, app-only) the token is
+    managed by that request function, and large attachments are not supported
+    here: the chunked upload helper is delegated `/me` only, so the tool
+    refuses them before calling this.
     """
-    # Fetch the token once and reuse it across create + upload(s) + send
-    # instead of refreshing on each call.
-    access_token = await graph._get_access_token(credentials)
+    delegated = request_fn is None
+    request = request_fn or graph._graph_request
+    extra: Dict[str, Any] = {}
+    if delegated:
+        # Fetch the token once and reuse it across create + upload(s) + send
+        # instead of refreshing on each call.
+        extra["access_token"] = await graph._get_access_token(credentials)
     draft_id: Optional[str] = None
     try:
-        created = await graph._graph_request(
+        created = await request(
             credentials,
             "POST",
-            "/me/messages",
+            f"{base_path}/messages",
             json_data=message_body,
-            access_token=access_token,
             prefer=IMMUTABLE_ID_PREFER,
+            **extra,
         )
         draft_id = created.get("id")
         for large in large_attachments:
@@ -823,18 +856,18 @@ async def send_via_draft(
                 large["filename"],
                 large["content"],
                 large["content_type"],
-                access_token=access_token,
+                access_token=extra.get("access_token"),
             )
-        await graph._graph_request(
+        await request(
             credentials,
             "POST",
-            f"/me/messages/{draft_id}/send",
-            access_token=access_token,
+            f"{base_path}/messages/{draft_id}/send",
+            **extra,
         )
         return draft_id
     except (ValueError, httpx.HTTPError):
         if draft_id:
-            await _cleanup_draft(graph, credentials, draft_id)
+            await _cleanup_draft(graph, credentials, draft_id, request_fn, base_path)
         raise
 
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
@@ -1767,7 +1800,7 @@ async def download_attachment(credentials: Dict[str, str],
 # Evidence: POST /me/messages/{email_id}/forward
 @server.tool(
     name='forward_email',
-    description="Forward an email. Pass `email_id` (from list_emails or search_emails) and `to` (comma-separated recipients). Optional: `comment` (text added above forwarded content).",
+    description="Forward an email. Pass `email_id` (from list_emails or search_emails) and `to` (comma-separated recipients). Optional: `comment` (plain text above the forwarded content). For a full forward like Outlook's: `body` (REPLACES the forwarded content with your own, so put the quoted thread in it), `is_html`, `subject`, `cc`, `bcc`, `attachments` / `attachment_urls` (files to attach; the original message's own files are NOT kept unless `keep_original_attachments` is true), and `mailbox` (send as that shared mailbox via app-only auth; it must be in this connection's allowed_mailboxes). With none of those, behaves exactly as a plain forward. No recipient is added beyond `to`, `cc` and `bcc`. Returns `attachments` listing what was actually attached.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -1782,43 +1815,162 @@ async def download_attachment(credentials: Dict[str, str],
                     'to': {'type': 'string', 'description': 'Recipients, comma-separated'},
                     'comment': {'type': 'string',
                                 'description': 'Comment above forwarded content',
-                                'default': ''}},
+                                'default': ''},
+                    'body': {'type': 'string',
+                             'description': 'Replaces the forwarded content with this body',
+                             'default': ''},
+                    'is_html': {'type': 'boolean',
+                                'description': 'Body is HTML',
+                                'default': False},
+                    'subject': {'type': 'string',
+                                'description': 'Overrides the subject',
+                                'default': ''},
+                    'cc': {'type': 'string',
+                           'description': 'CC recipients, comma-separated',
+                           'default': ''},
+                    'bcc': {'type': 'string',
+                            'description': 'BCC recipients, comma-separated',
+                            'default': ''},
+                    'attachments': {'type': 'array',
+                                    'items': {'anyOf': [{'type': 'string',
+                                                         'description': 'Platform file_id (UUID) or storage key'},
+                                                        {'type': 'object',
+                                                         'properties': {'file_id': {'type': 'string'}},
+                                                         'required': ['file_id']},
+                                                        {'type': 'object',
+                                                         'properties': {'filename': {'type': 'string'},
+                                                                        'content_base64': {'type': 'string'},
+                                                                        'content_type': {'type': 'string'}},
+                                                         'required': ['content_base64']}]},
+                                    'maxItems': 10,
+                                    'description': 'Files to attach (max 10). Three accepted forms per item: (1) a '
+                                                   'platform file_id UUID or storage key as a plain string, (2) '
+                                                   '{"file_id": "<uuid-or-key>"}, or (3) a pre-fetched {filename, '
+                                                   'content_base64, content_type}. Forms 1 and 2 are replaced with form 3 '
+                                                   'by the platform before this tool runs, so pass the identifier as-is: '
+                                                   'never put it in `filename`, and never send an empty `content_base64`. '
+                                                   'DO NOT ENCODE `content_base64` YOURSELF. Form 3 exists for bytes the '
+                                                   'platform has already fetched, not for base64 you write: a '
+                                                   'hand-encoded attachment arrives as a file that opens and is silently '
+                                                   'corrupt. If you hold no file_id or storage key, send the mail without '
+                                                   'an attachment and say so - do not improvise one, and do not retype '
+                                                   'data from the conversation into a file.'},
+                    'attachment_urls': {'type': 'array',
+                                        'items': {'type': 'string'},
+                                        'description': 'HTTPS URLs of files to attach'},
+                    'attachment_filename': {'type': 'string',
+                                            'description': 'Filename for a single '
+                                                           'attachment_urls entry'},
+                    'keep_original_attachments': {'type': 'boolean',
+                                                  'description': 'Keep the files Graph '
+                                                                 'copies from the original '
+                                                                 'message (default false '
+                                                                 'when any override above '
+                                                                 'is used)',
+                                                  'default': False},
+                    'mailbox': {'type': 'string',
+                                'description': 'Send as this shared mailbox (app-only); '
+                                               'empty uses the signed-in account'}},
      'required': ['email_id', 'to']})
 async def forward_email(credentials: Dict[str, str],
     email_id: str,
     to: str,
     comment: str = "",
+    body: str = "",
+    is_html: bool = False,
+    subject: str = "",
+    cc: str = "",
+    bcc: str = "",
+    attachments: Optional[List[Dict[str, Any]]] = None,
+    attachment_urls: Optional[List[str]] = None,
+    attachment_filename: Optional[str] = None,
+    keep_original_attachments: bool = False,
+    mailbox: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Forward an email to specified recipients."""
+    """Forward an email to specified recipients, optionally as a fully edited draft."""
     try:
         err = validate_id(email_id, "email_id")
         if err:
             return {"success": False, "error": err}
 
-        if len(comment) > MAX_BODY_SIZE:
-            return {"success": False, "error": "Comment exceeds 5MB limit"}
+        if len(comment) > MAX_BODY_SIZE or len(body) > MAX_BODY_SIZE:
+            return {"success": False, "error": "Body exceeds 5MB limit"}
 
         err, to_recipients = parse_recipients(to, "email")
         if err:
             return {"success": False, "error": err}
 
-        json_data = {
-            "toRecipients": to_recipients,
-            "comment": comment,
-        }
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
+            return {"success": False, "error": "mailbox must be a valid email address"}
+        if mailbox:
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
 
-        await _graph_request(
-            credentials,
-            "POST",
-            f"/me/messages/{email_id}/forward",
-            json_data=json_data,
+        patch: Dict[str, Any] = {"toRecipients": to_recipients}
+        for field, raw in (("ccRecipients", cc), ("bccRecipients", bcc)):
+            if raw:
+                err, parsed = parse_recipients(raw, "cc" if field == "ccRecipients" else "bcc")
+                if err:
+                    return {"success": False, "error": err}
+                patch[field] = parsed
+        if subject.strip():
+            patch["subject"] = subject.strip()
+        if body:
+            patch["body"] = {"contentType": "HTML" if is_html else "Text", "content": body}
+
+        # The one-call /forward action has nowhere for a body, Cc/Bcc, a file or a
+        # shared mailbox. Any of those means building the forward as a draft
+        # (createForward), patching it, and sending. With none of them the
+        # original call is unchanged.
+        needs_draft = bool(
+            body or subject.strip() or cc or bcc or attachments or attachment_urls or mailbox
         )
+        if not needs_draft:
+            await _graph_request(
+                credentials,
+                "POST",
+                f"/me/messages/{email_id}/forward",
+                json_data={"toRecipients": to_recipients, "comment": comment},
+            )
+            return {
+                "success": True,
+                "email_id": email_id,
+                "forwarded_to": to,
+                "message": "Email forwarded",
+            }
 
+        if comment:
+            # `comment` rides on the one-call /forward action only. A draft's body is
+            # whatever `body` says, so refuse rather than silently drop the note.
+            return {
+                "success": False,
+                "error": "comment cannot be combined with body/cc/bcc/subject/attachments/mailbox; put the note at the top of body",
+            }
+        inline, large, info, err = await gather_attachments(
+            attachment_urls, attachment_filename, attachments
+        )
+        if err:
+            return {"success": False, "error": err}
+        sent_id = await reply_via_draft(
+            _GRAPH_SCOPE_OWNER,
+            credentials,
+            email_id,
+            False,
+            patch,
+            inline,
+            large,
+            mailbox=mailbox,
+            action="createForward",
+            drop_draft_attachments=not keep_original_attachments,
+        )
         return {
             "success": True,
             "email_id": email_id,
             "forwarded_to": to,
-            "message": "Email forwarded",
+            "message": f"Email forwarded with {len(info)} attachment(s)",
+            "message_id": sent_id,
+            "attachments": info,
         }
     except Exception as e:
         logger.exception("forward_email_error", error=str(e))
@@ -2858,7 +3010,7 @@ async def list_mailbox_subscriptions(credentials: Dict[str, str]) -> Dict[str, A
 # Evidence: PATCH /me/messages/{eid}
 @server.tool(
     name='mark_emails',
-    description="Bulk mark emails as read or unread. Pass `email_ids` (array of IDs from list_emails or search_emails, max 50) and `is_read` (true = mark read, false = mark unread). No other parameters. Returns marked_count and any failed IDs.",
+    description="Bulk mark emails as read or unread. Pass `email_ids` (array of IDs from list_emails or search_emails, max 50) and `is_read` (true = mark read, false = mark unread). Optional `mailbox` updates a shared mailbox via app-only auth instead of the signed-in user's own mailbox (must be in this connection's allowed_mailboxes). Returns marked_count and any failed IDs.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=True,
@@ -2872,7 +3024,11 @@ async def list_mailbox_subscriptions(credentials: Dict[str, str]) -> Dict[str, A
                                   'description': 'List of message IDs from list_emails or '
                                                  'search_emails (max 50)'},
                     'is_read': {'type': 'boolean',
-                                'description': 'true=mark read, false=mark unread'}},
+                                'description': 'true=mark read, false=mark unread'},
+                    'mailbox': {'type': 'string',
+                                'description': 'Shared mailbox address to update via '
+                                               'app-only auth, instead of /me. Omit to '
+                                               "update the signed-in user's own mailbox."}},
      'required': ['email_ids', 'is_read']})
 @declare_output_schema({'properties': {'failed': {'description': 'Failed email IDs with errors', 'type': 'array'},
                                        'is_read': {'type': 'boolean'},
@@ -2882,6 +3038,7 @@ async def list_mailbox_subscriptions(credentials: Dict[str, str]) -> Dict[str, A
 async def mark_emails(credentials: Dict[str, str],
     email_ids: List[str],
     is_read: bool,
+    mailbox: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Bulk mark emails as read or unread."""
     try:
@@ -2889,6 +3046,14 @@ async def mark_emails(credentials: Dict[str, str],
             return {"success": False, "error": "No email IDs provided"}
         if len(email_ids) > MAX_BATCH_SIZE:
             return {"success": False, "error": f"Too many IDs, max {MAX_BATCH_SIZE}"}
+
+        if mailbox and not EMAIL_RE.match(mailbox.strip()):
+            return {"success": False, "error": "mailbox must be a valid email address"}
+        if mailbox:
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
+        request_fn, base_path = resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox)
 
         marked = 0
         failed: List[Dict[str, str]] = []
@@ -2899,10 +3064,10 @@ async def mark_emails(credentials: Dict[str, str],
                 failed.append({"id": eid, "error": err})
                 continue
             try:
-                await _graph_request(
+                await request_fn(
                     credentials,
                     "PATCH",
-                    f"/me/messages/{eid}",
+                    f"{base_path}/messages/{eid}",
                     json_data={"isRead": is_read},
                 )
                 marked += 1
@@ -3366,7 +3531,7 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
 # Evidence: POST {base}/messages/{email_id}/{action}, base /me or /users/{mailbox}
 @server.tool(
     name='reply_email',
-    description="Reply to an email, keeping the thread. Pass `email_id` (from list_emails or search_emails) and `body` (reply content). Optional: `reply_all` (true to reply to all recipients), `cc` (comma-separated extra CC recipients), `bcc` (comma-separated extra BCC recipients), `is_html` (true for HTML body), `attachments` (same three forms as send_email: a platform file_id/storage-key string, {\"file_id\": ...}, or a pre-fetched {filename, content_base64, content_type} - never encode content_base64 yourself), `attachment_urls`, and `mailbox` (see its own description). Returns `attachments` listing what was actually attached; if that list is absent or empty, nothing was attached and you must not claim otherwise.",
+    description="Reply to an email, keeping the thread. Pass `email_id` (from list_emails or search_emails) and `body` (reply content). Optional: `reply_all` (true to reply to all recipients), `cc` (comma-separated extra CC recipients), `bcc` (comma-separated extra BCC recipients), `to` (comma-separated; REPLACES the default recipient - the original sender - so the reply goes only to these addresses, still on the same thread; it overrides `reply_all`), `is_html` (true for HTML body), `attachments` (same three forms as send_email: a platform file_id/storage-key string, {\"file_id\": ...}, or a pre-fetched {filename, content_base64, content_type} - never encode content_base64 yourself), `attachment_urls`, and `mailbox` (see its own description). Returns `attachments` listing what was actually attached; if that list is absent or empty, nothing was attached and you must not claim otherwise.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -3388,6 +3553,9 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
                     'bcc': {'type': 'string',
                             'description': 'Extra BCC recipients, comma-separated',
                             'default': ''},
+                    'to': {'type': 'string',
+                           'description': 'Replaces the default To (the original sender) with these comma-separated addresses; the reply stays on the same thread. Empty keeps the normal reply-to-sender behaviour. Ignores reply_all.',
+                           'default': ''},
                     'is_html': {'type': 'boolean',
                                 'description': 'Body is HTML',
                                 'default': False},
@@ -3463,6 +3631,7 @@ async def reply_email(credentials: Dict[str, str],
     reply_all: bool = False,
     cc: str = "",
     bcc: str = "",
+    to: str = "",
     is_html: bool = False,
     attachments: Optional[List[Dict[str, Any]]] = None,
     attachment_urls: Optional[List[str]] = None,
@@ -3502,17 +3671,29 @@ async def reply_email(credentials: Dict[str, str],
                 return {"success": False, "error": err}
             message["bccRecipients"] = bcc_recipients
 
+        # `to` overrides the default recipient (the original sender). It can only
+        # be applied by patching a createReply draft, so it forces the draft path
+        # below, and it replaces reply_all (a draft's To is rewritten wholesale).
+        to_recipients: List[Dict[str, Any]] = []
+        if to and to.strip():
+            err, to_recipients = parse_recipients(to, "to")
+            if err:
+                return {"success": False, "error": err}
+            reply_all = False
+
         # With attachments the immediate /reply action cannot be used: it
         # has nowhere to carry a file. Build the reply as a draft, attach,
         # then send. Without attachments the original one-call path stays,
         # so the common case keeps its single round trip.
-        if attachments or attachment_urls:
+        if attachments or attachment_urls or to_recipients:
             inline, large, info, err = await gather_attachments(
                 attachment_urls, attachment_filename, attachments
             )
             if err:
                 return {"success": False, "error": err}
             patch: Dict[str, Any] = dict(message)
+            if to_recipients:
+                patch["toRecipients"] = to_recipients
             patch["body"] = {
                 "contentType": "HTML" if is_html else "Text",
                 "content": body,
@@ -3763,7 +3944,7 @@ async def send_draft(credentials: Dict[str, str],
 # Evidence: POST /me/sendMail (via send_via_sendmail())
 @server.tool(
     name='send_email',
-    description="Send an email. Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `bcc`, `is_html` (true for HTML body), `importance` (low/normal/high), `save_to_sent` (default: true), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. Attachments over 3MB require save_to_sent=true. Returns `message_id` (an immutable id for the sent message) when save_to_sent=true; it is null when save_to_sent=false (Graph provides no id for that path).",
+    description="Send an email. Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `bcc`, `is_html` (true for HTML body), `importance` (low/normal/high), `save_to_sent` (default: true), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. Attachments over 3MB require save_to_sent=true. Optional `mailbox` sends AS that shared mailbox via app-only auth instead of the signed-in account (it must be in this connection's allowed_mailboxes, and attachments over 3MB are not supported there); omit it to send as the signed-in user. Returns `message_id` (an immutable id for the sent message) when save_to_sent=true; it is null when save_to_sent=false (Graph provides no id for that path).",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -3834,7 +4015,13 @@ async def send_draft(credentials: Dict[str, str],
                                                    'without an attachment and say so - do '
                                                    'not improvise one, and do not retype '
                                                    'data from the conversation into a '
-                                                   'file.'}},
+                                                   'file.'},
+                    'mailbox': {'type': 'string',
+                                'description': 'Shared mailbox address to send AS via '
+                                               'app-only auth, instead of the signed-in '
+                                               "account. Must be in this connection's "
+                                               'allowed_mailboxes. Omit (or leave empty) '
+                                               'to send as the signed-in user.'}},
      'required': ['to', 'subject', 'body']})
 async def send_email(credentials: Dict[str, str],
     to: str,
@@ -3848,6 +4035,7 @@ async def send_email(credentials: Dict[str, str],
     attachment_urls: Optional[List[str]] = None,
     attachment_filename: Optional[str] = None,
     attachments: Optional[List[Dict[str, Any]]] = None,
+    mailbox: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Send an email with optional attachments.
 
@@ -3855,8 +4043,20 @@ async def send_email(credentials: Dict[str, str],
     (with an immutable id) and then sent, so a durable `message_id` can be
     returned. When save_to_sent is False it goes via /me/sendMail and no id
     is available, so `message_id` is null.
+
+    `mailbox` (empty/whitespace counts as omitted) sends AS that shared
+    mailbox - app-only auth against /users/{mailbox} - after checking it
+    against the connection's allowed_mailboxes; omitted, behaviour is the
+    unchanged delegated /me path.
     """
     try:
+        mailbox = (mailbox or "").strip() or None
+        if mailbox is not None:
+            if not EMAIL_RE.match(mailbox):
+                return {"success": False, "error": "mailbox must be a valid email address"}
+            err = check_mailbox_allowed(credentials, mailbox)
+            if err:
+                return {"success": False, "error": err}
         error = validate_send_inputs(subject, body, importance)
         if error:
             return {"success": False, "error": error}
@@ -3890,6 +4090,16 @@ async def send_email(credentials: Dict[str, str],
         # Attachments over the inline limit require a draft-then-send flow,
         # which always saves to Sent Items - so save_to_sent=false can't be
         # honored alongside them.
+        if large_attachments and mailbox is not None:
+            return {
+                "success": False,
+                "error": (
+                    "attachments over "
+                    f"{INLINE_ATTACHMENT_LIMIT // (1024 * 1024)}MB are not supported "
+                    "when sending from a shared mailbox"
+                ),
+            }
+
         if large_attachments and not save_to_sent:
             return {
                 "success": False,
@@ -3899,13 +4109,25 @@ async def send_email(credentials: Dict[str, str],
                 ),
             }
 
+        # Shared mailbox: app-only against /users/{mailbox}. Omitted: the
+        # delegated /me path, exactly as before.
+        request_fn, base_path = (
+            resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox) if mailbox else (None, "/me")
+        )
         try:
             if save_to_sent:
                 message_id = await send_via_draft(
-                    _GRAPH_SCOPE_OWNER, credentials, message_body, large_attachments
+                    _GRAPH_SCOPE_OWNER,
+                    credentials,
+                    message_body,
+                    large_attachments,
+                    request_fn,
+                    base_path,
                 )
             else:
-                message_id = await send_via_sendmail(_GRAPH_SCOPE_OWNER, credentials, message_body)
+                message_id = await send_via_sendmail(
+                    _GRAPH_SCOPE_OWNER, credentials, message_body, request_fn, base_path
+                )
         except (ValueError, httpx.HTTPError) as e:
             return {"success": False, "error": f"Failed to send email: {e}"}
 
@@ -3920,7 +4142,11 @@ async def send_email(credentials: Dict[str, str],
             result["attachments"] = attachments_info
             result["message"] = f"Email sent with {len(attachments_info)} attachment(s)"
 
-        logger.info("send_email_sent", message_id=message_id, save_to_sent=save_to_sent)
+        if mailbox:
+            result["mailbox"] = mailbox
+        logger.info(
+            "send_email_sent", message_id=message_id, save_to_sent=save_to_sent, mailbox=mailbox
+        )
         return result
     except Exception as e:
         logger.exception("send_email_error", error=str(e))
