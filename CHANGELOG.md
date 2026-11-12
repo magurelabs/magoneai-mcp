@@ -86,6 +86,11 @@ ahead of the first release.
   characters instead of 100,000. Real results reach about 220,000 characters,
   and a tool with a declared output schema returns an oversized result as an
   error.
+- `web_search`: pages are fetched with the User-Agent
+  `magoneai-web-search/<version> (+<repository URL>)` instead of a desktop
+  Chrome string, on both the direct fetch and Crawl4AI. `scrape_url` with
+  `return_full=true` checks the site's robots.txt first, per RFC 9309, and
+  refuses a page it disallows; a single-page fetch does not.
 - `outlook_email`: `reply_email` takes an optional `mailbox`, so a reply to a
   message in an allowed shared mailbox is sent from that mailbox, with or
   without attachments. Existing properties are unchanged.
