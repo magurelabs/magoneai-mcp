@@ -8,5 +8,27 @@
     "url": "https://github.com/magurelabs/magoneai-mcp",
     "source": "github",
     "subfolder": "connectors/atlassian_confluence"
-  }
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "docker.io/magoneai/mcp-atlassian-confluence:2.0.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "http://localhost:8000/mcp"
+      },
+      "environmentVariables": [
+        {
+          "name": "MCP_MODE",
+          "description": "Auth mode. The image defaults to platform; hosted and local need more settings, see docs/configuration.md.",
+          "default": "platform"
+        },
+        {
+          "name": "MCP_SERVICE_TOKEN",
+          "description": "Shared secret callers send as X-Service-Token in platform mode.",
+          "isSecret": true
+        }
+      ]
+    }
+  ]
 }

@@ -31,6 +31,15 @@ fails locally instead of at a registry.
 
     python scripts/gen_server_json.py
     python scripts/gen_server_json.py --check
+
+## The package entry
+
+Each manifest names the connector's Docker Hub image as an `oci` package, so a
+registry entry is installable rather than a description of a repository. The
+image is `docker.io/magoneai/mcp-<SERVER_NAME>:<SERVER_VERSION>`, the same tag
+`.github/workflows/publish.yml` builds and pushes, which reads it from here.
+The version is in the tag, not in a separate `version` field. The image starts
+in `platform` mode, so the two variables that mode needs are declared.
 """
 
 import argparse
@@ -47,6 +56,7 @@ PUBLICATION = CONNECTORS / "publication.json"
 SCHEMA_URL = "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json"
 NAMESPACE = "io.github.magurelabs"
 REPOSITORY_URL = "https://github.com/magurelabs/magoneai-mcp"
+IMAGE_NAMESPACE = "docker.io/magoneai"
 
 NAME_PATTERN = re.compile(r"^[a-zA-Z0-9.-]+/[a-zA-Z0-9._-]+$")
 DESCRIPTION_MAX = 100
@@ -105,6 +115,10 @@ def declared(package: Path) -> tuple[str, str]:
     return found["SERVER_NAME"], found["SERVER_VERSION"]
 
 
+def image_for(server_name: str, version: str) -> str:
+    return f"{IMAGE_NAMESPACE}/mcp-{server_name}:{version}"
+
+
 def manifest_for(package: Path) -> dict:
     server_name, version = declared(package)
     description = DESCRIPTIONS.get(package.name)
@@ -139,6 +153,27 @@ def manifest_for(package: Path) -> dict:
             "source": "github",
             "subfolder": f"connectors/{package.name}",
         },
+        "packages": [
+            {
+                "registryType": "oci",
+                "identifier": image_for(server_name, version),
+                "transport": {"type": "streamable-http", "url": "http://localhost:8000/mcp"},
+                "environmentVariables": [
+                    {
+                        "name": "MCP_MODE",
+                        "description": "Auth mode. The image defaults to platform; hosted and "
+                        "local need more settings, see docs/configuration.md.",
+                        "default": "platform",
+                    },
+                    {
+                        "name": "MCP_SERVICE_TOKEN",
+                        "description": "Shared secret callers send as X-Service-Token in "
+                        "platform mode.",
+                        "isSecret": True,
+                    },
+                ],
+            }
+        ],
     }
 
 
