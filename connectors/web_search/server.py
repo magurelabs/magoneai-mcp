@@ -466,7 +466,10 @@ def _pinning_args(url: str, extra_args: list[str] | None) -> list[str]:
 # agent from a person and address it in robots.txt. The product token is what
 # robots.txt rules match on.
 _ROBOTS_AGENT = f"magoneai-{SERVER_NAME}"
-USER_AGENT = f"{_ROBOTS_AGENT}/{SERVER_VERSION} (+https://github.com/magurelabs/magoneai-mcp)"
+USER_AGENT = (
+    f"Mozilla/5.0 (compatible; {_ROBOTS_AGENT}/{SERVER_VERSION}; "
+    "+https://github.com/magurelabs/magoneai-mcp)"
+)
 
 # RFC 9309: parse at least 500 KiB, cache for no more than 24 hours, follow up
 # to five redirects. A crawl asks for many pages on one host, so the answer is

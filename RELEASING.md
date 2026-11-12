@@ -11,16 +11,16 @@ Releases are cut by a maintainer (see [MAINTAINERS.md](MAINTAINERS.md)).
 | Artifact | Where | Version source |
 |---|---|---|
 | `magone-mcp-core` wheel and sdist (the framework only; connectors run from a checkout) | PyPI | `version` in `pyproject.toml`, and `__version__` in `src/magone_mcp_core/__init__.py` |
-| One container image per publishable connector, `docker.io/magoneai/mcp-<SERVER_NAME>:<SERVER_VERSION>` | Docker Hub | the connector's `SERVER_VERSION`, the image tag its `server.json` names |
+| One container image per publishable connector, `docker.io/magureai/mcp-<SERVER_NAME>:<SERVER_VERSION>` | Docker Hub | the connector's `SERVER_VERSION`, the image tag its `server.json` names |
 | One MCP Registry entry per publishable connector (`connectors/<name>/server.json`) | MCP Registry | the connector's `SERVER_VERSION`, copied into `server.json` by `scripts/gen_server_json.py` |
 
 A connector is publishable only when `connectors/publication.json` marks it
 `ready`; a `blocked` connector has no `server.json` and is never built for
 publication.
 
-Connector images go to Docker Hub under the `magoneai` namespace, one
+Connector images go to Docker Hub under the `magureai` namespace, one
 repository per connector named after its `SERVER_NAME` (for example
-`magoneai/mcp-web-search`), tagged with its `SERVER_VERSION`. The tag is not
+`magureai/mcp-web-search`), tagged with its `SERVER_VERSION`. The tag is not
 typed anywhere: `scripts/gen_server_json.py` writes it into the connector's
 `server.json`, and the publish workflow reads it from there.
 
@@ -105,8 +105,10 @@ two deliberate actions by someone with that authority, and no fewer:
      with the step.
    - **Docker Hub** needs `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in the
      `release` environment's secrets.
-   - **MCP Registry** needs `MCP_REGISTRY_TOKEN` in the `release`
-     environment's secrets.
+   - **MCP Registry** needs no secret: `mcp-publisher login github-oidc`
+     proves the `io.github.magurelabs` namespace with the job's GitHub OIDC
+     token. Uncomment the job's `id-token: write` permission along with the
+     step.
 
 ## After a release
 

@@ -52,7 +52,7 @@ ahead of the first release.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - Each `server.json` names the connector's Docker Hub image,
-  `docker.io/magoneai/mcp-<name>:<version>`, as an `oci` package, so a
+  `docker.io/magureai/mcp-<name>:<version>`, as an `oci` package, so a
   registry entry can be installed. The publish workflow builds and pushes
   exactly that tag.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
@@ -83,7 +83,8 @@ ahead of the first release.
 ### Changed
 
 - `cloudflare_r2`, `outlook_email` and `surveymonkey` send the User-Agent
-  `magoneai-<server name>/<version> (+<repository URL>)` on their outbound
+  `Mozilla/5.0 (compatible; magoneai-<server name>/<version>; +<repository URL>)`
+  on their outbound
   requests, in place of three different hand-written strings, so the version
   in it follows the connector's.
 - The default outbound budget (`MCP_MAX_RESULT_CHARS`) is 1,000,000
@@ -91,7 +92,8 @@ ahead of the first release.
   and a tool with a declared output schema returns an oversized result as an
   error.
 - `web_search`: pages are fetched with the User-Agent
-  `magoneai-web-search/<version> (+<repository URL>)` instead of a desktop
+  `Mozilla/5.0 (compatible; magoneai-web-search/<version>; +<repository URL>)`
+  instead of a desktop
   Chrome string, on both the direct fetch and Crawl4AI. `scrape_url` with
   `return_full=true` checks the site's robots.txt first, per RFC 9309, and
   refuses a page it disallows; a single-page fetch does not.

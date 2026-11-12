@@ -113,7 +113,7 @@ jobs:
           for connector in $ready; do
             echo "::group::$connector"
             name=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "connectors/$connector/server.json")
-            # The tag is the one the manifest names (docker.io/magoneai/mcp-<name>:<version>),
+            # The tag is the one the manifest names (docker.io/magureai/mcp-<name>:<version>),
             # so what is built here is exactly what the registry entry points at.
             image=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['packages'][0]['identifier'])" "connectors/$connector/server.json")
             docker build --build-arg "CONNECTOR=$connector" --build-arg "SERVER_NAME=$name" \
@@ -248,10 +248,16 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: echo "NOT SUBMITTING. The publish step below is commented out."
 
+      # The io.github.magurelabs namespace is proven with this job's GitHub
+      # OIDC token, so no registry credential is stored anywhere. Uncomment
+      # together with the step below, and not before.
+      # permissions:
+      #   contents: read
+      #   id-token: write
+
       # - name: Publish to the MCP Registry
-      #   env:
-      #     MCP_REGISTRY_TOKEN: ${{ secrets.MCP_REGISTRY_TOKEN }}
       #   run: |
+      #     mcp-publisher login github-oidc
       #     for manifest in connectors/*/server.json; do
       #       mcp-publisher publish "$manifest"
       #     done

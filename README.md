@@ -10,7 +10,7 @@ Every connector here talks to somebody else's API. You supply your own credentia
 
 ### MagOneAI
 
-[MagOneAI](https://aistudio.magure.ai/) is Magure's AI agent workflow platform: teams define agents with a persona and tools, place them in multi-step workflows, and run them from an app, chat, a schedule or an API, while the platform handles orchestration, retries, credentials and execution tracking. Its agents reach outside services through MCP servers, and this repository is those servers, published so they run anywhere, not only inside MagOneAI.
+[MagOneAI](https://www.magureinc.com/magoneai) is Magure's AI agent workflow platform: teams define agents with a persona and tools, place them in multi-step workflows, and run them from an app, chat, a schedule or an API, while the platform handles orchestration, retries, credentials and execution tracking. Its agents reach outside services through MCP servers, and this repository is those servers, published so they run anywhere, not only inside MagOneAI.
 
 Where these docs or a tool's description say **the platform** or **the host**, they mean whatever runs the connector on a user's behalf: MagOneAI, another MCP host, or you on your laptop. A few tools accept a *file reference* (a file ID) that a host can swap for the file's bytes before the tool runs. MagOneAI does that; called directly, send the bytes inline as the tool's schema describes.
 
@@ -22,7 +22,8 @@ The project's short name is **`magoneai`**. The others each have a reason:
 |---|---|
 | Magure Tech Middle East Ltd | the company: copyright holder and steward ([NOTICE](NOTICE), [GOVERNANCE.md](GOVERNANCE.md)) |
 | MagOneAI | Magure's platform, the product these connectors were built for |
-| `magoneai` | the short name: this repository (`magoneai-mcp`) and the Docker Hub namespace (`magoneai/mcp-<connector>`) |
+| `magoneai` | the short name: this repository (`magoneai-mcp`) |
+| `magureai` | Magure's Docker Hub namespace, where each connector's image is published (`magureai/mcp-<connector>`) |
 | `magurelabs` | the GitHub organisation, and so the MCP Registry namespace (`io.github.magurelabs/<connector>`), which the registry ties to it |
 | `magone-mcp-core` / `magone_mcp_core` | the framework's package on PyPI, and its import name |
 

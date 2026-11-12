@@ -25,8 +25,12 @@ SERVER_VERSION = "2.0.0"
 # Ported bodies reference `self.logger`, which was the v1 server's own logger.
 logger = structlog.get_logger(f"mcp.{SERVER_NAME}")
 
-# One pattern across connectors: the connector, its version, and where to read about it.
-USER_AGENT = f"magoneai-{SERVER_NAME}/{SERVER_VERSION} (+https://github.com/magurelabs/magoneai-mcp)"
+# One pattern across connectors: the connector, its version, and where to read
+# about it, in the `Mozilla/5.0 (compatible; ...)` form crawlers use, which many
+# hosts accept where they refuse an unfamiliar string.
+USER_AGENT = (
+    f"Mozilla/5.0 (compatible; magoneai-{SERVER_NAME}/{SERVER_VERSION}; +https://github.com/magurelabs/magoneai-mcp)"
+)
 
 server = ConnectorServer(
     name=SERVER_NAME,
