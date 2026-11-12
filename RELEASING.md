@@ -91,12 +91,17 @@ two deliberate actions by someone with that authority, and no fewer:
 
 1. uncomment the push step in the publish job being armed, in a reviewed pull
    request;
-2. add the credential that step names to the `release` environment's
-   secrets, never to repository secrets.
-
-Preferred over long-lived tokens where the registry supports it: PyPI
-[trusted publishing](https://docs.pypi.org/trusted-publishers/) through
-GitHub OIDC, which needs no stored secret at all.
+2. give that step its credential, never through repository secrets:
+   - **PyPI** uses [trusted publishing](https://docs.pypi.org/trusted-publishers/)
+     through GitHub OIDC, so there is no secret to store. On PyPI, add a
+     trusted publisher for `magone-mcp-core` with owner `magurelabs`,
+     repository `magoneai-mcp`, workflow `publish.yml` and environment
+     `release`, and uncomment the job's `id-token: write` permission along
+     with the step.
+   - **Docker Hub** needs `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in the
+     `release` environment's secrets.
+   - **MCP Registry** needs `MCP_REGISTRY_TOKEN` in the `release`
+     environment's secrets.
 
 ## After a release
 
