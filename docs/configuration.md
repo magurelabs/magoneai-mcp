@@ -66,6 +66,16 @@ exception: it wins over headers, see `MCP_CREDENTIALS_PATH` above.)
 
 ### `web_search`
 
+Pages are fetched with the User-Agent
+`magoneai-web-search/<version> (+https://github.com/magurelabs/magoneai-mcp)`,
+so a site can see who is asking and address the connector by name in
+robots.txt. `scrape_url` with `return_full=true`, the crawl path, checks the
+site's robots.txt first and refuses a page it disallows; a single-page fetch
+is one request on a user's behalf and does not. Whoever runs the connector is
+responsible for complying with each target site's terms and with the terms of
+the search provider in use (Serper, Perplexity, or the engines a SearXNG
+instance queries).
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `SEARXNG_URL` | `http://localhost:8888` | SearXNG instance used for search when Serper is not selected. JSON output must be enabled on it. |
