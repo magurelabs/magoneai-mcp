@@ -1,8 +1,6 @@
 # Releasing
 
-How versions are numbered and how a release would be published. **Nothing has
-been published yet**: the publishing workflow exists and runs as a dry run,
-and arming it is a deliberate step described below.
+How versions are numbered and how a release is published.
 
 Releases are cut by a maintainer (see [MAINTAINERS.md](MAINTAINERS.md)).
 
@@ -91,24 +89,23 @@ halves:
   which is protected by required reviewers. A branch name is something a
   contributor can choose; an environment approval is not.
 
-Every push step in the publish jobs is commented out today. Arming one takes
-two deliberate actions by someone with that authority, and no fewer:
+The publish jobs are armed. Each takes its credential without a
+repository secret:
 
-1. uncomment the push step in the publish job being armed, in a reviewed pull
-   request;
-2. give that step its credential, never through repository secrets:
-   - **PyPI** uses [trusted publishing](https://docs.pypi.org/trusted-publishers/)
-     through GitHub OIDC, so there is no secret to store. On PyPI, add a
-     trusted publisher for `magone-mcp-core` with owner `magurelabs`,
-     repository `magoneai-mcp`, workflow `publish.yml` and environment
-     `release`, and uncomment the job's `id-token: write` permission along
-     with the step.
-   - **Docker Hub** needs `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` in the
-     `release` environment's secrets.
-   - **MCP Registry** needs no secret: `mcp-publisher login github-oidc`
-     proves the `io.github.magurelabs` namespace with the job's GitHub OIDC
-     token. Uncomment the job's `id-token: write` permission along with the
-     step.
+- **PyPI** uses [trusted publishing](https://docs.pypi.org/trusted-publishers/)
+  through GitHub OIDC (publisher: owner `magurelabs`, repository
+  `magoneai-mcp`, workflow `publish.yml`, environment `release`), so there is
+  no secret to store.
+- **Docker Hub** uses `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` from the
+  `release` environment's secrets. The token can push to `magureai` and
+  nothing else.
+- **MCP Registry** uses `mcp-publisher login github-oidc`, which proves the
+  `io.github.magurelabs` namespace with the job's GitHub OIDC token. It runs
+  after the images are pushed, because the registry checks each image.
+
+To release, a maintainer dispatches **Publish** from `main` (Actions tab, or
+`gh workflow run publish.yml`), and a different maintainer approves the
+`release` environment deployment.
 
 ## After a release
 

@@ -3,6 +3,7 @@
 [![CI](https://github.com/magurelabs/magoneai-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/magurelabs/magoneai-mcp/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/magurelabs/magoneai-mcp/badge)](https://scorecard.dev/viewer/?uri=github.com/magurelabs/magoneai-mcp)
+[![Docker Hub](https://img.shields.io/badge/Docker%20Hub-magureai-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/u/magureai)
 
 MCP connectors for third-party APIs, built on the [official MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk).
 
@@ -269,7 +270,13 @@ CI also runs, on every pull request: `ruff check` and `ruff format --check`; a g
 
 Each of the 18 publishable connectors carries a `server.json` (schema `2025-12-11`), derived from the connector's own `SERVER_NAME` and `SERVER_VERSION` so a manifest cannot describe a server other than the one that runs. `scripts/gen_server_json.py --check` regenerates and diffs them, and `scripts/publication_gate.py` fails if a blocked connector ever gains one.
 
-**Writing a manifest is not publishing.** Nothing here has been pushed to any registry. `.github/workflows/publish.yml` builds and validates everything it would publish, and its publish jobs run only on a manual dispatch inside a protected `release` environment, with every push step still commented out.
+Released artifacts:
+
+- **Container images:** one per publishable connector on Docker Hub under [`magureai`](https://hub.docker.com/u/magureai), named `magureai/mcp-<connector>`, tagged with the connector's version.
+- **Python package:** the framework as [`magone-mcp-core`](https://pypi.org/project/magone-mcp-core/) on PyPI.
+- **MCP Registry:** one entry per publishable connector under `io.github.magurelabs/<connector>`.
+
+`.github/workflows/publish.yml` builds and validates all of this on every pull request that touches it, and publishes only on a manual dispatch inside the protected `release` environment, after a maintainer approves the run.
 
 ## History
 
