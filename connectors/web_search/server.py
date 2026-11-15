@@ -515,7 +515,7 @@ async def _load_robots(origin: str) -> tuple[RobotFileParser, float]:
         async with httpx.AsyncClient(
             timeout=10, follow_redirects=False, headers={"User-Agent": USER_AGENT}
         ) as client:
-            for _ in range(_MAX_REDIRECTS + 1):
+            for _ in range(_scrape.MAX_REDIRECTS + 1):
                 validate_url(url)
                 async with client.stream("GET", url) as resp:
                     reject_blocked_peer(resp)
