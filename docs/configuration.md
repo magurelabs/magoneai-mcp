@@ -27,7 +27,7 @@ Read by every connector.
 | `MCP_MAX_BODY_BYTES` | `10485760` (10 MiB), or the connector's own default | start-up | Largest request body accepted. A larger one is answered `413` before it is parsed. A connector whose tools carry attachments may declare a larger default with `ConnectorServer(max_body_bytes=...)`: `atlassian_jira` declares 70 MiB and `outlook_email` 75 MiB. This variable overrides either. An unparseable or non-positive value falls back to the connector's default. Base64 attachments are about a third larger than the file. |
 | `MCP_MAX_RESULT_CHARS` | `1000000` | start-up | Outbound budget: the most text one tool result may carry. Larger results are cut, visibly; a tool with a declared output schema cannot be cut and still conform, so its oversized result is returned as an error instead. Values below `1000` are raised to `1000`; an unparseable value falls back to the default. |
 | `MCP_READ_ONLY` | off | every call | Refuses every tool not marked `readOnlyHint=True`, and hides them from `tools/list`. Read per call, so changing it needs no restart. |
-| `MCP_CREDENTIALS_PATH` | unset | path at start-up, file per call | Path to a JSON object of credentials for a server you run yourself, keyed like the `credentials` dict (`{"linear_api_key": "..."}`). A request header overrides the file. A missing or unreadable file is treated as empty. |
+| `MCP_CREDENTIALS_PATH` | unset | path at start-up, file per call | Path to a JSON object of credentials for a server you run yourself, keyed like the `credentials` dict (`{"linear_api_key": "..."}`). When the file has values it wins: a request header cannot override a key the file sets, and can fill only a key the file leaves unset, never a host, port, URL, endpoint, connection string or allowlist once the file holds a secret. A missing or unreadable file is treated as empty. |
 | `MCP_LOG_RAW_UPSTREAM_ERRORS` | off | per log line | Logs unscrubbed upstream error bodies. Honoured only when `MCP_MODE=local`. |
 
 ## Process
@@ -61,9 +61,20 @@ Not environment variables, but configuration a caller sends per request.
 Credentials always arrive per call (as headers, or from
 `MCP_CREDENTIALS_PATH`). Where a connector also reads a credential from the
 environment, that is a **fallback** for a standalone server one person runs;
-the per-call value wins whenever it is present.
+the per-call value wins whenever it is present. (A credentials file is the
+exception: it wins over headers, see `MCP_CREDENTIALS_PATH` above.)
 
 ### `web_search`
+
+Pages are fetched with the User-Agent
+`Mozilla/5.0 (compatible; magoneai-web-search/<version>; +https://github.com/magurelabs/magoneai-mcp)`,
+so a site can see who is asking and address the connector by name in
+robots.txt. `scrape_url` with `return_full=true`, the crawl path, checks the
+site's robots.txt first and refuses a page it disallows; a single-page fetch
+is one request on a user's behalf and does not. Whoever runs the connector is
+responsible for complying with each target site's terms and with the terms of
+the search provider in use (Serper, Perplexity, or the engines a SearXNG
+instance queries).
 
 | Variable | Default | Meaning |
 |---|---|---|
@@ -76,6 +87,16 @@ the per-call value wins whenever it is present.
 | `WEB_SEARCH_PROVIDER` | auto | Overrides the automatic choice. `serper` uses Serper (a key is still required); any other value, such as `searxng`, uses SearXNG even when a Serper key is present. |
 | `PERPLEXITY_API_KEY` | empty | Perplexity key fallback, for the tool that uses it. |
 | `CRAWL4AI_URL` | `http://localhost:11235` | Crawl4AI service used for page extraction. |
+| `WEB_RESEARCH_PAGE_TIMEOUT_S` | `5` | `web_research`: how long one page may take to read, in seconds. |
+| `WEB_RESEARCH_DEADLINE_S` | `8` | `web_research`: the budget for the whole call, in seconds. Pages not read by then are listed in `unread_pages` with reason `deadline`. |
+| `WEB_RESEARCH_OUTPUT_CHARS` | `24000` | `web_research`: the most passage text one call returns. |
+| `WEB_RESEARCH_CACHE_TTL_S` | `900` | `web_research`: how long a read page is cached, in seconds. |
+| `WEB_RESEARCH_CACHE_MAX` | `256` | `web_research`: how many read pages the cache holds. |
+| `WEB_RESEARCH_LOGIN_WALLED_HOSTS` | built-in list | `web_research`: comma-separated hosts whose pages sit behind a sign-in, so only their search snippet is used (subdomains match too). Replaces the built-in list of common social sites; `-` reads every host. |
+
+Each `web_research` call logs one `web_research.pages` event with the number
+of sources returned and `unread_reasons`, a count per reason a page went
+unread, so a rise in `deadline` or `timeout` can be watched as a metric.
 
 ### `cloudflare_r2`
 
@@ -128,6 +149,15 @@ Fallbacks for the per-call credentials of the same name:
 | `LINEAR_API_KEY` | empty | API key fallback. |
 | `LINEAR_GRAPHQL_URL` | `https://api.linear.app/graphql` | GraphQL endpoint; override for testing. |
 
+### `linkedin`
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LINKEDIN_ORG_ID` | empty | Default post author when a call passes no `author`: the organization with this id is used instead of the authenticated member. It is process-wide, so on a server shared by several callers it changes the author for **every** caller; leave it unset there and have each call pass `author`. |
+| `LINKEDIN_VERSION` | `202606` | Versioned-API month (`YYYYMM`) sent with each request. |
+| `LINKEDIN_API_BASE` | `https://api.linkedin.com` | API base URL; override for testing or a proxy. |
+| `LINKEDIN_TOKEN_URL` | `https://www.linkedin.com/oauth/v2/accessToken` | OAuth token endpoint; override for testing or a proxy. |
+
 ### `outlook_email`
 
 | Variable | Default | Meaning |
@@ -135,6 +165,10 @@ Fallbacks for the per-call credentials of the same name:
 | `MAX_ATTACHMENT_DOWNLOAD_SIZE_MB` | `25` | Largest attachment downloaded, in megabytes. |
 
 ### `twitter_intel`
+
+This connector uses twitterapi.io, an unofficial third-party provider that is
+not affiliated with X Corp, rather than the official X API. If you run it, you
+are responsible for complying with the terms of X and of twitterapi.io.
 
 | Variable | Default | Meaning |
 |---|---|---|

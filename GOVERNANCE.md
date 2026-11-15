@@ -97,6 +97,7 @@ Conduct or of this document, by a vote of the other maintainers.
 
 ## Stewardship
 
-The project is stewarded by Magure, Inc., which holds the copyright notice in
-[NOTICE](NOTICE) and administers the GitHub organisation. Stewardship does not
-override the decision process above for the project's technical direction.
+The project is stewarded by Magure Tech Middle East Ltd, which holds the
+copyright notice in [NOTICE](NOTICE) and administers the GitHub organisation.
+Stewardship does not override the decision process above for the project's
+technical direction.

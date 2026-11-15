@@ -286,7 +286,7 @@ MCP_MODE=local python -m connectors.example_widgets
 
 Then connect an MCP client to `http://127.0.0.1:8000/mcp` and send your key
 as the `X-Example-Api-Key` header, or, for a server only you use, put
-`{"example_api_key": "..."}` in a file and set `MCP_CREDENTIALS_PATH` to it.
+`{"example_api_key": "..."}` in a file and set `MCP_CREDENTIALS_PATH` to it. Keys in the file win over headers.
 
 Before opening the pull request, run every gate and the tests as listed in
 [CONTRIBUTING.md](../CONTRIBUTING.md#running-the-tests-and-every-gate).

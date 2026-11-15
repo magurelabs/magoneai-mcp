@@ -61,17 +61,26 @@ MAX_REDIRECTS = 5
 EXTRACT_TIMEOUT_S = 30
 TOTAL_DEADLINE_S = 60
 
-BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
+# The connector's own User-Agent. server.py sets this to its USER_AGENT at
+# import, so a page fetched here says who is fetching exactly as every other
+# request the connector makes does; the value below only serves this module
+# when it is used on its own.
+USER_AGENT = (
+    "Mozilla/5.0 (compatible; magoneai-web-search; +https://github.com/magurelabs/magoneai-mcp)"
+)
+
+REQUEST_HEADERS = {
     "Accept": (
         "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8"
     ),
-    "Accept-Language": "en-US,en;q=0.9,ar;q=0.5",
+    "Accept-Language": "en-US,en;q=0.9,*;q=0.5",
     "Upgrade-Insecure-Requests": "1",
 }
+
+
+def request_headers() -> dict[str, str]:
+    """Headers sent on every page fetch: REQUEST_HEADERS plus USER_AGENT."""
+    return {**REQUEST_HEADERS, "User-Agent": USER_AGENT}
 _TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 _RETRY_STATUS = {429, 502, 503, 504}
 
@@ -453,7 +462,7 @@ async def _stream_get(url: str, ctx: ssl.SSLContext) -> Fetched:
                 # and defeat the pinning above.
                 async with httpx.AsyncClient(
                     verify=ctx,
-                    headers=BROWSER_HEADERS,
+                    headers=request_headers(),
                     timeout=_TIMEOUT,
                     follow_redirects=False,
                     trust_env=False,

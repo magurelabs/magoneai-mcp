@@ -505,10 +505,12 @@ def test_redirect_loop_capped(monkeypatch):
 # ---- headers -------------------------------------------------------------
 
 
-def test_browser_like_headers():
-    h = _scrape.BROWSER_HEADERS
-    assert "Mozilla/5.0" in h["User-Agent"] and "Chrome" in h["User-Agent"]
-    assert "text/html" in h["Accept"] and "Accept-Language" in h
+def test_request_headers_identify_the_connector():
+    h = _scrape.request_headers()
+    assert h["User-Agent"].startswith("Mozilla/5.0 (compatible; magoneai-web-search")
+    assert "Chrome" not in h["User-Agent"]
+    assert "text/html" in h["Accept"] and "application/pdf" in h["Accept"]
+    assert "Accept-Language" in h
 
 
 # ---- HTML tables ---------------------------------------------------------

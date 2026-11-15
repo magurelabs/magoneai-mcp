@@ -64,10 +64,53 @@ def header_to_key(header_name: str) -> str:
     return key.replace("-", "_")
 
 
+# Credential keys that say WHERE a secret is sent or WHAT a connection may
+# reach, as opposed to the secret itself: a host, a port, an endpoint or base
+# URL, a DSN or connection string, a scheme or TLS setting, and an allowlist.
+# Matched on the key a header maps to (`header_to_key`), by suffix or prefix so a
+# connector added later is covered without anyone remembering to list it:
+# `db_host`, `trino_port`, `r2_endpoint_url`, `llm_base_url`,
+# `db_connection_string`, `trino_http_scheme`, `allowed_mailboxes`,
+# `trino_allowed_catalogs`.
+_TARGET_SUFFIXES = (
+    "_host",
+    "_hostname",
+    "_port",
+    "_url",
+    "_uri",
+    "_endpoint",
+    "_dsn",
+    "_connection_string",
+    "_scheme",
+    "_trust_server_certificate",
+)
+
+
+def is_target_key(key: str) -> bool:
+    """Whether a credential key chooses a destination or widens a scope."""
+    key = key.lower()
+    return key.endswith(_TARGET_SUFFIXES) or key.startswith("allowed_") or "_allowed_" in key
+
+
+def _supplies_secret(file_credentials: Mapping[str, Any]) -> bool:
+    """Whether the file holds anything that must not be sent to a caller's choice.
+
+    A connection string embeds its password even though its key does not look
+    secret, so it counts.
+    """
+    from .redact import is_secret_key
+
+    return any(
+        value and (is_secret_key(key) or key.lower().endswith(("_connection_string", "_dsn")))
+        for key, value in file_credentials.items()
+    )
+
+
 def from_file(path: str | None) -> dict:
     """Credentials baked into the image, for a server that runs standalone.
 
-    Headers override these. A missing or unreadable file is not an error: the
+    A request header can fill a key this file leaves unset but never replaces one
+    it sets; see `build`. A missing or unreadable file is not an error: the
     common deployment supplies everything per request.
     """
     if not path or not os.path.exists(path):
@@ -90,18 +133,47 @@ def build(
 ) -> dict:
     """The `credentials` dict a handler receives.
 
-    File first, then the tool's declared headers, then platform context. Later
-    wins, so a per-request header overrides a baked-in default.
+    **Header-only (no credentials file, or one that yields nothing):** each of
+    the tool's declared headers present on the request becomes a key, then
+    platform context. Unchanged.
+
+    **With a credentials file that yields values, the file wins.** Precedence is
+    the reverse of what it once was, because letting a request header override a
+    file key one at a time meant a caller who sent only `X-Db-Host` made the
+    server send the file's database password to that host:
+
+    - a key the file sets cannot be overridden by a header;
+    - a header may fill a key the file does not set;
+    - except a target key (host, port, URL, endpoint, DSN or connection string,
+      scheme or TLS setting, allowlist such as `X-Allowed-Mailboxes`; see
+      `is_target_key`), which never comes from a header once the file supplies
+      any secret. Otherwise the caller could point the file's secret at a server
+      of their choosing, or widen what the connection is allowed to reach.
+
+    Headers that lose are dropped silently, not reported: the caller of a
+    shared server does not learn which keys the operator baked in.
     """
     credentials = from_file(file_path)
     if not headers:
         return credentials
 
     lookup = {str(k).lower(): v for k, v in dict(headers).items()}
-
+    from_headers: dict[str, Any] = {}
     for header_name in credential_headers:
         value = lookup.get(str(header_name).lower())
         if value:
-            credentials[header_to_key(header_name)] = value
+            from_headers[header_to_key(header_name)] = value
+
+    if not any(credentials.values()):
+        # Nothing baked in, so there is nothing for a header to override or
+        # redirect: the file is empty or holds only blank values.
+        return {**credentials, **from_headers}
+
+    file_keys = {key.lower() for key, value in credentials.items() if value}
+    guard_targets = _supplies_secret(credentials)
+    for key, value in from_headers.items():
+        if key in file_keys or (guard_targets and is_target_key(key)):
+            continue
+        credentials[key] = value
 
     return credentials

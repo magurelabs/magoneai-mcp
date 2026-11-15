@@ -1,5 +1,10 @@
 """The web-search connector.
 
+Fetches identify themselves with `USER_AGENT`, and the crawl path
+(`scrape_url` with `return_full`) obeys robots.txt. Whoever runs this is
+responsible for the terms of the sites it fetches and of the search provider
+it uses; see docs/configuration.md.
+
 Ported from the v1 mixin form by a codemod.
 
 5 tools, 5 of them proposed read-only. Every input schema
@@ -49,11 +54,13 @@ import os
 import re
 import time
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
 import trafilatura
 
-from . import _research
+from magone_mcp_core.net import reject_blocked_peer
+from . import _research, _scrape
 from ._scrape import (
     BLOCKED_URL,
     EMPTY,
@@ -482,6 +489,86 @@ def _pinning_args(url: str, extra_args: list[str] | None) -> list[str]:
     return list(extra_args)
 
 
+# Who is fetching, said plainly, so a site owner reading a log can tell an
+# agent from a person and address it in robots.txt. The product token is what
+# robots.txt rules match on.
+_ROBOTS_AGENT = f"magoneai-{SERVER_NAME}"
+USER_AGENT = (
+    f"Mozilla/5.0 (compatible; {_ROBOTS_AGENT}/{SERVER_VERSION}; "
+    "+https://github.com/magurelabs/magoneai-mcp)"
+)
+# The direct page fetch lives in _scrape; it sends the same User-Agent.
+_scrape.USER_AGENT = USER_AGENT
+
+# RFC 9309: parse at least 500 KiB, cache for no more than 24 hours, follow up
+# to five redirects. A crawl asks for many pages on one host, so the answer is
+# cached per origin; an unreachable robots.txt is retried sooner than a real one.
+_ROBOTS_MAX_BYTES = 500 * 1024
+_ROBOTS_TTL = 3600.0
+_ROBOTS_ERROR_TTL = 300.0
+_ROBOTS_CACHE_MAX = 512
+_robots_cache: dict[str, tuple[float, RobotFileParser]] = {}
+
+
+async def _load_robots(origin: str) -> tuple[RobotFileParser, float]:
+    """Fetch and parse `<origin>/robots.txt`, and say how long to trust it.
+
+    Per RFC 9309, a 4xx means there are no rules, while a 5xx or an unreachable
+    server means assume the whole site is disallowed. Every hop is checked
+    against the SSRF guard and the address actually connected to is judged,
+    because the origin came from the model just as the page URL did.
+    """
+    parser = RobotFileParser()
+    url = f"{origin}/robots.txt"
+    try:
+        async with httpx.AsyncClient(
+            timeout=10, follow_redirects=False, headers={"User-Agent": USER_AGENT}
+        ) as client:
+            for _ in range(_MAX_REDIRECTS + 1):
+                validate_url(url)
+                async with client.stream("GET", url) as resp:
+                    reject_blocked_peer(resp)
+                    if resp.is_redirect and resp.headers.get("location"):
+                        url = urljoin(url, resp.headers["location"])
+                        continue
+                    if 400 <= resp.status_code < 500:
+                        parser.allow_all = True
+                        return parser, _ROBOTS_TTL
+                    if resp.status_code != 200:
+                        break
+                    body = bytearray()
+                    async for chunk in resp.aiter_bytes():
+                        body += chunk
+                        if len(body) >= _ROBOTS_MAX_BYTES:
+                            break
+                    parser.parse(
+                        bytes(body[:_ROBOTS_MAX_BYTES]).decode("utf-8", "replace").splitlines()
+                    )
+                    return parser, _ROBOTS_TTL
+    except (SSRFBlocked, InvalidURL) as exc:
+        logger.warning("robots.blocked", origin=origin, error=str(exc))
+    except httpx.HTTPError:
+        pass
+    parser.disallow_all = True
+    return parser, _ROBOTS_ERROR_TTL
+
+
+async def _robots_allows(url: str) -> bool:
+    """Whether the site's robots.txt lets this connector fetch `url`."""
+    parts = urlparse(url)
+    origin = f"{parts.scheme}://{parts.netloc}".lower()
+    now = time.monotonic()
+    cached = _robots_cache.get(origin)
+    if cached and cached[0] > now:
+        parser = cached[1]
+    else:
+        parser, ttl = await _load_robots(origin)
+        if len(_robots_cache) >= _ROBOTS_CACHE_MAX:
+            _robots_cache.clear()
+        _robots_cache[origin] = (now + ttl, parser)
+    return parser.can_fetch(_ROBOTS_AGENT, url)
+
+
 async def _fetch_via_crawl4ai(url: str, max_chars: int) -> str:
     """Fallback: fetch with Crawl4AI (renders JS via headless browser).
 
@@ -494,7 +581,10 @@ async def _fetch_via_crawl4ai(url: str, max_chars: int) -> str:
     try:
         payload = {
             "urls": [url],
-            "browser_config": {"type": "BrowserConfig", "params": {"headless": True}},
+            "browser_config": {
+                "type": "BrowserConfig",
+                "params": {"headless": True, "user_agent": USER_AGENT},
+            },
             "crawler_config": {
                 "type": "CrawlerRunConfig",
                 "params": {"cache_mode": "bypass"},
@@ -573,7 +663,7 @@ async def _fetch_via_crawl4ai_rich(
     if not _crawl4ai_configured():
         return {"success": False, "error": "crawl4ai is not configured (CRAWL4AI_URL unset)"}
     try:
-        browser_params: dict[str, Any] = {"headless": True}
+        browser_params: dict[str, Any] = {"headless": True, "user_agent": USER_AGENT}
         if extra_args:
             browser_params["extra_args"] = extra_args
         payload = {
@@ -921,6 +1011,14 @@ async def scrape_url(credentials: dict[str, str],
         # KB-style rich fetch: full markdown + links + title + status.
         # No truncation here; callers (kb-worker) enforce their own
         # max-content-MB ceiling downstream.
+        # This is the path a crawler walks, page after page from the links it
+        # returns, so it asks the site first. A single page fetched for an
+        # agent below is one request on a user's behalf, not a crawl.
+        if not await _robots_allows(url):
+            return {
+                "error": f"Refused to crawl URL: the site's robots.txt does not allow "
+                f"{_ROBOTS_AGENT} to fetch it"
+            }
         try:
             result = await _fetch_via_crawl4ai_rich(url, extra_args=pinned)
         except RedirectBlocked as exc:
@@ -1221,12 +1319,36 @@ async def web_research(credentials: dict[str, str],
             time_range=time_range,
         )
 
-    return await _research.research(
+    result = await _research.research(
         list(queries or []),
         search=search,
         fetch=_fetch_page_content,
         normalize=_normalize_url,
         max_pages=max_pages,
+    )
+    _log_research_outcome(result)
+    return result
+
+
+def _log_research_outcome(result: dict[str, Any]) -> None:
+    """One structured event per web_research call, counting why pages went unread.
+
+    Under load the deadline drops pages rather than slowing the answer, so the
+    decline shows as lost sources, not latency. Counting the reasons (deadline,
+    timeout, blocked_url, http_403, ...) lets a log-based metric show it.
+    """
+    unread = result.get("unread_pages") or []
+    reasons: dict[str, int] = {}
+    for page in unread:
+        # "error:<ExceptionName>" collapses to "error" so the label set stays small.
+        reason = str(page.get("reason") or "skipped").split(":", 1)[0]
+        reasons[reason] = reasons.get(reason, 0) + 1
+    logger.info(
+        "web_research.pages",
+        sources=len(result.get("sources") or []),
+        unread=len(unread),
+        unread_reasons=reasons,
+        total_ms=(result.get("timing_ms") or {}).get("total"),
     )
 
 

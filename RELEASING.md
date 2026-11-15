@@ -1,8 +1,6 @@
 # Releasing
 
-How versions are numbered and how a release would be published. **Nothing has
-been published yet**: the publishing workflow exists and runs as a dry run,
-and arming it is a deliberate step described below.
+How versions are numbered and how a release is published.
 
 Releases are cut by a maintainer (see [MAINTAINERS.md](MAINTAINERS.md)).
 
@@ -11,12 +9,18 @@ Releases are cut by a maintainer (see [MAINTAINERS.md](MAINTAINERS.md)).
 | Artifact | Where | Version source |
 |---|---|---|
 | `magone-mcp-core` wheel and sdist (the framework only; connectors run from a checkout) | PyPI | `version` in `pyproject.toml`, and `__version__` in `src/magone_mcp_core/__init__.py` |
-| One container image per publishable connector | container registry | the connector's `SERVER_VERSION` |
+| One container image per publishable connector, `docker.io/magureai/mcp-<SERVER_NAME>:<SERVER_VERSION>` | Docker Hub | the connector's `SERVER_VERSION`, the image tag its `server.json` names |
 | One MCP Registry entry per publishable connector (`connectors/<name>/server.json`) | MCP Registry | the connector's `SERVER_VERSION`, copied into `server.json` by `scripts/gen_server_json.py` |
 
 A connector is publishable only when `connectors/publication.json` marks it
 `ready`; a `blocked` connector has no `server.json` and is never built for
 publication.
+
+Connector images go to Docker Hub under the `magureai` namespace, one
+repository per connector named after its `SERVER_NAME` (for example
+`magureai/mcp-web-search`), tagged with its `SERVER_VERSION`. The tag is not
+typed anywhere: `scripts/gen_server_json.py` writes it into the connector's
+`server.json`, and the publish workflow reads it from there.
 
 ## Versioning
 
@@ -41,6 +45,11 @@ and its version describes its **tool contract**:
   are the changes `golden_schema_gate.py` makes visible;
 - **minor**: a tool or an optional parameter added;
 - **patch**: a fix that changes no schema.
+
+Connectors start at **2.0.0** while the core starts at 0.1.0. A connector's
+version continues from its earlier one (see [History](README.md#history)), so
+2.0.0 is not a first release; the core has no earlier version. The first
+registry entry for each connector says 2.0.0, and no 1.x was ever published.
 
 ## Tags
 
@@ -80,17 +89,23 @@ halves:
   which is protected by required reviewers. A branch name is something a
   contributor can choose; an environment approval is not.
 
-Every push step in the publish jobs is commented out today. Arming one takes
-two deliberate actions by someone with that authority, and no fewer:
+The publish jobs are armed. Each takes its credential without a
+repository secret:
 
-1. uncomment the push step in the publish job being armed, in a reviewed pull
-   request;
-2. add the credential that step names to the `release` environment's
-   secrets, never to repository secrets.
+- **PyPI** uses [trusted publishing](https://docs.pypi.org/trusted-publishers/)
+  through GitHub OIDC (publisher: owner `magurelabs`, repository
+  `magoneai-mcp`, workflow `publish.yml`, environment `release`), so there is
+  no secret to store.
+- **Docker Hub** uses `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` from the
+  `release` environment's secrets. The token can push to `magureai` and
+  nothing else.
+- **MCP Registry** uses `mcp-publisher login github-oidc`, which proves the
+  `io.github.magurelabs` namespace with the job's GitHub OIDC token. It runs
+  after the images are pushed, because the registry checks each image.
 
-Preferred over long-lived tokens where the registry supports it: PyPI
-[trusted publishing](https://docs.pypi.org/trusted-publishers/) through
-GitHub OIDC, which needs no stored secret at all.
+To release, a maintainer dispatches **Publish** from `main` (Actions tab, or
+`gh workflow run publish.yml`), and a different maintainer approves the
+`release` environment deployment.
 
 ## After a release
 

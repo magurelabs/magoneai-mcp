@@ -398,3 +398,43 @@ def test_web_research_accepts_a_bare_string(monkeypatch, q):
 
     out = _run(search_tools.web_research({}, q))
     assert out["queries"] == [q]
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, _research._DEFAULT_LOGIN_WALLED),
+        ("  ", _research._DEFAULT_LOGIN_WALLED),
+        ("-", ()),
+        ("Example.com, www.walled.test ,,", ("example.com", "walled.test")),
+    ],
+)
+def test_login_walled_hosts_can_be_replaced(value, expected):
+    assert _research._login_walled_hosts(value) == expected
+
+
+def test_web_research_logs_why_pages_went_unread(monkeypatch):
+    from structlog.testing import capture_logs
+
+    search_tools = importlib.import_module("connectors.web_search.server")
+
+    async def fake_run(credentials, query, **kw):
+        return {"results": [_hit("https://a.org/1"), _hit("https://b.org/2")]}
+
+    async def fake_fetch(url, max_chars):
+        if "b.org" in url:
+            raise ScrapeError(TIMEOUT, "slow")
+        return "a text about topic", "html"
+
+    monkeypatch.setattr(search_tools, "run_web_search", fake_run)
+    monkeypatch.setattr(search_tools, "_fetch_page_content", fake_fetch)
+    _research.PAGE_CACHE.clear()
+
+    with capture_logs() as events:
+        _run(search_tools.web_research({}, ["topic"]))
+
+    logged = [e for e in events if e["event"] == "web_research.pages"]
+    assert len(logged) == 1
+    assert logged[0]["sources"] == 1
+    assert logged[0]["unread"] == 1
+    assert logged[0]["unread_reasons"] == {TIMEOUT: 1}
