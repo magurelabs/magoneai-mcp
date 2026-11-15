@@ -102,6 +102,7 @@ from ._shared.microsoft_graph import (
     SendUnconfirmed,
     auth_reason,
     graph_failure,
+    graph_reason,
 )
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE
 import time
@@ -1321,7 +1322,7 @@ async def _graph_request(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            error_msg = error_data.get("error", {}).get("message", response.text[:500])
+            error_msg = graph_reason(error_data)
             raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
@@ -1556,10 +1557,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            detail = error_data.get("error", {}).get("message", response.text[:500])
-            raise GraphNotFoundError(
-                f"Resource not found. ({detail})" if detail else "Resource not found."
-            )
+            raise GraphNotFoundError(f"Resource not found. ({graph_reason(error_data)})")
         elif response.status_code == 410:
             # deltaLink expired — caller should reset and re-list.
             return {"_error": "delta_expired", "_status": 410}
@@ -1573,7 +1571,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            error_msg = error_data.get("error", {}).get("message", response.text[:500])
+            error_msg = graph_reason(error_data)
             raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
