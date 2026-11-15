@@ -151,7 +151,9 @@ async def test_shared_mailbox_without_tenant_reports_it(monkeypatch):
 
 
 def token_endpoint_says(monkeypatch, status: int, **response):
-    real = httpx.AsyncClient
+    """Answer every request with this response. Called after install(), so it
+    builds on the real client class, not on install()'s patched one."""
+    real = httpx._client.AsyncClient
 
     def rejecting(*args, **kwargs):
         kwargs["transport"] = httpx.MockTransport(
