@@ -88,6 +88,8 @@ from .tools._constants import CREDENTIAL_HEADERS, MAX_RESULTS_CAP, VALID_FOLDERS
 from typing import Any, Dict, List
 from .tools._constants import CREDENTIAL_HEADERS, MAX_BATCH_SIZE
 import html as _html_module
+from email import message_from_bytes as _message_from_bytes
+from email import policy as _email_policy
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE, MAX_RESULTS_CAP, VALID_FOLDERS, VALID_FOLDERS_LIST
 from .tools._constants import CREDENTIAL_HEADERS, MAX_BODY_SIZE
 from .tools._constants import CREDENTIAL_HEADERS, INLINE_ATTACHMENT_LIMIT, MAX_ATTACHMENTS, VALID_IMPORTANCE_LIST
@@ -536,6 +538,49 @@ def _extract_zip(filename: str, content_bytes: bytes) -> str:
 
         return _truncate("\n".join(lines))
 
+# An email attached from Outlook ("Attach item") is an itemAttachment: it has no
+# contentBytes, and its headers and body are read through $expand instead.
+_ITEM_ATTACHMENT = "#microsoft.graph.itemAttachment"
+
+
+def message_text(headers: List[Tuple[str, str]], body: str, body_is_html: bool) -> str:
+    """An email as text: its header lines, a blank line, then the body.
+
+    Shared by an attached Outlook item and an attached .eml file, so an
+    attached email reads the same whichever way it was attached. The headers
+    are what an attached email is usually opened for (who it went to, who was
+    copied), so they come first and are never truncated away.
+    """
+    head = "\n".join(f"{name}: {value}" for name, value in headers if value)
+    text = _strip_html(body or "") if body_is_html else (body or "").strip()
+    return _truncate(f"{head}\n\n{text}" if head else text) or "(empty email)"
+
+
+def _extract_eml(content_bytes: bytes) -> str:
+    msg = _message_from_bytes(content_bytes, policy=_email_policy.default)
+    headers = [(h, str(msg.get(h, ""))) for h in ("From", "To", "Cc", "Date", "Subject")]
+    part = msg.get_body(preferencelist=("plain", "html"))
+    if part is None:
+        return message_text(headers, "", False)
+    return message_text(headers, part.get_content(), part.get_content_subtype() == "html")
+
+
+def _item_text(item: Dict[str, Any]) -> str:
+    """Text of the Outlook item inside an itemAttachment (usually an email)."""
+    body = item.get("body") or {}
+    sender = item.get("from")
+    headers = [
+        ("From", _fmt_addr(sender) if isinstance(sender, dict) else ""),
+        ("To", _fmt_addr_list(item.get("toRecipients"))),
+        ("Cc", _fmt_addr_list(item.get("ccRecipients"))),
+        ("Date", item.get("sentDateTime") or item.get("receivedDateTime") or ""),
+        ("Subject", item.get("subject") or ""),
+    ]
+    return message_text(
+        headers, body.get("content") or "", (body.get("contentType") or "").lower() == "html"
+    )
+
+
 def extract_text(
     filename: str, content_bytes: bytes, content_type: str = "", _depth: int = 0
 ) -> str:
@@ -555,6 +600,11 @@ def extract_text(
 
         if name.endswith(".xlsx") or "spreadsheetml" in ct:
             return _extract_xlsx(content_bytes)
+
+        # Before the text branch: message/rfc822 is not text/*, and an .eml read
+        # as raw text would bury the headers in MIME boundaries and base64.
+        if name.endswith(".eml") or ct == "message/rfc822":
+            return _extract_eml(content_bytes)
 
         if name.endswith(_TEXT_EXTS) or ct.startswith("text/") or "json" in ct or "xml" in ct:
             return _truncate(content_bytes.decode("utf-8", errors="replace"))
@@ -3258,7 +3308,7 @@ async def move_email(credentials: Dict[str, str],
 # Evidence: GET, path built at runtime
 @server.tool(
     name='read_attachment',
-    description="Read the TEXT CONTENT of an email attachment (PDF, Word .docx, Excel .xlsx, text/csv/json/html/xml, or a .zip archive). Pass `email_id` and `attachment_id` (from list_attachments). Returns the extracted text so you can summarize or answer questions about the attachment. A .zip returns a list of what it contains plus the text of the readable members. Images and other binary types return a short note instead of text. 25MB limit, set via MAX_ATTACHMENT_DOWNLOAD_SIZE_MB.",
+    description="Read the TEXT CONTENT of an email attachment (PDF, Word .docx, Excel .xlsx, text/csv/json/html/xml, an attached email, or a .zip archive). An attached email returns its From/To/Cc/Date/Subject lines and its body. Pass `email_id` and `attachment_id` (from list_attachments). Returns the extracted text so you can summarize or answer questions about the attachment. A .zip returns a list of what it contains plus the text of the readable members. Images and other binary types return a short note instead of text. 25MB limit, set via MAX_ATTACHMENT_DOWNLOAD_SIZE_MB.",
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -3309,6 +3359,24 @@ async def read_attachment(credentials: Dict[str, str],
         )
         name = meta.get("name", "attachment")
         size = meta.get("size", 0)
+        # An attached Outlook item has no contentBytes, so the file path below
+        # would read nothing. Its headers and body come back as JSON instead,
+        # and its size counts its own attachments, which are not fetched, so
+        # the size cap does not apply to it.
+        if meta.get("@odata.type") == _ITEM_ATTACHMENT:
+            expanded = await request(
+                credentials,
+                "GET",
+                f"{base}/messages/{email_id}/attachments/{attachment_id}",
+                params={"$expand": "microsoft.graph.itemattachment/item"},
+            )
+            return {
+                "success": True,
+                "name": name,
+                "content_type": "message/rfc822",
+                "size": size,
+                "text": _item_text(expanded.get("item") or {}),
+            }
         if size > MAX_ATTACHMENT_SIZE:
             return {
                 "success": False,
