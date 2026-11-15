@@ -72,6 +72,13 @@ def test_an_unresolved_file_reference_says_why_rather_than_uploading_nothing():
         _attachment_file("exports/proj/report.pdf", 2)
 
 
+def test_the_error_tells_a_direct_caller_what_to_send():
+    """Called without a host that resolves references, the fix is to send the
+    bytes inline; the message has to say so rather than only name a host."""
+    with pytest.raises(ValueError, match="send the file's bytes inline"):
+        _attachment_file({"file_id": "9f1c2e3a-0000-0000-0000-000000000000"}, 0)
+
+
 def test_the_error_names_the_position_so_one_bad_item_is_findable():
     with pytest.raises(ValueError, match=r"attachments\[3\]"):
         _attachment_file({"filename": "x"}, 3)

@@ -179,7 +179,7 @@ async def test_every_tool_is_callable_without_crashing(package, isolated, monkey
                 result = await asyncio.wait_for(
                     client.call_tool(tool.name, arguments_for(tool)), timeout=20
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 problems.append(f"{tool.name}: timed out")
                 continue
             finally:

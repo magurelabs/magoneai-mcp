@@ -3,10 +3,16 @@
 Security:
 - query() and search() use SET TRANSACTION READ ONLY + ROLLBACK
 - Multi-statement queries rejected to prevent bypass of read-only mode
+
+TLS follows the connection string's `ssl-mode` (also `ssl_mode`, `sslmode`,
+`ssl`), with MySQL's own meanings, so a server running with
+require_secure_transport=ON (or TiDB Cloud, which always requires TLS) is
+reachable. No parameter keeps the old behaviour: no TLS.
 """
 
+import ssl
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 try:
     import aiomysql
@@ -34,6 +40,42 @@ POOL_MIN_SIZE = 1
 POOL_MAX_SIZE = 5
 
 
+_SSL_KEYS = ("ssl-mode", "ssl_mode", "sslmode", "ssl")
+_SSL_OFF = {"disabled", "disable", "false", "0", "off", "no"}
+_SSL_ENCRYPT_ONLY = {"required", "require", "preferred", "prefer", "true", "1", "on", "yes"}
+_SSL_VERIFY_CA = {"verify_ca", "verify-ca"}
+_SSL_VERIFY_IDENTITY = {"verify_identity", "verify-identity", "verify-full", "verify_full"}
+
+
+def _ssl_context(query: str) -> ssl.SSLContext | None:
+    """TLS context for the `ssl-mode` in a MySQL URL query string.
+
+    REQUIRED encrypts without checking the certificate, as the mysql client
+    does; VERIFY_CA checks the chain against the system CAs; VERIFY_IDENTITY
+    also checks the host name. Absent or DISABLED means no TLS.
+    """
+    params = {k.lower(): v for k, v in parse_qsl(query, keep_blank_values=True)}
+    mode = next((params[k] for k in _SSL_KEYS if k in params), None)
+    if mode is None:
+        return None
+    mode = mode.strip().lower()
+    if mode in _SSL_OFF:
+        return None
+    ctx = ssl.create_default_context()
+    if mode in _SSL_VERIFY_IDENTITY:
+        return ctx
+    if mode in _SSL_VERIFY_CA:
+        ctx.check_hostname = False
+        return ctx
+    if mode in _SSL_ENCRYPT_ONLY:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    raise ValueError(
+        f"Unsupported ssl-mode {mode!r}: use DISABLED, REQUIRED, VERIFY_CA or VERIFY_IDENTITY"
+    )
+
+
 def _reject_multi_statement(sql: str) -> None:
     """Reject queries containing multiple SQL statements."""
     stripped = sql.rstrip().rstrip(";").rstrip()
@@ -56,13 +98,16 @@ class MySQLConnector(DatabaseConnector):
         self._pool = await aiomysql.create_pool(
             host=parsed.hostname or "localhost",
             port=parsed.port or 3306,
-            user=parsed.username or "root",
-            password=parsed.password or "",
-            db=parsed.path.lstrip("/") if parsed.path else "",
+            # urlparse leaves percent-escapes in place; a URL-encoded password
+            # (the only way to put @ : / in one) must reach the server decoded.
+            user=unquote(parsed.username) if parsed.username else "root",
+            password=unquote(parsed.password) if parsed.password else "",
+            db=unquote(parsed.path.lstrip("/")) if parsed.path else "",
             connect_timeout=10,
             autocommit=True,
             minsize=POOL_MIN_SIZE,
             maxsize=POOL_MAX_SIZE,
+            ssl=_ssl_context(parsed.query),
         )
 
     async def query(self, sql: str, params: list[Any] | None = None) -> list[dict[str, Any]]:

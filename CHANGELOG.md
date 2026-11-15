@@ -51,6 +51,10 @@ ahead of the first release.
   organization's posts. Blocked from publication until it has run end to end.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
+- Each `server.json` names the connector's Docker Hub image,
+  `docker.io/magureai/mcp-<name>:<version>`, as an `oci` package, so a
+  registry entry can be installed. The publish workflow builds and pushes
+  exactly that tag.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
   on a message, in the signed-in user's mailbox or an allowed shared mailbox,
   and `get_email` returns a message's `categories`.
@@ -78,20 +82,56 @@ ahead of the first release.
 
 ### Changed
 
+- `cloudflare_r2`, `outlook_email` and `surveymonkey` send the User-Agent
+  `Mozilla/5.0 (compatible; magoneai-<server name>/<version>; +<repository URL>)`
+  on their outbound
+  requests, in place of three different hand-written strings, so the version
+  in it follows the connector's.
 - The default outbound budget (`MCP_MAX_RESULT_CHARS`) is 1,000,000
   characters instead of 100,000. Real results reach about 220,000 characters,
   and a tool with a declared output schema returns an oversized result as an
   error.
+- `web_search`: pages are fetched with the User-Agent
+  `Mozilla/5.0 (compatible; magoneai-web-search/<version>; +<repository URL>)`
+  instead of a desktop
+  Chrome string, on both the direct fetch and Crawl4AI. `scrape_url` with
+  `return_full=true` checks the site's robots.txt first, per RFC 9309, and
+  refuses a page it disallows; a single-page fetch does not.
 - `outlook_email`: `reply_email` takes an optional `mailbox`, so a reply to a
   message in an allowed shared mailbox is sent from that mailbox, with or
   without attachments. Existing properties are unchanged.
+- `twitter_intel` is blocked from publication and carries no `server.json`. It
+  calls twitterapi.io, an unofficial third-party provider not affiliated with
+  X Corp, rather than the official X API. It still runs from a checkout, and
+  whoever runs it is responsible for the terms of X and of twitterapi.io.
 
 ### Fixed
 
+- `magone-mcp-core`: when `MCP_CREDENTIALS_PATH` supplies values, the file now
+  wins over request headers. A header can no longer override a key the file
+  sets, and once the file holds a secret it can no longer supply a host, port,
+  URL, endpoint, connection string or allowlist, so a caller who sent only a
+  host header could no longer make the server present the file's password
+  there. Header-only deployments are unchanged. This reverses the previous
+  rule that a header overrides the file.
 - `atlassian_jira`: `addJiraIssueAttachment`'s description points callers at
   `attachments` again instead of inviting model-written base64.
+- `atlassian_jira`: an attachment that arrives as an unresolved file reference
+  is refused with a message that tells a direct caller to send the file's
+  bytes inline, instead of naming only the platform that resolves references.
 - `outlook_email`: an empty `mailbox` on `get_email`, `list_attachments`,
   `read_attachment` and `download_attachment` means the signed-in user's own
   mailbox, as an omitted one does, instead of being refused as invalid.
+- `otp_verification`: codes come from the operating system's CSPRNG instead of
+  SQL `RANDOM()`, are stored only as a salted hash, and are compared in
+  constant time. Asking again while a code is live now issues a replacement
+  (the old one stops working) instead of returning the stored one, and the raw
+  identifier is no longer written to the log on lockout. Rows written before
+  this change hold plaintext codes, never match, and expire on their own.
+- `outlook_email`: `attachment_urls` on `send_email`, `create_draft` and
+  `reply_email` now use the framework's SSRF check instead of a private copy
+  that missed carrier-grade NAT, IPv6 site-local and IPv4-in-IPv6 forms, and
+  the address actually connected to is checked as well as the name. Redirects
+  are validated again at each hop. Added `magone_mcp_core.net.reject_blocked_peer`.
 
 [Unreleased]: https://github.com/magurelabs/magoneai-mcp/commits/main

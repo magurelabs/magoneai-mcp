@@ -10,7 +10,7 @@ import ipaddress
 import pytest
 
 from magone_mcp_core import SSRFBlocked, is_blocked_address, validate_url
-from magone_mcp_core.net import InvalidURL, encoded_addresses
+from magone_mcp_core.net import InvalidURL, encoded_addresses, reject_blocked_peer
 
 BLOCKED = [
     ("169.254.169.254", "cloud instance metadata"),
@@ -165,3 +165,32 @@ class TestOnlyTheWellKnownNat64PrefixIsExempt:
     def test_local_use_addresses_wrapping_internal_targets_stay_blocked(self):
         for address in ("64:ff9b:1::a00:1", "64:ff9b:1::7f00:1", "64:ff9b:1::a9fe:a9fe"):
             assert is_blocked_address(ipaddress.ip_address(address)) is True, address
+
+
+class _Response:
+    def __init__(self, stream):
+        self.extensions = {} if stream is None else {"network_stream": stream}
+
+
+class _Stream:
+    def __init__(self, server_addr):
+        self.server_addr = server_addr
+
+    def get_extra_info(self, name):
+        return self.server_addr if name == "server_addr" else None
+
+
+class TestRejectBlockedPeer:
+    """The address connected to is judged, because the name is resolved twice."""
+
+    @pytest.mark.parametrize("ip", ["169.254.169.254", "100.100.100.200", "::ffff:127.0.0.1"])
+    def test_an_internal_peer_is_refused(self, ip):
+        with pytest.raises(SSRFBlocked):
+            reject_blocked_peer(_Response(_Stream((ip, 80))))
+
+    def test_a_public_peer_is_allowed(self):
+        reject_blocked_peer(_Response(_Stream(("93.184.216.34", 80))))
+
+    @pytest.mark.parametrize("stream", [None, _Stream(None), _Stream(("not-an-ip", 80))])
+    def test_no_usable_peer_is_not_an_error(self, stream):
+        reject_blocked_peer(_Response(stream))
