@@ -665,6 +665,53 @@ def build_message_body(fields: Dict[str, Any]) -> Tuple[Optional[str], Optional[
 
     return None, message_body
 
+_BODY_OPEN_RE = re.compile(r"<body[^>]*>", re.IGNORECASE)
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n[ \t]*\n")
+# Graph-built HTML has no default font, and Outlook desktop then falls back to
+# Times New Roman. Match Outlook's own compose default instead.
+_REPLY_FONT_STYLE = (
+    "font-family:Aptos,Calibri,Arial,Helvetica,sans-serif;font-size:11pt;color:#000000"
+)
+
+
+def text_to_html(text: str) -> str:
+    """Plain text to HTML: blank lines become paragraphs, single newlines <br>."""
+    normalised = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    paragraphs = [p for p in _PARAGRAPH_SPLIT_RE.split(normalised) if p.strip()]
+    return "".join(
+        '<p style="margin:0 0 12pt 0">' + _html_module.escape(p).replace("\n", "<br>") + "</p>"
+        for p in paragraphs
+    )
+
+
+def reply_body(new_body: str, is_html: bool, quoted: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """The reply's full body: the new text above the thread createReply quoted."""
+    piece = new_body if is_html else text_to_html(new_body)
+    piece = f'<div style="{_REPLY_FONT_STYLE}">{piece}</div><br>'
+    quoted = quoted or {}
+    content = quoted.get("content") or ""
+    if content and str(quoted.get("contentType", "")).lower() != "html":
+        content = f'<div style="{_REPLY_FONT_STYLE}">{text_to_html(content)}</div>'
+    match = _BODY_OPEN_RE.search(content)
+    if match:
+        content = content[: match.end()] + piece + content[match.end() :]
+    else:
+        content = piece + content
+    return {"contentType": "HTML", "content": content}
+
+
+def _union_recipients(existing: Any, extra: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep createReply(All)'s recipients and add the extra ones, no duplicates."""
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for r in list(existing or []) + list(extra or []):
+        address = str(((r or {}).get("emailAddress") or {}).get("address") or "").lower()
+        if address and address not in seen:
+            seen.add(address)
+            merged.append(r)
+    return merged
+
+
 async def reply_via_draft(
     graph: Any,
     credentials: Dict[str, str],
@@ -674,8 +721,22 @@ async def reply_via_draft(
     inline_attachments: List[Dict[str, Any]],
     large_attachments: List[Dict[str, Any]],
     mailbox: Optional[str] = None,
-) -> Optional[str]:
-    """Create a reply draft, attach, send. Returns the sent message id.
+    body: Optional[str] = None,
+    is_html: bool = False,
+    send: bool = True,
+) -> Dict[str, Optional[str]]:
+    """Create a reply draft, fill it, attach, and send it unless `send` is False.
+
+    Returns {"id", "web_link"}: the reply's immutable id (the sent message when
+    sent, the draft otherwise) and its Outlook web link.
+
+    Every reply takes this path. The one-call `/reply` takes the new text as a
+    plain-text `comment`, and Outlook drops its line breaks when it lands in an
+    HTML thread, so a five-paragraph reply arrived as one block. Here `body`
+    goes into the draft as HTML, above the quoted thread createReply already
+    put there, so paragraphs survive and the thread stays. cc/bcc in
+    `message_patch` are added to the ones createReply(All) set rather than
+    replacing them; anything else in it (to, subject, importance) overrides.
 
     Attachments are POSTed to the draft one at a time rather than PATCHed onto
     it: Graph does not accept an `attachments` collection on a message PATCH,
@@ -719,8 +780,14 @@ async def reply_via_draft(
         if not draft_id:
             raise ValueError("createReply returned no draft id")
 
-        if message_patch:
-            await _request("PATCH", f"{base_path}/messages/{draft_id}", json_data=message_patch)
+        patch: Dict[str, Any] = dict(message_patch or {})
+        for key in ("ccRecipients", "bccRecipients"):
+            if key in patch:
+                patch[key] = _union_recipients(created.get(key), patch[key])
+        if body is not None:
+            patch["body"] = reply_body(body, is_html, created.get("body"))
+        if patch:
+            await _request("PATCH", f"{base_path}/messages/{draft_id}", json_data=patch)
 
         for att in inline_attachments:
             await _request("POST", f"{base_path}/messages/{draft_id}/attachments", json_data=att)
@@ -737,8 +804,9 @@ async def reply_via_draft(
                 base_path=base_path,
             )
 
-        await _post_send(lambda: _request("POST", f"{base_path}/messages/{draft_id}/send"))
-        return draft_id
+        if send:
+            await _post_send(lambda: _request("POST", f"{base_path}/messages/{draft_id}/send"))
+        return {"id": draft_id, "web_link": created.get("webLink")}
     except SendUnconfirmed:
         raise
     except (ValueError, httpx.HTTPError):
@@ -1520,7 +1588,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
 # Evidence: POST /me/messages
 @server.tool(
     name='create_draft',
-    description="Create a draft email (saved, not sent). Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `is_html` (true for HTML body), `importance` (low/normal/high), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. Returns the draft_id for use with send_draft.",
+    description="Create a draft email (saved, not sent). Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `is_html` (true for HTML body), `importance` (low/normal/high), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. To draft a REPLY inside an existing thread, also pass `reply_to_id` (the message id being answered, from list_emails or search_emails) and optionally `reply_all`; the draft then carries the quoted thread like a reply typed in Outlook. Returns the draft_id for use with send_draft, and `web_link` to open it in Outlook.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -1584,7 +1652,14 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                                                    'without an attachment and say so - do '
                                                    'not improvise one, and do not retype '
                                                    'data from the conversation into a '
-                                                   'file.'}},
+                                                   'file.'},
+                    'reply_to_id': {'type': 'string',
+                                    'description': 'Message id to reply to; makes this a '
+                                                   'reply draft in that thread'},
+                    'reply_all': {'type': 'boolean',
+                                  'description': 'With reply_to_id: reply to all '
+                                                 'recipients',
+                                  'default': False}},
      'required': ['to', 'subject', 'body']})
 async def create_draft(credentials: Dict[str, str],
     to: str,
@@ -1596,8 +1671,10 @@ async def create_draft(credentials: Dict[str, str],
     attachment_urls: Optional[List[str]] = None,
     attachment_filename: Optional[str] = None,
     attachments: Optional[List[Dict[str, Any]]] = None,
+    reply_to_id: str = "",
+    reply_all: bool = False,
 ) -> Dict[str, Any]:
-    """Create a draft email."""
+    """Create a draft email, or a reply draft in a thread when reply_to_id is set."""
     try:
         if len(subject) > MAX_SUBJECT_LEN:
             return {"success": False, "error": f"Subject exceeds {MAX_SUBJECT_LEN} characters"}
@@ -1634,6 +1711,39 @@ async def create_draft(credentials: Dict[str, str],
         ) = await gather_attachments(attachment_urls, attachment_filename, attachments)
         if attachment_error:
             return {"success": False, "error": attachment_error}
+
+        if reply_to_id:
+            err = validate_id(reply_to_id, "reply_to_id")
+            if err:
+                return {"success": False, "error": err}
+            # createReply builds the draft with the quoted thread; the fields
+            # the caller gave then override its defaults.
+            patch = {k: v for k, v in message.items() if k != "body"}
+            reply = await reply_via_draft(
+                _GRAPH_SCOPE_OWNER,
+                credentials,
+                reply_to_id,
+                reply_all,
+                patch,
+                inline_attachments,
+                large_attachments,
+                body=body,
+                is_html=is_html,
+                send=False,
+            )
+            reply_result: Dict[str, Any] = {
+                "success": True,
+                "draft_id": reply["id"],
+                "web_link": reply["web_link"],
+                "subject": subject,
+                "message": "Reply draft created",
+            }
+            if attachments_info:
+                reply_result["attachments"] = attachments_info
+                reply_result["message"] = (
+                    f"Reply draft created with {len(attachments_info)} attachment(s)"
+                )
+            return reply_result
 
         if inline_attachments:
             message["attachments"] = inline_attachments
@@ -1680,6 +1790,7 @@ async def create_draft(credentials: Dict[str, str],
         draft_result: Dict[str, Any] = {
             "success": True,
             "draft_id": draft_id,
+            "web_link": result.get("webLink"),
             "subject": subject,
             "message": "Draft created",
         }
@@ -3554,8 +3665,7 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
                                                        'type': 'array'},
                                        'email_id': {'description': 'ID of the email replied to', 'type': 'string'},
                                        'message': {'type': 'string'},
-                                       'message_id': {'description': 'Immutable id of the sent reply (attachment path '
-                                                                     'only)',
+                                       'message_id': {'description': 'Immutable id of the sent reply',
                                                       'type': 'string'},
                                        'reply_all': {'type': 'boolean'},
                                        'success': {'type': 'boolean'}},
@@ -3591,8 +3701,6 @@ async def reply_email(credentials: Dict[str, str],
             if err:
                 return {"success": False, "error": err}
 
-        action = "replyAll" if reply_all else "reply"
-
         message: Dict[str, Any] = {}
         if cc:
             err, cc_recipients = parse_recipients(cc, "cc")
@@ -3605,64 +3713,42 @@ async def reply_email(credentials: Dict[str, str],
                 return {"success": False, "error": err}
             message["bccRecipients"] = bcc_recipients
 
-        # With attachments the immediate /reply action cannot be used: it
-        # has nowhere to carry a file. Build the reply as a draft, attach,
-        # then send. Without attachments the original one-call path stays,
-        # so the common case keeps its single round trip.
+        inline: List[Dict[str, Any]] = []
+        large: List[Dict[str, Any]] = []
+        info: List[Dict[str, Any]] = []
         if attachments or attachment_urls:
             inline, large, info, err = await gather_attachments(
                 attachment_urls, attachment_filename, attachments
             )
             if err:
                 return {"success": False, "error": err}
-            patch: Dict[str, Any] = dict(message)
-            patch["body"] = {
-                "contentType": "HTML" if is_html else "Text",
-                "content": body,
-            }
-            sent_id = await reply_via_draft(
-                _GRAPH_SCOPE_OWNER,
-                credentials,
-                email_id,
-                reply_all,
-                patch,
-                inline,
-                large,
-                mailbox=mailbox,
-            )
-            return {
-                "success": True,
-                "email_id": email_id,
-                "reply_all": reply_all,
-                "message": f"Reply sent with {len(info)} attachment(s)",
-                "message_id": sent_id,
-                "attachments": info,
-            }
 
-        # Use comment for plain text, message.body for HTML — not both.
-        # Extra cc/bcc go on the message object regardless.
-        if is_html:
-            message["body"] = {"contentType": "HTML", "content": body}
-            json_data: Dict[str, Any] = {"message": message}
-        else:
-            json_data = {"comment": body}
-            if message:
-                json_data["message"] = message
-
-        request, base = resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox)
-        await request(
+        # Always the draft flow (see reply_via_draft): the body goes in as HTML
+        # above the quoted thread, so its paragraphs reach the recipient, and
+        # the sent reply has an id to return.
+        reply = await reply_via_draft(
+            _GRAPH_SCOPE_OWNER,
             credentials,
-            "POST",
-            f"{base}/messages/{email_id}/{action}",
-            json_data=json_data,
+            email_id,
+            reply_all,
+            message,
+            inline,
+            large,
+            mailbox=mailbox,
+            body=body,
+            is_html=is_html,
         )
-
-        return {
+        result: Dict[str, Any] = {
             "success": True,
             "email_id": email_id,
             "reply_all": reply_all,
             "message": "Reply sent",
+            "message_id": reply["id"],
         }
+        if info:
+            result["message"] = f"Reply sent with {len(info)} attachment(s)"
+            result["attachments"] = info
+        return result
     except Exception as e:
         logger.exception("reply_email_error", error=str(e))
         return graph_failure("Failed to reply to email", e)

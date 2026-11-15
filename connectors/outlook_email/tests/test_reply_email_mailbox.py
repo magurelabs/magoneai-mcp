@@ -62,34 +62,44 @@ async def test_the_new_parameter_is_optional():
     assert schema["required"] == ["email_id", "body"]
 
 
+def flow(graph, base: str = "/v1.0/me", action: str = "createReply"):
+    return [(r.method, r.url.path) for r in graph] == [
+        ("POST", f"{base}/messages/m-1/{action}"),
+        ("PATCH", f"{base}/messages/draft-1"),
+        ("POST", f"{base}/messages/draft-1/send"),
+    ]
+
+
 async def test_a_plain_reply_without_mailbox_stays_on_me(monkeypatch):
-    graph = install(monkeypatch, lambda r: httpx.Response(202))
+    graph = install(monkeypatch, draft_flow())
 
     result = await reply({})
 
     assert result.is_error is False, result.content[0].text
-    assert [r.url.path for r in graph] == ["/v1.0/me/messages/m-1/reply"]
-    assert graph[0].headers["authorization"] == "Bearer user-token"
+    assert flow(graph)
+    assert all(r.headers["authorization"] == "Bearer user-token" for r in graph)
 
 
 async def test_an_empty_mailbox_is_the_same_as_none(monkeypatch):
-    graph = install(monkeypatch, lambda r: httpx.Response(202))
+    graph = install(monkeypatch, draft_flow())
 
     result = await reply({"mailbox": ""})
 
     assert result.is_error is False, result.content[0].text
-    assert [r.url.path for r in graph] == ["/v1.0/me/messages/m-1/reply"]
+    assert flow(graph)
 
 
 async def test_a_plain_reply_from_a_shared_mailbox_goes_app_only(monkeypatch):
-    graph = install(monkeypatch, lambda r: httpx.Response(202))
+    graph = install(monkeypatch, draft_flow())
 
     result = await reply({"mailbox": "shared@example.com", "reply_all": True})
 
     assert result.is_error is False, result.content[0].text
-    assert [r.url.path for r in graph] == [f"{SHARED}/messages/m-1/replyAll"]
-    assert graph[0].headers["authorization"] == "Bearer app-token"
-    assert body_of(graph[0]) == {"comment": "hi"}
+    assert flow(graph, SHARED, "createReplyAll")
+    assert all(r.headers["authorization"] == "Bearer app-token" for r in graph)
+    patched = body_of(graph[1])["body"]
+    assert patched["contentType"] == "HTML"
+    assert ">hi</p>" in patched["content"]
 
 
 async def test_an_attachment_reply_from_a_shared_mailbox_runs_entirely_there(monkeypatch):
