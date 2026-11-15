@@ -1287,7 +1287,7 @@
         "type": "string"
       },
       "message_id": {
-        "description": "Immutable id of the sent reply (attachment path only)",
+        "description": "Immutable id of the sent reply",
         "type": "string"
       },
       "reply_all": {
