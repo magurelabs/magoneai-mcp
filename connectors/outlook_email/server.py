@@ -93,7 +93,7 @@ from .tools._constants import CREDENTIAL_HEADERS, MAX_BODY_SIZE
 from .tools._constants import CREDENTIAL_HEADERS, INLINE_ATTACHMENT_LIMIT, MAX_ATTACHMENTS, VALID_IMPORTANCE_LIST
 from datetime import datetime, timedelta, timezone
 from datetime import timezone as _dt_timezone
-from ._shared.microsoft_graph import GraphAuthError, GraphNotFoundError, graph_failure
+from ._shared.microsoft_graph import GraphAuthError, GraphNotFoundError, auth_reason, graph_failure
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE
 import time
 
@@ -1111,7 +1111,7 @@ async def _get_access_token(credentials: Dict[str, str]) -> str:
                 error_data = response.json()
             except Exception:
                 error_data = {}
-            error_desc = error_data.get("error_description", response.text[:500])
+            error_desc = auth_reason(error_data.get("error_description"))
             raise GraphAuthError(f"Token refresh failed ({response.status_code}): {error_desc}")
 
         token_data = response.json()
@@ -1164,7 +1164,10 @@ async def _graph_request(credentials: Dict[str, str],
         if response.status_code == 401:
             raise GraphAuthError("Authentication failed. Please re-authenticate.")
         elif response.status_code == 403:
-            raise ValueError("Access denied. Check permissions.")
+            raise GraphAuthError(
+                "Access denied. The connected account lacks the permission or "
+                "consent this operation needs (e.g. Mail.Read or Mail.Send)."
+            )
         elif response.status_code == 404:
             raise GraphNotFoundError("Resource not found.")
         elif response.status_code == 429:
@@ -1266,11 +1269,11 @@ async def _get_app_only_token(credentials: Dict[str, str]) -> str:
     tenant_id = credentials.get("microsoft_tenant_id")
 
     if not client_id or not client_secret:
-        raise ValueError(
+        raise GraphAuthError(
             "Missing app-only credentials. Pass client_id and client_secret via headers."
         )
     if not tenant_id:
-        raise ValueError("Missing tenant_id. App-only OAuth requires an explicit tenant id.")
+        raise GraphAuthError("Missing tenant_id. App-only OAuth requires an explicit tenant id.")
 
     cache_key = (tenant_id, client_id)
     now = time.monotonic()
@@ -1303,10 +1306,8 @@ async def _get_app_only_token(credentials: Dict[str, str]) -> str:
                     error_data = response.json()
                 except Exception:
                     error_data = {}
-                error_desc = error_data.get(
-                    "error_description", response.text[:500] or "Token acquisition failed"
-                )
-                raise ValueError(
+                error_desc = auth_reason(error_data.get("error_description"))
+                raise GraphAuthError(
                     f"App-only token acquisition failed ({response.status_code}): {error_desc}"
                 )
 
@@ -1394,12 +1395,13 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            detail = error_data.get("error", {}).get("message", response.text[:500])
+            error_obj = error_data.get("error") if isinstance(error_data, dict) else None
+            detail = auth_reason(error_obj.get("message") if isinstance(error_obj, dict) else None)
             if response.status_code == 401:
-                raise ValueError(
+                raise GraphAuthError(
                     f"Authentication failed. Check app credentials and admin consent. ({detail})"
                 )
-            raise ValueError(
+            raise GraphAuthError(
                 "Access denied. Verify the app has the required admin-consented "
                 "application permission for this resource (e.g. Mail.Read for mailbox "
                 "access, or a Sites.Selected per-site grant for SharePoint). "

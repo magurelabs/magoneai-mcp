@@ -32,6 +32,24 @@ class GraphAuthError(ValueError):
     surface its message so the caller can tell "not connected" from a failure."""
 
 
+_AUTH_REASON_MAX_CHARS = 200
+
+
+def auth_reason(reason: Any) -> str:
+    """The identity provider's own explanation, bounded for a tool result.
+
+    A GraphAuthError message reaches the caller, so only a structured reason
+    (an OAuth `error_description`, a Graph `error.message`) goes into it, cut
+    to its first line and _AUTH_REASON_MAX_CHARS. A raw response body never
+    does: without a structured reason this returns "no reason given"."""
+    if not isinstance(reason, str) or not reason.strip():
+        return "no reason given"
+    line = " ".join(reason.strip().splitlines()[0].split())
+    if len(line) > _AUTH_REASON_MAX_CHARS:
+        line = line[: _AUTH_REASON_MAX_CHARS - 3].rstrip() + "..."
+    return line
+
+
 def graph_failure(action: str, exc: Exception) -> Dict[str, Any]:
     """Error result for a tool whose Graph call raised.
 
