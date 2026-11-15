@@ -32,6 +32,20 @@ class GraphAuthError(ValueError):
     surface its message so the caller can tell "not connected" from a failure."""
 
 
+class SendUnconfirmed(ValueError):
+    """A /send call failed in transit (a timeout or a dropped connection).
+
+    Graph may have sent the message anyway, and the draft id is then the id of
+    the sent message, so the caller must keep the draft rather than delete it,
+    and the person is told to check Sent Items before sending again."""
+
+
+SEND_UNCONFIRMED = (
+    "Outlook did not confirm the send in time; it may have gone out. "
+    "Check Sent Items before sending it again."
+)
+
+
 _AUTH_REASON_MAX_CHARS = 200
 
 
@@ -55,9 +69,10 @@ def graph_failure(action: str, exc: Exception) -> Dict[str, Any]:
 
     A credential problem keeps its message, in the "<action>: <reason>" shape the
     calendar connector uses, so the caller sees the mailbox is not connected
-    instead of an opaque failure it would retry. Anything else stays a bare
-    `action`, so Graph internals do not leak."""
-    if isinstance(exc, GraphAuthError):
+    instead of an opaque failure it would retry. A send that may have gone out
+    (SendUnconfirmed) keeps its message too, so nobody resends blindly.
+    Anything else stays a bare `action`, so Graph internals do not leak."""
+    if isinstance(exc, (GraphAuthError, SendUnconfirmed)):
         return {"success": False, "error": f"{action}: {exc}"}
     return {"success": False, "error": action}
 

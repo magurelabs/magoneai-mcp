@@ -57,7 +57,7 @@ from .tools._constants import MAX_TOTAL_ATTACHMENT_SIZE
 import base64
 import os
 import re
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 import io
 import zipfile
 from typing import List
@@ -93,7 +93,14 @@ from .tools._constants import CREDENTIAL_HEADERS, MAX_BODY_SIZE
 from .tools._constants import CREDENTIAL_HEADERS, INLINE_ATTACHMENT_LIMIT, MAX_ATTACHMENTS, VALID_IMPORTANCE_LIST
 from datetime import datetime, timedelta, timezone
 from datetime import timezone as _dt_timezone
-from ._shared.microsoft_graph import GraphAuthError, GraphNotFoundError, auth_reason, graph_failure
+from ._shared.microsoft_graph import (
+    SEND_UNCONFIRMED,
+    GraphAuthError,
+    GraphNotFoundError,
+    SendUnconfirmed,
+    auth_reason,
+    graph_failure,
+)
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE
 import time
 
@@ -627,7 +634,8 @@ async def reply_via_draft(
     of failure this whole function exists to fix.
 
     Any failure deletes the half-built draft, so a failed reply never leaves an
-    orphan sitting in the user's Drafts folder.
+    orphan sitting in the user's Drafts folder; except a send that failed in
+    transit, which may have gone out (SendUnconfirmed): that draft is kept.
 
     Pass `mailbox` (an address) to run the whole sequence, including the
     large-attachment upload and the cleanup, against a shared mailbox via
@@ -679,8 +687,10 @@ async def reply_via_draft(
                 base_path=base_path,
             )
 
-        await _request("POST", f"{base_path}/messages/{draft_id}/send")
+        await _post_send(lambda: _request("POST", f"{base_path}/messages/{draft_id}/send"))
         return draft_id
+    except SendUnconfirmed:
+        raise
     except (ValueError, httpx.HTTPError):
         if draft_id:
             await _cleanup_draft(
@@ -806,8 +816,10 @@ async def send_via_draft(
     attachments into it, then send it. Returns the immutable message id.
 
     On any failure the partially-built draft is deleted before re-raising, so
-    no orphan draft is left behind. Sending a draft always lands it in Sent
-    Items, so this path is only used when save_to_sent is True.
+    no orphan draft is left behind, except when the send itself failed in
+    transit (SendUnconfirmed): the message may have gone out, and deleting the
+    draft would then delete the sent copy. Sending a draft always lands it in
+    Sent Items, so this path is only used when save_to_sent is True.
     """
     # Fetch the token once and reuse it across create + upload(s) + send
     # instead of refreshing on each call.
@@ -832,17 +844,31 @@ async def send_via_draft(
                 large["content_type"],
                 access_token=access_token,
             )
-        await graph._graph_request(
-            credentials,
-            "POST",
-            f"/me/messages/{draft_id}/send",
-            access_token=access_token,
+        await _post_send(
+            lambda: graph._graph_request(
+                credentials,
+                "POST",
+                f"/me/messages/{draft_id}/send",
+                access_token=access_token,
+            )
         )
         return draft_id
+    except SendUnconfirmed:
+        raise
     except (ValueError, httpx.HTTPError):
         if draft_id:
             await _cleanup_draft(graph, credentials, draft_id)
         raise
+
+
+async def _post_send(send: Callable[[], Awaitable[Any]]) -> None:
+    """Run a draft's /send. A timeout or dropped connection leaves the outcome
+    unknown (Graph may have sent it), so it is raised as SendUnconfirmed: the
+    caller must not delete the draft, whose id may now be the sent message."""
+    try:
+        await send()
+    except httpx.TransportError as exc:
+        raise SendUnconfirmed(SEND_UNCONFIRMED) from exc
 
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
 
@@ -3749,10 +3775,12 @@ async def send_draft(credentials: Dict[str, str],
         if err:
             return {"success": False, "error": err}
 
-        await _graph_request(
-            credentials,
-            "POST",
-            f"/me/messages/{draft_id}/send",
+        await _post_send(
+            lambda: _graph_request(
+                credentials,
+                "POST",
+                f"/me/messages/{draft_id}/send",
+            )
         )
 
         return {
