@@ -22,6 +22,7 @@ it would have to be repeated for every range added later.
 import ipaddress
 import socket
 from collections.abc import Iterable
+from typing import Any
 from urllib.parse import urlparse
 
 _BaseAddress = ipaddress._BaseAddress  # noqa: SLF001 - the public name is private
@@ -204,3 +205,30 @@ def validate_url(url: str, *, allowed_schemes: Iterable[str] = ALLOWED_SCHEMES) 
         if is_blocked_address(address):
             raise SSRFBlocked(f"{hostname} resolves to an internal address ({address})")
     return url.strip()
+
+
+def reject_blocked_peer(response: Any) -> None:
+    """Refuse a response whose connection went to an internal address.
+
+    `validate_url` resolves the name once and the HTTP client resolves it again
+    when it connects, so a hostname that answers public to the first lookup and
+    internal to the second passes the first and is connected to anyway. This
+    reads the address the socket actually reached (the ``network_stream``
+    extension httpx exposes) and judges that one. Call it as soon as the
+    response headers arrive, before reading the body or following a redirect.
+
+    A transport with no real socket (a test double) exposes no peer, and there
+    is nothing to judge then.
+    """
+    stream = response.extensions.get("network_stream")
+    if stream is None:
+        return
+    server_addr = stream.get_extra_info("server_addr")
+    if not server_addr:
+        return
+    try:
+        ip = ipaddress.ip_address(server_addr[0])
+    except (ValueError, IndexError):
+        return
+    if is_blocked_address(ip):
+        raise SSRFBlocked(f"connected to an internal address ({ip})")

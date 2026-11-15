@@ -31,9 +31,8 @@ one place it could never notice.
 
 import ast
 import sys
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CONNECTORS = REPO_ROOT / "connectors"

@@ -39,8 +39,11 @@ server = ConnectorServer(
 
 from typing import Any
 import asyncpg
+import hashlib
+import hmac
 import json
 import re
+import secrets
 import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -159,6 +162,39 @@ async def execute_command(
 
 TABLE_NAME_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_.]{0,62}$")
 
+# The `code` column holds `sha256$<salt>$<hex digest>`, never the code itself, so
+# a copy of the table does not hand out live codes. The column is TEXT, so this
+# needs no migration. A row written before this format (plaintext digits) does
+# not parse as one, never matches, and expires within `expiry_minutes`.
+_HASH_PREFIX = "sha256"
+
+
+def _new_code(length: int) -> str:
+    """A uniformly random numeric code from the OS CSPRNG, zero-padded."""
+    return str(secrets.randbelow(10**length)).zfill(length)
+
+
+def _digest(salt: str, code: str) -> str:
+    return hashlib.sha256(f"{salt}:{code}".encode()).hexdigest()
+
+
+def _hash_code(code: str) -> str:
+    salt = secrets.token_hex(16)
+    return f"{_HASH_PREFIX}${salt}${_digest(salt, code)}"
+
+
+def _code_matches(stored: str, code: str) -> bool:
+    """Constant-time check of `code` against a stored `_hash_code` value."""
+    parts = (stored or "").split("$")
+    if len(parts) != 3 or parts[0] != _HASH_PREFIX:
+        return False
+    return hmac.compare_digest(_digest(parts[1], code), parts[2])
+
+
+def _identifier_ref(identifier: str) -> str:
+    """A short stable fingerprint for logs, so a raw email or phone is not written."""
+    return hashlib.sha256(identifier.encode()).hexdigest()[:12]
+
 
 
 # credential_headers: ['X-Db-Connection-String']
@@ -252,7 +288,7 @@ async def check_verification_status(credentials: Dict[str, str],
 # stays False.
 @server.tool(
     name='generate_otp',
-    description="Generate a verification OTP code for an identifier (email, phone). If a valid code already exists, returns it without generating a new one. Max 3 codes per identifier per 2 hours.",
+    description="Generate a verification OTP code for an identifier (email, phone). If a valid code already exists it is replaced by a new one (the old one stops working). Max 3 codes per identifier per 2 hours.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=True,
@@ -320,7 +356,7 @@ async def generate_otp(credentials: Dict[str, str],
         # 1. Check for existing valid pending OTP for this identifier
         existing = await execute_one(
             conn,
-            f"SELECT id, code, expires_at "
+            f"SELECT id, expires_at "
             f"FROM {table_name} "
             f"WHERE identifier = $1 "
             f"AND purpose = $2 AND status = 'pending' "
@@ -330,20 +366,9 @@ async def generate_otp(credentials: Dict[str, str],
             purpose,
         )
 
-        if existing:
-            logger.info(
-                "otp_already_exists",
-                identifier_type=identifier_type,
-                purpose=purpose,
-            )
-            return {
-                "success": True,
-                "code": existing["code"],
-                "expires_in_minutes": expiry_minutes,
-                "is_resend": True,
-                "message": "A valid code already exists. Check your email.",
-            }
-
+        # A stored code is a hash and cannot be sent again, so a request that
+        # finds a live code mints a replacement below and expires the old one.
+        # It counts toward the same limit as any other code.
         # 2. Count OTPs generated in the block window
         count_row = await execute_one(
             conn,
@@ -373,20 +398,21 @@ async def generate_otp(credentials: Dict[str, str],
             purpose,
         )
 
-        # 4. Generate new OTP
-        otp_len = DEFAULT_OTP_LENGTH
+        # 4. Generate new OTP. The plaintext is returned to the caller once and
+        # only its salted hash is stored.
+        code = _new_code(DEFAULT_OTP_LENGTH)
         row = await execute_one(
             conn,
             f"INSERT INTO {table_name} "
             f"(session_id, identifier, identifier_type, code, purpose, "
             f"expires_at, metadata) "
-            f"VALUES ($1, $2, $3, "
-            f"LPAD(FLOOR(RANDOM() * {10**otp_len})::TEXT, {otp_len}, '0'), "
-            f"$4, NOW() + INTERVAL '{expiry_minutes} minutes', $5) "
-            f"RETURNING code",
+            f"VALUES ($1, $2, $3, $4, $5, "
+            f"NOW() + INTERVAL '{expiry_minutes} minutes', $6) "
+            f"RETURNING id",
             identifier,
             identifier,
             identifier_type,
+            _hash_code(code),
             purpose,
             json.dumps(meta_dict),
         )
@@ -402,9 +428,9 @@ async def generate_otp(credentials: Dict[str, str],
         )
         return {
             "success": True,
-            "code": row["code"],
+            "code": code,
             "expires_in_minutes": expiry_minutes,
-            "is_resend": False,
+            "is_resend": bool(existing),
             "attempts_remaining": DEFAULT_MAX_RESENDS - total_generated - 1,
         }
     except Exception as e:
@@ -502,7 +528,7 @@ async def verify_otp(credentials: Dict[str, str],
                 "error": "No pending verification found. Code may have expired.",
             }
 
-        if otp_row["code"] == code:
+        if _code_matches(otp_row["code"], code):
             await conn.execute(
                 f"UPDATE {table_name} "
                 f"SET status = 'verified', verified_at = NOW() "
@@ -530,7 +556,7 @@ async def verify_otp(credentials: Dict[str, str],
                     otp_row["id"],
                     new_attempts,
                 )
-                logger.warning("otp_locked", identifier=identifier)
+                logger.warning("otp_locked", identifier_ref=_identifier_ref(identifier))
                 return {
                     "success": False,
                     "verified": False,

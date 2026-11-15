@@ -1,5 +1,11 @@
 """The twitter-intel connector.
 
+**Unofficial provider.** This connector calls twitterapi.io, an unofficial
+third-party service, not the official X API. Neither this connector nor that
+provider is affiliated with or endorsed by X Corp. If you run it, you are
+responsible for complying with the terms of X and of twitterapi.io. It is
+blocked from publication in `connectors/publication.json`.
+
 Ported from the v1 mixin form by a codemod.
 
 4 tools, 4 of them proposed read-only. Every input schema

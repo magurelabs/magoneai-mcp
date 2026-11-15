@@ -62,11 +62,10 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement, the maintainers
 listed in [MAINTAINERS.md](MAINTAINERS.md). A report goes to all of them, never
 to one person alone, and a maintainer the report concerns takes no part in
-handling it. Report privately through GitHub: use the
-repository's private reporting channel described in [SECURITY.md](SECURITY.md)
-and say that the report concerns conduct rather than a vulnerability, or, if
-you cannot use it, open an issue asking a maintainer to contact you privately,
-without including any details of the incident. GitHub's own
+handling it. Report privately through either channel described in
+[SECURITY.md](SECURITY.md), the repository's private reporting channel or
+[security@magureinc.com](mailto:security@magureinc.com), and say that the
+report concerns conduct rather than a vulnerability. GitHub's own
 [reporting tools](https://docs.github.com/en/communities/maintaining-your-safety-on-github/reporting-abuse-or-spam)
 are also available for content on GitHub.
 

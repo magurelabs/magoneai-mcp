@@ -18,12 +18,13 @@ upgrade. Versioning is described in [RELEASING.md](RELEASING.md).
 Use [GitHub's private vulnerability reporting](https://github.com/magurelabs/magoneai-mcp/security/advisories/new)
 on this repository (the **Security** tab, then **Report a vulnerability**). It
 creates a private thread with the maintainers and gives you a draft advisory
-you can review before anything is published. It is the only channel we
-monitor for security reports.
+you can review before anything is published.
 
-If you cannot use it, open an issue that says only that you have a security
-report and need a private channel, with no technical detail, and a maintainer
-will reach out to you.
+If you cannot use it, email [security@magureinc.com](mailto:security@magureinc.com).
+That address reaches every maintainer in [MAINTAINERS.md](MAINTAINERS.md), and
+the same response times below apply to it.
+
+These are the only two channels we monitor for security reports.
 
 Include whatever you have. A rough reproduction is more useful than a polished
 report that arrives a week later.
