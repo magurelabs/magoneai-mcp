@@ -54,7 +54,9 @@ CACHE_MAX = int(os.getenv("WEB_RESEARCH_CACHE_MAX", "256"))
 
 # Hosts whose pages need a login or are mostly script shells, so a plain fetch
 # returns a sign-in wall. Their search snippets are still returned.
-_LOGIN_WALLED = (
+# WEB_RESEARCH_LOGIN_WALLED_HOSTS (comma-separated) replaces this list, so an
+# operator can correct it without a release; set it to "-" to read every host.
+_DEFAULT_LOGIN_WALLED = (
     "facebook.com",
     "instagram.com",
     "x.com",
@@ -64,6 +66,18 @@ _LOGIN_WALLED = (
     "pinterest.com",
     "threads.net",
 )
+
+
+def _login_walled_hosts(value: str | None) -> tuple[str, ...]:
+    if value is None or not value.strip():
+        return _DEFAULT_LOGIN_WALLED
+    if value.strip() == "-":
+        return ()
+    hosts = (h.strip().lower().removeprefix("www.") for h in value.split(","))
+    return tuple(h for h in hosts if h)
+
+
+_LOGIN_WALLED = _login_walled_hosts(os.getenv("WEB_RESEARCH_LOGIN_WALLED_HOSTS"))
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 _STOP = frozenset(

@@ -1280,12 +1280,36 @@ async def web_research(credentials: dict[str, str],
             time_range=time_range,
         )
 
-    return await _research.research(
+    result = await _research.research(
         list(queries or []),
         search=search,
         fetch=_fetch_page_content,
         normalize=_normalize_url,
         max_pages=max_pages,
+    )
+    _log_research_outcome(result)
+    return result
+
+
+def _log_research_outcome(result: dict[str, Any]) -> None:
+    """One structured event per web_research call, counting why pages went unread.
+
+    Under load the deadline drops pages rather than slowing the answer, so the
+    decline shows as lost sources, not latency. Counting the reasons (deadline,
+    timeout, blocked_url, http_403, ...) lets a log-based metric show it.
+    """
+    unread = result.get("unread_pages") or []
+    reasons: dict[str, int] = {}
+    for page in unread:
+        # "error:<ExceptionName>" collapses to "error" so the label set stays small.
+        reason = str(page.get("reason") or "skipped").split(":", 1)[0]
+        reasons[reason] = reasons.get(reason, 0) + 1
+    logger.info(
+        "web_research.pages",
+        sources=len(result.get("sources") or []),
+        unread=len(unread),
+        unread_reasons=reasons,
+        total_ms=(result.get("timing_ms") or {}).get("total"),
     )
 
 
