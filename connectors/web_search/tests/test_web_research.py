@@ -4,10 +4,11 @@ Search and fetch are injected fakes, so no network or key is needed.
 """
 
 import asyncio
+import importlib
 import time
+from urllib.parse import urlparse
 
 import pytest
-import importlib
 
 from connectors.web_search import _research
 from connectors.web_search._research import (
@@ -72,7 +73,7 @@ def test_pick_pages_skips_login_walls_and_caps_per_domain():
     urls = [p["url"] for p in picked]
     assert "https://www.facebook.com/post/1" not in urls
     assert not any("youtube" in u for u in urls)
-    assert sum(u.startswith("https://a.org") for u in urls) == 2
+    assert sum(urlparse(u).hostname == "a.org" for u in urls) == 2
     assert "https://b.org/1" in urls
 
 
@@ -422,7 +423,7 @@ def test_web_research_logs_why_pages_went_unread(monkeypatch):
         return {"results": [_hit("https://a.org/1"), _hit("https://b.org/2")]}
 
     async def fake_fetch(url, max_chars):
-        if "b.org" in url:
+        if urlparse(url).hostname == "b.org":
             raise ScrapeError(TIMEOUT, "slow")
         return "a text about topic", "html"
 
