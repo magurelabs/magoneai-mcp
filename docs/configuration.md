@@ -54,6 +54,7 @@ Not environment variables, but configuration a caller sends per request.
 | `Authorization: Bearer ...` | An access token, when the server has a token verifier. |
 | `X-MCP-Enabled-Tools` | Comma-separated tool names this connection may use. Wins over groups. A caller-supplied hint: it restricts anything only when a trusted host or gateway sets it (see [architecture.md](architecture.md#per-connection-tool-selection)). |
 | `X-MCP-Enabled-Groups` | Comma-separated permission groups this connection may use. Same caveat; and most connectors have only the `default` group. |
+| `X-Execution-Id` | `playwright` only: the caller's run id. Each run gets its own browser session and its artifacts are scoped to it. In `platform`/`hosted` mode a browser call with neither this header nor a verified identity is refused. |
 | a tool's credential headers | For example `X-Linear-Api-Key`. Each tool declares the ones it may receive; [TOOLS.md](TOOLS.md) shows how many each tool takes and `credential_headers=` in `connectors/<name>/server.py` names them. |
 
 ## Connectors
@@ -163,6 +164,26 @@ The connector also declares a 75 MiB request-body cap (the framework default is
 | Variable | Default | Meaning |
 |---|---|---|
 | `MAX_ATTACHMENT_DOWNLOAD_SIZE_MB` | `25` | Largest attachment downloaded, in megabytes. |
+
+### `playwright`
+
+Relays an operator-run Playwright MCP server (see
+[`connectors/playwright/README.md`](../connectors/playwright/README.md)) and
+returns the browser's files in the tool result. Needs a **single replica** (or
+routing that keeps an `X-Execution-Id` on one replica).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PLAYWRIGHT_UPSTREAM_URL` | `http://playwright:8931/mcp` | The upstream Playwright MCP server. |
+| `PLAYWRIGHT_SESSION_IDLE_MINUTES` | `15` | End a browser session idle this long. |
+| `PLAYWRIGHT_MAX_SESSIONS` | `64` | Sessions kept at once; the least recently used idle one is ended first. |
+| `PLAYWRIGHT_MAX_SESSIONS_PER_CALLER` | a quarter of `PLAYWRIGHT_MAX_SESSIONS` | Most sessions one caller may hold. |
+| `PLAYWRIGHT_CALL_TIMEOUT_SECONDS` | `100` | Per relayed call. |
+| `PLAYWRIGHT_MANIFEST_REFRESH_MINUTES` | `10` | How often the upstream tool list is re-read. |
+| `PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS` | `false` | Expose the code-running tools (`browser_evaluate`, `browser_run_code`). |
+| `ARTIFACTS_ROOT` | `/artifacts` | Mount point of the volume shared with the browser. |
+| `ARTIFACTS_MAX_BYTES` | `26214400` (25 MB) | Largest file `publish_artifact` returns. |
+| `ARTIFACTS_DELETE_AFTER_PUBLISH` | `true` | Remove a returned file from the volume. |
 
 ### `twitter_intel`
 

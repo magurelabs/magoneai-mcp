@@ -37,16 +37,16 @@ concurrency:
 jobs:
   # Which connectors can this change possibly have broken?
   #
-  # Conformance is 26 jobs, one per connector, and it was the single most
+  # Conformance is 27 jobs, one per connector, and it was the single most
   # expensive thing in this CI. Every one of them ran on every pull request,
   # including a pull request that touched one connector's docstring.
   #
   # The rule is deliberately conservative: a change to anything outside
-  # `connectors/` runs all 26, because shared code is shared. Only a diff
+  # `connectors/` runs all 27, because shared code is shared. Only a diff
   # confined to `connectors/<name>/` narrows the matrix, and only to the
-  # connectors it actually touched. Anything unrecognised falls back to all 26.
+  # connectors it actually touched. Anything unrecognised falls back to all 27.
   #
-  # Push to `main` always runs all 26, so a cross-connector break that a
+  # Push to `main` always runs all 27, so a cross-connector break that a
   # narrowed pull request could not have seen is still caught before publish.
   scope:
     name: Scope
@@ -70,18 +70,18 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          ALL="atlassian_confluence atlassian_jira cloudflare_r2 csv_to_sql database docusign filesystem google_calendar google_drive google_gmail image_generation kapso_whatsapp linear linkedin microsoft_sharepoint microsoft_teams onedrive otp_verification outlook_calendar outlook_email surveymonkey trino twitter_intel vanna web_search zoom"
+          ALL="atlassian_confluence atlassian_jira cloudflare_r2 csv_to_sql database docusign filesystem google_calendar google_drive google_gmail image_generation kapso_whatsapp linear linkedin microsoft_sharepoint microsoft_teams onedrive otp_verification outlook_calendar outlook_email playwright surveymonkey trino twitter_intel vanna web_search zoom"
           to_json() { printf '%s' "$1" | tr ' ' '\n' | grep -v '^$' | sed 's/.*/"&"/' | paste -sd, - | sed 's/^/[/;s/$/]/'; }
 
           pick="$ALL"
-          reason="all 26 (not a pull request)"
+          reason="all 27 (not a pull request)"
 
           if [ "$EVENT" = "pull_request" ]; then
             changed="$(git diff --name-only "$BASE" "$HEAD")"
             if [ -z "$changed" ]; then
-              reason="all 26 (empty diff)"
+              reason="all 27 (empty diff)"
             elif printf '%s\n' "$changed" | grep -qv '^connectors/'; then
-              reason="all 26 (shared code changed)"
+              reason="all 27 (shared code changed)"
             else
               names="$(printf '%s\n' "$changed" | sed -n 's|^connectors/\([^/][^/]*\)/.*|\1|p' | sort -u)"
               keep=""
@@ -92,7 +92,7 @@ jobs:
                 pick="${keep# }"
                 reason="only the connectors this pull request touches"
               else
-                reason="all 26 (no known connector matched the diff)"
+                reason="all 27 (no known connector matched the diff)"
               fi
             fi
           fi
@@ -305,7 +305,7 @@ jobs:
         #
         # The list comes from the `scope` job above rather than being written
         # out here. On push, and on any pull request that touches shared code,
-        # that is all 26. The canonical list lives in `scope`; this must not be
+        # that is all 27. The canonical list lives in `scope`; this must not be
         # duplicated here, or the two will disagree the first time a connector
         # is added.
         connector: ${{ fromJSON(needs.scope.outputs.connectors) }}
@@ -319,10 +319,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      # Every per-connector extra, because the matrix now covers all 26 and
+      # Every per-connector extra, because the matrix now covers all 27 and
       # eight of them need a third-party library. Installing only [dev] would
       # fail those at start-up for a reason this job is not about.
-      - run: pip install -e ".[dev,cloudflare_r2,csv_to_sql,database,otp_verification,outlook_email,trino,vanna,web_search]"
+      - run: pip install -e ".[dev,cloudflare_r2,csv_to_sql,database,otp_verification,outlook_email,playwright,trino,vanna,web_search]"
       - name: Start the connector
         env:
           CONNECTOR: ${{ matrix.connector }}

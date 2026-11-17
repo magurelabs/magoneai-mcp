@@ -58,6 +58,14 @@ ahead of the first release.
   arrive per call as `X-Microsoft-*` headers; its own Graph scopes are
   `Files.ReadWrite`, `User.Read` and `offline_access`, and no other connector's
   scopes change. Blocked from publication until it has run end to end.
+- `playwright` connector: relays the browser tools of an operator-run Microsoft
+  Playwright MCP server (one browser session per caller run, idle and per-caller
+  limits, a reviewed allowlist with a checked-in schema snapshot), plus three
+  own tools — `publish_artifact`, `list_artifacts`, `publish_test_report` — that
+  return the browser's screenshots, recordings, traces and HTML/PDF/CSV test
+  reports in the tool result as embedded resources, scoped to the run that
+  produced them. Needs a single replica. Blocked from publication until it has
+  run end to end against the browser container.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - Each `server.json` names the connector's Docker Hub image,
