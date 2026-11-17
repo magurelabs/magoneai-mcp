@@ -31,13 +31,11 @@ import structlog
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import principal_components
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.server.mcpserver.tools.base import Tool as SDKTool
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
-from pydantic import Field, ValidationError
+from pydantic import ValidationError
 
 import magone_mcp_core.server as core_server
-from magone_mcp_core import ConnectorServer, assert_enabled, budget_call_result
-from magone_mcp_core.readonly import assert_callable
+from magone_mcp_core import ConnectorServer
 
 from .allowlist import ALLOWED_NAMES, schema_matches_snapshot
 from .artifact_scope import ArtifactScope
@@ -120,19 +118,6 @@ def request_session_key(context: Any) -> SessionKey:
     return session_key(identity, execution_id)
 
 
-def _placeholder() -> None:
-    """Never called: a RelayedTool answers in ``run``."""
-
-
-class RelayedTool(SDKTool):
-    """An upstream tool in the SDK's tool table, answered by the gateway."""
-
-    gateway: Any = Field(default=None, exclude=True)
-
-    async def run(self, arguments: dict, context: Any, convert_result: bool = False) -> Any:
-        return await self.gateway.relay(self, arguments, context)
-
-
 def _annotations(raw: Any) -> ToolAnnotations | None:
     if not isinstance(raw, dict):
         return None
@@ -171,7 +156,7 @@ class Gateway:
             clock,
             max_per_caller=options.get("max_per_caller"),
         )
-        self.local_names = frozenset(server.mcp._tool_manager._tools)
+        self.local_names = server.tool_names()
         self.upstream: dict[str, dict] = {}
         # Per caller session, the real artifact paths that showed up in that
         # session's own relayed results. The local tools scope to this set.
@@ -200,32 +185,24 @@ class Gateway:
         return True
 
     def _forget(self, name: str) -> None:
-        self.server.mcp._tool_manager._tools.pop(name, None)
-        self.server._annotations.pop(name, None)
-        self.server._permission_groups.pop(name, None)
-        self.server._required_scopes.pop(name, None)
+        self.server.unregister_relayed_tool(name)
 
     def _register(self, name: str, tool: dict) -> None:
-        annotations = _annotations(tool.get("annotations"))
-        relayed = RelayedTool.from_function(
-            _placeholder,
-            name=name,
-            description=described(name, tool.get("description")),
-            title=tool.get("title") if isinstance(tool.get("title"), str) else None,
-            annotations=annotations,
-            structured_output=False,
-        )
         schema = tool.get("inputSchema")
-        relayed.parameters = schema if isinstance(schema, dict) else {"type": "object"}
-        relayed.meta = {
-            "io.magone/permission_group": BROWSER_GROUP,
-            "io.magone/required_scopes": [],
-        }
-        relayed.gateway = self
-        self.server.mcp._tool_manager._tools[name] = relayed
-        self.server._annotations[name] = annotations
-        self.server._permission_groups[name] = BROWSER_GROUP
-        self.server._required_scopes[name] = []
+
+        async def handler(arguments: dict, context: Any, _name: str = name) -> Any:
+            return await self._relay(_name, arguments, context)
+
+        self.server.register_relayed_tool(
+            name,
+            description=described(name, tool.get("description")),
+            input_schema=schema if isinstance(schema, dict) else {"type": "object"},
+            annotations=_annotations(tool.get("annotations")),
+            permission_group=BROWSER_GROUP,
+            required_scopes=[],
+            handler=handler,
+            title=tool.get("title") if isinstance(tool.get("title"), str) else None,
+        )
 
     def apply_manifest(self, tools: list) -> bool:
         """Register the upstream tools; True when the exposed set changed."""
@@ -276,12 +253,10 @@ class Gateway:
                 "The Playwright browser service is not available right now. Try again shortly."
             )
 
-    async def relay(self, tool: RelayedTool, arguments: dict, context: Any) -> CallToolResult:
-        """The upstream's result for one call, after the framework's own checks."""
-        headers = core_server._request_headers(context)
-        if self.server._read_only():
-            assert_callable(tool.name, tool.annotations, {"MCP_READ_ONLY": "1"})
-        assert_enabled(tool.name, headers, self.server._permission_groups)
+    async def _relay(self, name: str, arguments: dict, context: Any) -> CallToolResult:
+        """The upstream's result for one call. Read-only, selection and the budget
+        are applied by ``ConnectorServer._run_relayed`` around this; here is the
+        browser-specific part: run identity, the session and recording artifacts."""
         identity, execution_id = request_run(context)
         if not identity and not execution_id and self.server.mode != "local":
             # In platform or hosted mode several callers reach one connector, so
@@ -297,12 +272,12 @@ class Gateway:
                 "its open logins."
             )
         self._ensure_sweeper()
-        logger.info("tool_relayed", tool=tool.name, argument_keys=sorted(arguments))
+        logger.info("tool_relayed", tool=name, argument_keys=sorted(arguments))
         key = session_key(identity, execution_id)
         try:
-            result = await self.pool.call_tool(key, tool.name, arguments)
+            result = await self.pool.call_tool(key, name, arguments)
         except UpstreamError as exc:
-            logger.warning("upstream_call_failed", tool=tool.name, reason=str(exc)[:200])
+            logger.warning("upstream_call_failed", tool=name, reason=str(exc)[:200])
             return _error(str(exc))
         if not isinstance(result.get("content"), list):
             return _error("The browser service returned no content.")
@@ -311,7 +286,7 @@ class Gateway:
         except ValidationError:
             return _error("The browser service returned a result this server cannot read.")
         self._record_artifacts(key, shaped)
-        return budget_call_result(shaped, self.server.budget)
+        return shaped
 
     def _record_artifacts(self, key: SessionKey, result: CallToolResult) -> None:
         """Remember the files this relayed result names, so only this session may fetch them."""
@@ -369,20 +344,15 @@ def install(
     transport: httpx.AsyncBaseTransport | None = None,
     options: dict | None = None,
 ) -> Gateway:
-    """Attach a gateway to ``server``: lazy manifest, call checks, shutdown."""
+    """Attach a gateway to ``server``: lazy manifest, call checks, shutdown.
+
+    Uses the framework's public relayed-tool seams (``before_list_tools``,
+    ``before_call_tool`` and ``register_relayed_tool``), so a relayed call gets
+    the same read-only, selection and budget guarantees as a local tool and the
+    connector reaches into no SDK or framework internals of its own.
+    """
     gateway = Gateway(server, options or settings(), transport)
-    list_tools = server.mcp.list_tools
-    call_tool = server.mcp.call_tool
-
-    async def list_with_upstream() -> list:
-        await gateway.refresh()
-        return await list_tools()
-
-    async def call_with_upstream(name: str, arguments: dict, context: Any = None) -> Any:
-        await gateway.before_call(name)
-        return await call_tool(name, arguments, context)
-
-    server.mcp.list_tools = list_with_upstream  # type: ignore[method-assign]
-    server.mcp.call_tool = call_with_upstream  # type: ignore[method-assign]
+    server.before_list_tools(gateway.refresh)
+    server.before_call_tool(gateway.before_call)
     server.on_shutdown(gateway.close)
     return gateway
