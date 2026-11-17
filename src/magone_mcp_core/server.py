@@ -139,6 +139,11 @@ class ConnectorServer:
         self._permission_groups: dict[str, str] = {}
         self._required_scopes: dict[str, list[str]] = {}
         self._shutdown_hooks: list[Callable[[], Any]] = []
+        # Hooks for a connector that relays another MCP server (see relay.py).
+        # Installed lazily, so a connector that registers none is untouched.
+        self._list_hooks: list[Callable[[], Any]] = []
+        self._call_hooks: list[Callable[[str], Any]] = []
+        self._dynamic_hooks_installed = False
 
         self._token_verifier = token_verifier
         # The SDK refuses a token verifier without auth settings, so the seam
@@ -557,6 +562,123 @@ class ConnectorServer:
 
             setattr(guarded, _OUTPUT_ATTR, output_schema)
         return guarded
+
+    # -- relayed tools -----------------------------------------------------
+
+    def register_relayed_tool(
+        self,
+        name: str,
+        *,
+        description: str,
+        input_schema: dict,
+        annotations: ToolAnnotations | None,
+        permission_group: str,
+        handler: Callable[[dict, Any], Any],
+        required_scopes: tuple | list = (),
+        title: str | None = None,
+    ) -> Any:
+        """Register a tool whose body is supplied at runtime — a relay to an upstream
+        MCP server — with the guarantees a local tool gets.
+
+        ``handler(arguments, ctx)`` runs the relay and returns the upstream's
+        ``CallToolResult`` (or a dict shaped like one); the server applies
+        read-only mode, per-connection selection and the outbound budget around
+        it (``_run_relayed``). Register and unregister as the upstream's tool
+        list changes; ``before_list_tools``/``before_call_tool`` are the seams
+        for refreshing that list and for intercepting a call to a name not yet
+        registered. The connector never has to reach into the SDK tool table or
+        this class's bookkeeping, which it would otherwise do unreviewed.
+        """
+        from .relay import RelayedTool, _placeholder
+
+        tool = RelayedTool.from_function(
+            _placeholder,
+            name=name,
+            description=description,
+            title=title,
+            annotations=annotations,
+            structured_output=False,
+        )
+        tool.parameters = input_schema if isinstance(input_schema, dict) else {"type": "object"}
+        tool.meta = {
+            "io.magone/permission_group": permission_group,
+            "io.magone/required_scopes": list(required_scopes),
+        }
+        tool.server = self
+        tool.handler = handler
+        self.mcp._tool_manager._tools[name] = tool
+        self._annotations[name] = annotations
+        self._permission_groups[name] = permission_group
+        self._required_scopes[name] = list(required_scopes)
+        return tool
+
+    def unregister_relayed_tool(self, name: str) -> None:
+        """Remove a tool registered by ``register_relayed_tool``."""
+        self.mcp._tool_manager._tools.pop(name, None)
+        self._annotations.pop(name, None)
+        self._permission_groups.pop(name, None)
+        self._required_scopes.pop(name, None)
+
+    def tool_names(self) -> frozenset[str]:
+        """Every tool name currently registered (local and relayed)."""
+        return frozenset(self.mcp._tool_manager._tools)
+
+    async def _run_relayed(self, tool: Any, arguments: dict, context: Any) -> Any:
+        """Apply the framework's guarantees around a relayed tool's handler."""
+        from mcp.types import CallToolResult
+
+        from .redact import argument_keys
+
+        headers = _request_headers(context)
+        # The same checks `_apply_guarantees` makes for a local tool, so a
+        # relayed call is held to read-only mode and the connection's selection.
+        if self._read_only():
+            assert_callable(tool.name, tool.annotations, {"MCP_READ_ONLY": "1"})
+        assert_enabled(tool.name, headers, self._permission_groups)
+        self.logger.info(
+            "relayed_tool_call", tool=tool.name, argument_keys=list(argument_keys(arguments))
+        )
+        result = await tool.handler(arguments, context)
+        if isinstance(result, dict):
+            result = CallToolResult.model_validate(result)
+        return budget_call_result(result, self.budget)
+
+    def before_list_tools(self, fn: Callable[[], Any]) -> Callable[[], Any]:
+        """Run ``fn`` before each ``tools/list`` (e.g. to refresh an upstream manifest)."""
+        self._ensure_dynamic_hooks()
+        self._list_hooks.append(fn)
+        return fn
+
+    def before_call_tool(self, fn: Callable[[str], Any]) -> Callable[[str], Any]:
+        """Run ``fn(name)`` before each ``tools/call`` (e.g. to load or refuse a relayed name)."""
+        self._ensure_dynamic_hooks()
+        self._call_hooks.append(fn)
+        return fn
+
+    def _ensure_dynamic_hooks(self) -> None:
+        """Wrap ``list_tools``/``call_tool`` to run the registered hooks, once.
+
+        Installed only when a connector registers its first hook, so a connector
+        that relays nothing keeps the SDK's own dispatch untouched.
+        """
+        if self._dynamic_hooks_installed:
+            return
+        self._dynamic_hooks_installed = True
+        list_tools = self.mcp.list_tools
+        call_tool = self.mcp.call_tool
+
+        async def list_with_hooks() -> Any:
+            for hook in self._list_hooks:
+                await hook()
+            return await list_tools()
+
+        async def call_with_hooks(name: str, arguments: dict, context: Any = None) -> Any:
+            for hook in self._call_hooks:
+                await hook(name)
+            return await call_tool(name, arguments, context)
+
+        self.mcp.list_tools = list_with_hooks  # type: ignore[method-assign]
+        self.mcp.call_tool = call_with_hooks  # type: ignore[method-assign]
 
     def annotations_for(self, name: str) -> ToolAnnotations | None:
         return self._annotations.get(name)
