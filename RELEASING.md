@@ -51,6 +51,12 @@ version continues from its earlier one (see [History](README.md#history)), so
 2.0.0 is not a first release; the core has no earlier version. The first
 registry entry for each connector says 2.0.0, and no 1.x was ever published.
 
+A connector with **no earlier version** — one written here rather than ported —
+has nothing to continue, so it starts at **0.1.0** and follows the same
+`0.y.z` rule as the core: a breaking change bumps the minor, everything else
+the patch, until it is declared stable at 1.0.0. `playwright` is the first of
+these.
+
 ## Tags
 
 - `vX.Y.Z` tags a `magone-mcp-core` release.
