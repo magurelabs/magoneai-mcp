@@ -148,6 +148,16 @@ Fallbacks for the per-call credentials of the same name:
 | `LINKEDIN_API_BASE` | `https://api.linkedin.com` | API base URL; override for testing or a proxy. |
 | `LINKEDIN_TOKEN_URL` | `https://www.linkedin.com/oauth/v2/accessToken` | OAuth token endpoint; override for testing or a proxy. |
 
+### `onedrive`
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ONEDRIVE_MAX_UPLOAD_MB` | `250` | Largest single file accepted for upload, in megabytes (floor 1 MB). Checked before any bytes are decoded or sent. |
+
+The connector also declares a 75 MiB request-body cap (the framework default is
+10 MiB), so an inline upload above about 55 MB of file bytes needs
+`MCP_MAX_BODY_BYTES` (above) raised as well.
+
 ### `outlook_email`
 
 | Variable | Default | Meaning |
