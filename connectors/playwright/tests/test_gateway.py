@@ -17,7 +17,7 @@ import pytest
 from mcp import Client
 
 from .conftest import module
-from .fakes import IMAGE
+from .fakes import IMAGE, SNAPSHOT
 
 LOCAL = {"publish_artifact", "list_artifacts", "publish_test_report"}
 RELAYED = {"browser_navigate", "browser_take_screenshot", "browser_close"}
@@ -100,8 +100,10 @@ async def test_listing_merges_upstream_and_local_and_hides_unsafe(upstream):
     tools = {t["name"]: t for t in listed}
     assert set(tools) == LOCAL | RELAYED
     navigate = tools["browser_navigate"]
-    assert navigate["inputSchema"] == {"type": "object", "properties": {"url": {"type": "string"}}}
+    # The real captured schema and annotations are relayed, not hand-written ones.
+    assert navigate["inputSchema"] == SNAPSHOT["browser_navigate"]["inputSchema"]
     assert navigate["annotations"]["readOnlyHint"] is False
+    assert navigate["annotations"]["openWorldHint"] is True
     assert navigate["_meta"]["io.magone/permission_group"] == "browser"
     assert tools["list_artifacts"]["_meta"]["io.magone/permission_group"] == "artifacts"
 
@@ -119,14 +121,15 @@ async def test_a_tool_not_on_the_allowlist_is_never_relayed(upstream):
 def test_the_allowlist_withholds_a_tool_whose_schema_drifted():
     from connectors.playwright.allowlist import schema_matches_snapshot
 
-    reviewed = {
-        "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}},
-        "annotations": {"readOnlyHint": False, "destructiveHint": True},
-    }
-    assert schema_matches_snapshot("browser_navigate", reviewed)
-    drifted = {**reviewed, "inputSchema": {"type": "object", "properties": {"href": {}}}}
-    assert not schema_matches_snapshot("browser_navigate", drifted)
-    assert not schema_matches_snapshot("browser_file_upload", {"inputSchema": {"type": "object"}})
+    # The captured shape matches; a changed schema or changed annotations do not.
+    real = SNAPSHOT["browser_navigate"]
+    assert schema_matches_snapshot("browser_navigate", real)
+    drifted_schema = {**real, "inputSchema": {"type": "object", "properties": {"href": {}}}}
+    assert not schema_matches_snapshot("browser_navigate", drifted_schema)
+    drifted_ann = {**real, "annotations": {**real["annotations"], "openWorldHint": False}}
+    assert not schema_matches_snapshot("browser_navigate", drifted_ann)
+    # An excluded tool is never matched, even sent with its real shape.
+    assert not schema_matches_snapshot("browser_file_upload", SNAPSHOT["browser_file_upload"])
 
 
 async def test_relayed_result_is_returned_as_the_upstream_sent_it(upstream):
@@ -327,7 +330,8 @@ async def test_live_run_guidance_is_added_to_the_relayed_descriptions(upstream):
     async with Client(module.server.mcp) as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}
     shot = tools["browser_take_screenshot"].description
-    assert shot.startswith("Screenshot") and "no arguments" in shot
-    assert tools["browser_navigate"].description == "Go to a URL"
-    assert "after a page is open" in described("browser_video_chapter", "Add a chapter.")
-    assert "no arguments" in described("browser_snapshot", None)
+    # The upstream's own description, with the connector's guidance appended.
+    assert shot.startswith("Take a screenshot") and "no arguments" in shot
+    assert tools["browser_navigate"].description == "Navigate to a URL"
+    # A tool with no guidance keeps the upstream description unchanged.
+    assert described("browser_snapshot", "Capture a snapshot.") == "Capture a snapshot."

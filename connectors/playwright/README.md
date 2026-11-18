@@ -21,21 +21,26 @@ The connector is a relay. You run the browser yourself, as the official
 services:
   playwright:
     # Pin an exact released tag, never `latest`: a new upstream release can add,
-    # rename or change the relayed browser tools under a running deployment, and
-    # the allowlist (below) only relays tools whose schema is checked in. Bump the
-    # tag and re-approve the snapshot together.
+    # rename or change the relayed browser tools under a running deployment. The
+    # allowlist in `allowlist.py` is a snapshot captured from THIS tag (via
+    # `capture_snapshot.py`) and only relays tools whose schema still matches it;
+    # bump the tag and regenerate the snapshot together (`UPSTREAM_IMAGE` there).
     image: mcr.microsoft.com/playwright/mcp:v0.0.42
     working_dir: /artifacts          # files the agent names land on the volume too
     command: >
-      --isolated --host 0.0.0.0 --port 8931
+      --isolated --host 0.0.0.0 --port 8931 --caps pdf,tracing
+      --save-video=800x600
       --allowed-hosts playwright:8931
       --output-dir /artifacts
       --blocked-origins "http://169.254.169.254;http://metadata.google.internal;http://localhost;http://127.0.0.1;http://mcp-playwright:8000"
     volumes: [playwright-output:/artifacts]
     networks: [playwright-network]   # no published port
-    # `--caps devtools` (and other extra --caps) turn on more upstream tools.
-    # They are relayed only if they are added to the allowlist in gateway.py and
-    # their schemas approved, so adding a cap alone does not expose anything.
+    # 0.0.42's capabilities are `vision`, `pdf`, `testing` and `tracing`. The
+    # allowlist's snapshot was captured with `--caps pdf,tracing` (for
+    # browser_pdf_save and browser_start_tracing/browser_stop_tracing). A tool a
+    # cap adds is relayed only if it is in that snapshot, so adding a cap without
+    # regenerating the snapshot exposes nothing. Recording is the `--save-video`
+    # launch option, not a tool; the .webm lands in the output dir.
 
   mcp-playwright:
     build:
@@ -74,18 +79,18 @@ networks: { playwright-network: {} }
 
 Relaying is an **allowlist**, not "everything except a few". Only the browser
 tools named in [`allowlist.py`](allowlist.py) are relayed (`browser_navigate`,
-`browser_click`, `browser_take_screenshot`, `browser_start_video`, ...), each
-with its own schema and annotations, in permission group `browser`, so
-`MCP_READ_ONLY`, `X-MCP-Enabled-Tools`/`-Groups` and the outbound text budget
-apply to them as to any tool. `allowlist.py` is also a checked-in snapshot of
-each tool's reviewed input schema and annotations: a tool whose upstream schema
-has drifted from the snapshot (an upstream upgrade changed it) is withheld and
-logged rather than relayed unreviewed, so bumping the pinned image and
-re-approving the snapshot go together. A relayed result comes back as the
-upstream sent it: screenshots stay image content. Guidance learned from live
-runs is added to the descriptions: call `browser_snapshot` and
-`browser_take_screenshot` with no arguments (`boxes`, `depth` or `target`
-stalled the page), and add a `browser_video_chapter` only after a page is open.
+`browser_click`, `browser_take_screenshot`, `browser_start_tracing`, ... — 21 of
+the 24 the pinned image lists), each with its own schema and annotations, in
+permission group `browser`, so `MCP_READ_ONLY`,
+`X-MCP-Enabled-Tools`/`-Groups` and the outbound text budget apply to them as to
+any tool. The allowlist is built from [`upstream_snapshot.json`](upstream_snapshot.json),
+a capture of the pinned image's own `tools/list` (regenerate with
+[`capture_snapshot.py`](capture_snapshot.py)): a tool whose upstream schema or
+annotations have drifted from that snapshot is withheld and logged rather than
+relayed unreviewed, so bumping the pinned image and regenerating the snapshot go
+together. A relayed result comes back as the upstream sent it: screenshots stay
+image content, and `browser_take_screenshot`'s description gains a note to call
+it with no arguments for a full-page shot.
 
 Deliberately **not** on the allowlist: `browser_file_upload` (puts a file from
 the browser container's disk into a page), `browser_install` (installs browser

@@ -14,28 +14,24 @@ from pathlib import Path
 
 import httpx
 
+# The fake serves the real captured shapes (from the same upstream_snapshot.json
+# the allowlist is built from), so the tests exercise the schemas and annotations
+# the pinned image actually sends, not hand-written stand-ins.
+SNAPSHOT = {
+    t["name"]: t
+    for t in json.loads((Path(__file__).parents[1] / "upstream_snapshot.json").read_text())
+}
+
 TOOLS = [
-    {
-        "name": "browser_navigate",
-        "description": "Go to a URL",
-        "inputSchema": {"type": "object", "properties": {"url": {"type": "string"}}},
-        "annotations": {"readOnlyHint": False, "destructiveHint": True},
-    },
-    {
-        "name": "browser_take_screenshot",
-        "description": "Screenshot",
-        "inputSchema": {"type": "object", "properties": {}},
-        "annotations": {"readOnlyHint": True, "destructiveHint": False},
-    },
-    {"name": "browser_close", "description": "Close", "inputSchema": {"type": "object"}},
-    # On the upstream but NOT on the connector's allowlist, so never relayed:
+    SNAPSHOT["browser_navigate"],
+    SNAPSHOT["browser_take_screenshot"],
+    SNAPSHOT["browser_close"],
+    # Listed by the image but NOT on the allowlist, so never relayed:
     # browser_file_upload reads the container's disk into a page.
-    {
-        "name": "browser_file_upload",
-        "description": "Upload a file",
-        "inputSchema": {"type": "object", "properties": {"paths": {"type": "array"}}},
-    },
-    {"name": "browser_evaluate", "description": "Run JS", "inputSchema": {"type": "object"}},
+    SNAPSHOT["browser_file_upload"],
+    # browser_evaluate runs arbitrary code: hidden unless PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS.
+    SNAPSHOT["browser_evaluate"],
+    # Not in 0.0.42; kept to exercise the unsafe-tool refusal for a run-code name.
     {
         "name": "browser_run_code_unsafe",
         "description": "Run code",

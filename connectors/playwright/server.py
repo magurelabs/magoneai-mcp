@@ -4,11 +4,12 @@ Browser automation through Microsoft's official Playwright MCP server, which
 the operator runs next to this connector, plus three tools of its own that
 hand the browser's files back to the caller.
 
-3 tools, 1 of them proposed read-only. Those are the local tools below; every
-tool the upstream lists (``browser_navigate``, ``browser_click``,
-``browser_take_screenshot``, ``browser_start_video``, ...) is relayed as well,
-in permission group ``browser``, with its own schema and annotations. See
-``gateway.py``. ``browser_evaluate``, ``browser_run_code`` and
+3 tools, 1 of them proposed read-only. Those are the local tools below; the
+reviewed browser tools the upstream lists (``browser_navigate``,
+``browser_click``, ``browser_take_screenshot``, ``browser_start_tracing``, ...)
+are relayed as well, in permission group ``browser``, with their own schema and
+annotations, from the allowlist in ``allowlist.py``. See ``gateway.py``.
+``browser_evaluate``, ``browser_run_code`` and
 ``browser_run_code_unsafe`` run arbitrary code and are hidden and refused
 unless ``PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS`` is on.
 
@@ -80,11 +81,12 @@ def _require_own_artifact(resolved: Any, ctx: Any) -> None:
 @server.tool(
     name="publish_artifact",
     description=(
-        "Return a screenshot, video (.webm), trace (.zip), PDF or snapshot that the "
+        "Return a screenshot, recording (.webm), trace (.zip), PDF or snapshot that the "
         "Playwright browser saved, as an embedded resource in this tool result. Call it "
-        "after browser_take_screenshot, browser_stop_video, browser_pdf_save or a trace "
-        "stop, passing the path Playwright reported. The local copy is deleted once read "
-        "unless the server keeps it."
+        "after browser_take_screenshot, browser_pdf_save or browser_stop_tracing, passing "
+        "the path Playwright reported; for a recording (the browser is launched with "
+        "--save-video) use list_artifacts to find the .webm. The local copy is deleted "
+        "once read unless the server keeps it."
     ),
     # Not read-only: by default the file is removed from the shared volume
     # once it has been read, so a second call finds nothing.
@@ -182,9 +184,10 @@ async def list_artifacts(since_minutes: int = 60, limit: int = 50, ctx: Any = No
         "Build a QA test report and return it as three embedded resources: one "
         "self-contained HTML file (summary, issues by severity, test cases, console "
         "errors, with screenshots embedded), a PDF of the same report and a CSV of the "
-        "test cases. Call it once at the end of a test session with the video path "
-        "browser_stop_video printed and the screenshot paths Playwright reported. "
-        "Recordings are not embedded unless include_videos is true; the result lists "
+        "test cases. Call it once at the end of a test session with the recording path "
+        "(the .webm in the output dir; list_artifacts finds it) and the screenshot paths "
+        "Playwright reported. Recordings are not embedded unless include_videos is true; "
+        "the result lists "
         "them, and publish_artifact returns each one on its own."
     ),
     # Not read-only: the screenshots and recordings it embeds are removed from
@@ -363,7 +366,7 @@ async def list_artifacts(since_minutes: int = 60, limit: int = 50, ctx: Any = No
             },
             "video_path": {
                 "type": ["string", "null"],
-                "description": "The recording, exactly as browser_stop_video printed it.",
+                "description": "The recording's .webm path in the output dir (list_artifacts finds it).",
             },
             "include_videos": {
                 "type": "boolean",

@@ -55,14 +55,14 @@ FIRST_RETRY_SECONDS = 5.0
 MAX_RETRY_SECONDS = 60.0
 _TRUE = {"1", "true", "yes", "on"}
 
-# Appended to the upstream's own description, learned from live runs: with
-# `boxes`, `depth` or `target` these two stalled the page, and a chapter added
-# before any page was open failed the recording.
-_NO_ARGUMENTS = " Call it with no arguments: boxes, depth and target can stall the page."
+# Appended to the upstream's own description. browser_take_screenshot (0.0.42)
+# takes several optional arguments; a full-page screenshot with none is the
+# useful default, and browser_snapshot is the one to use before acting on a page.
 GUIDANCE = {
-    "browser_snapshot": _NO_ARGUMENTS,
-    "browser_take_screenshot": _NO_ARGUMENTS,
-    "browser_video_chapter": " Add a chapter only after a page is open.",
+    "browser_take_screenshot": (
+        " Call it with no arguments for a full-page screenshot unless you need a "
+        "specific element or format; use browser_snapshot before acting on a page."
+    ),
 }
 
 
