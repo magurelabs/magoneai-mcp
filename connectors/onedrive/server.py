@@ -4,10 +4,14 @@ Ported from v1 `mcp-servers/onedrive`. Uploads to, and lists, reads, moves,
 copies, shares, searches and deletes items in, the signed-in user's own
 OneDrive through Microsoft Graph, with the caller's own Microsoft credentials.
 
-12 tools, 5 of them proposed read-only. Input schemas are v1's, carried
+11 tools, 4 of them proposed read-only. Input schemas are v1's, carried
 across via `declare_schema`, except `onedrive_upload_file`, which no longer
 takes `file_id` (see below) and so now requires `filename`, and
-`onedrive_upload_files`, which uploads several inline files in one call.
+`onedrive_upload_files`, which uploads several inline files in one call. v1's
+`onedrive_list_shared_with_me` is dropped: Microsoft has deprecated both
+`/me/drive/sharedWithMe` and `/me/drive/recent` (each stops returning data
+after November 2026) with no supported successor, so there is no route to list
+shared items; `onedrive_list_files` and `onedrive_search_files` find files.
 
 ## Credentials
 
@@ -65,7 +69,6 @@ from .tools._constants import (
 from .tools._format import (
     ITEM_SCHEMA,
     format_item,
-    format_recent,
     format_search_hit,
     format_uploaded,
 )
@@ -377,13 +380,13 @@ async def onedrive_upload_file(
     name="onedrive_upload_files",
     description=(
         "Upload several files to the user's OneDrive in one call (at most 20). Put each "
-        "file in `attachments` as {filename, content_base64, content_type}. A platform "
-        "that resolves file references (MagOneAI rewrites run-file references in a "
-        "parameter named `attachments` into exactly this shape, so a large file such as "
-        "a recording is not cut by a per-string limit) fills these in; any other MCP "
-        "client passes the objects directly. Destination: `folder_path` (e.g. "
-        "'Reports/2026', created if missing) or `folder_id`. Files over 4 MB are sent in "
-        "resumable chunks. One bad file fails alone. Returns uploaded and failed lists."
+        "file in `attachments` as {filename, content_base64, content_type}. A host that "
+        "supports it, such as MagOneAI, can resolve a run-file reference in `attachments` "
+        "into that inline shape before the call, so a large file such as a recording is "
+        "not cut by a per-string limit; called directly, pass the inline objects. "
+        "Destination: `folder_path` (e.g. 'Reports/2026', created if missing) or "
+        "`folder_id`. Files over 4 MB are sent in resumable chunks. One bad file fails "
+        "alone. Returns uploaded and failed lists."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
     credential_headers=[
@@ -958,6 +961,22 @@ async def onedrive_create_share_link(
             ),
         }
 
+    # The `root` alias is refused above, but the drive root's real id is handed
+    # back (as parent_id) by onedrive_get_file, so check the item itself: Graph
+    # puts a `root` facet on the drive root. Never hand out a link to the whole
+    # drive, by alias or by id.
+    try:
+        item = await graph_request(
+            credentials,
+            "GET",
+            f"/me/drive/items/{encode_id(item_id)}",
+            params={"$select": "id,root"},
+        )
+    except Exception as exc:
+        return _failed("onedrive_create_share_link", exc)
+    if "root" in item:
+        return {"success": False, "error": "item_id is the drive root; share a specific item"}
+
     body: dict[str, Any] = {"type": link_type, "scope": scope}
     if expiry_days is not None:
         days = clamp(expiry_days, MIN_LINK_EXPIRY_DAYS, MAX_LINK_EXPIRY_DAYS)
@@ -978,89 +997,6 @@ async def onedrive_create_share_link(
         "scope": link.get("scope"),
         "expiry": result.get("expirationDateTime"),
     }
-
-
-# REVIEWED: readOnlyHint=True. Evidence: GET /me/drive/recent
-@server.tool(
-    name="onedrive_list_recent",
-    description=(
-        "List the files and folders you have used most recently in OneDrive, newest "
-        "first. This includes items shared with you from other drives, so it also "
-        "answers 'what was shared with me'. Pass `max_results` (default: 25, max: 200). "
-        "Returns items with id, name, type, size, modified_date and web_url; for an "
-        "item that lives on someone else's drive, also `shared_by` and the "
-        "`remote_item_id`/`remote_drive_id` that address the original."
-    ),
-    annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False),
-    credential_headers=[
-        "X-Microsoft-Refresh-Token",
-        "X-Microsoft-Client-Id",
-        "X-Microsoft-Client-Secret",
-        "X-Microsoft-Tenant-Id",
-    ],
-    permission_group="read_onedrive",
-    required_scopes=["https://graph.microsoft.com/Files.ReadWrite"],
-)
-@declare_schema(
-    {
-        "type": "object",
-        "properties": {
-            "max_results": {
-                "type": "integer",
-                "description": "Max items to return (default: 25, max: 200)",
-                "default": 25,
-            },
-        },
-    }
-)
-@declare_output_schema(
-    {
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "count": {"type": "integer"},
-            "items": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "string"},
-                        "name": {"type": "string"},
-                        "type": {"type": "string", "enum": ["file", "folder"]},
-                        "size": {"type": ["integer", "null"]},
-                        "modified_date": _NULLABLE_STR,
-                        "web_url": _NULLABLE_STR,
-                        "shared_by": _NULLABLE_STR,
-                        "remote_item_id": {
-                            "type": ["string", "null"],
-                            "description": "The item's id on its owning drive, for a shared item",
-                        },
-                        "remote_drive_id": {
-                            "type": ["string", "null"],
-                            "description": "The owning drive's id, for a shared item",
-                        },
-                    },
-                },
-            },
-            "error": _ERROR,
-        },
-        "required": ["success"],
-    }
-)
-async def onedrive_list_recent(credentials: dict, max_results: int = 25) -> dict[str, Any]:
-    # Replaces onedrive_list_shared_with_me: Microsoft deprecated /me/drive/sharedWithMe
-    # (degraded through November 2026, then it stops returning data) and named no
-    # successor, so recent items are the supported way to resurface shared files.
-    max_results = clamp(max_results, 1, MAX_RESULTS_CAP)
-    try:
-        result = await graph_request(
-            credentials, "GET", "/me/drive/recent", params={"$top": max_results}
-        )
-    except Exception as exc:
-        return _failed("onedrive_list_recent", exc)
-    # /me/drive/recent does not always honour $top, so bound the list here too.
-    items = (result.get("value", []) or [])[:max_results]
-    return {"success": True, "count": len(items), "items": [format_recent(i) for i in items]}
 
 
 # REVIEWED: readOnlyHint=True. Evidence: GET /me/drive/root/search(q='...')

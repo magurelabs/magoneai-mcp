@@ -58,30 +58,6 @@ def format_search_hit(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def format_recent(item: dict[str, Any]) -> dict[str, Any]:
-    """An item from `/me/drive/recent`.
-
-    Recently used items include files the caller opened on their own drive and
-    ones shared with them from another drive. For the latter Graph nests the
-    original under `remoteItem`; its id and drive id are surfaced so the caller
-    can address it, and the sharer (when Graph gives one) as `shared_by`.
-    """
-    remote = item.get("remoteItem") or {}
-    owner = ((remote.get("shared") or {}).get("owner") or {}).get("user") or {}
-    parent = remote.get("parentReference") or {}
-    return {
-        "id": item.get("id"),
-        "name": item.get("name"),
-        "type": "folder" if ("folder" in item or "folder" in remote) else "file",
-        "size": item.get("size") if item.get("size") is not None else remote.get("size"),
-        "modified_date": item.get("lastModifiedDateTime"),
-        "web_url": item.get("webUrl") or remote.get("webUrl"),
-        "shared_by": owner.get("displayName"),
-        "remote_item_id": remote.get("id"),
-        "remote_drive_id": parent.get("driveId"),
-    }
-
-
 def format_uploaded(item: dict[str, Any]) -> dict[str, Any]:
     """The fields an upload returns: where the file landed and how to open it."""
     parent = item.get("parentReference") or {}

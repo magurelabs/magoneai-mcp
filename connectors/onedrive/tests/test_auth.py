@@ -26,7 +26,6 @@ READ_TOOLS = {
     "onedrive_list_files",
     "onedrive_get_file",
     "onedrive_download_file",
-    "onedrive_list_recent",
     "onedrive_search_files",
 }
 DESTRUCTIVE_TOOLS = {
@@ -156,7 +155,7 @@ def test_other_microsoft_connectors_keep_their_token_scope(package):
 async def test_every_tool_declares_its_annotations_group_and_scope():
     async with Client(module.server.mcp) as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}
-    assert len(tools) == 12
+    assert len(tools) == 11
     for name, tool in tools.items():
         meta = tool.meta or {}
         read_only = name in READ_TOOLS
