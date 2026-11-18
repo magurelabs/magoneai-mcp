@@ -53,7 +53,7 @@ from .selection import (
     assert_enabled,
     enabled_tool_names,
 )
-from .server import ConnectorServer, request_headers
+from .server import ConnectorServer, request_header
 
 __all__ = [
     "ENABLED_GROUPS_HEADER",
@@ -66,7 +66,7 @@ __all__ = [
     "Budget",
     "BudgetExceeded",
     "ConnectorServer",
-    "request_headers",
+    "request_header",
     "ContentHandle",
     "ContentHandleError",
     "ContentHandleService",

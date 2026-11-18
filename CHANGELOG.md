@@ -44,7 +44,9 @@ ahead of the first release.
     (not yet used by any connector).
   - A public seam for relaying another MCP server's tools:
     `register_relayed_tool`/`unregister_relayed_tool`, the `before_list_tools`
-    and `before_call_tool` hooks, `tool_names()` and `request_headers(ctx)`. A
+    and `before_call_tool` hooks, `tool_names()` and `request_header(ctx, name)`
+    (one routing header, not the whole set, so it is no second way to a
+    credential). A
     relayed call is held to read-only mode, selection and the budget in
     `_run_relayed`, so a relaying connector reaches into no SDK internals. Used
     by the `playwright` connector; see [docs/architecture.md](docs/architecture.md).

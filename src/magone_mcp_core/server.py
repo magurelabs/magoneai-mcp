@@ -47,14 +47,17 @@ def _request_headers(ctx: Any) -> dict:
         return {}
 
 
-def request_headers(ctx: Any) -> dict:
-    """The inbound HTTP headers for this request, or an empty dict.
+def request_header(ctx: Any, name: str) -> str | None:
+    """One inbound request header by name (case-insensitive), or None.
 
-    The public reader a connector uses to inspect request headers — a relaying
-    connector needs this to key its upstream session — without reaching into the
-    SDK's request context itself.
+    The public reader a relaying connector uses to key its upstream session off a
+    routing header such as ``X-Execution-Id``. Deliberately one header at a time,
+    not the whole set: a tool's credentials must still be declared with
+    ``credential_headers=`` and are delivered only to that tool, so this does not
+    become a second, bulk way to reach ``Authorization`` or a credential header.
     """
-    return _request_headers(ctx)
+    headers = {str(k).lower(): v for k, v in _request_headers(ctx).items()}
+    return headers.get(name.lower())
 
 
 def _run_on_shutdown(app: Any, hooks: list[Callable[[], Any]], logger: Any) -> Any:

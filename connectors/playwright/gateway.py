@@ -34,7 +34,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import ValidationError
 
-from magone_mcp_core import ConnectorServer, request_headers
+from magone_mcp_core import ConnectorServer, request_header
 
 from .allowlist import ALLOWED_NAMES, schema_matches_snapshot
 from .artifact_scope import ArtifactScope
@@ -55,13 +55,13 @@ FIRST_RETRY_SECONDS = 5.0
 MAX_RETRY_SECONDS = 60.0
 _TRUE = {"1", "true", "yes", "on"}
 
-# Appended to the upstream's own description. browser_take_screenshot (0.0.42)
-# takes several optional arguments; a full-page screenshot with none is the
-# useful default, and browser_snapshot is the one to use before acting on a page.
+# Appended to the upstream's own description. For browser_take_screenshot (0.0.42)
+# no arguments captures the viewport; fullPage: true captures the whole scrollable
+# page. browser_snapshot is the one to use before acting on a page.
 GUIDANCE = {
     "browser_take_screenshot": (
-        " Call it with no arguments for a full-page screenshot unless you need a "
-        "specific element or format; use browser_snapshot before acting on a page."
+        " With no arguments it captures the viewport; pass fullPage: true for the "
+        "whole scrollable page. Use browser_snapshot before acting on a page."
     ),
 }
 
@@ -108,8 +108,7 @@ def caller_identity() -> str:
 
 def request_run(context: Any) -> tuple[str, str]:
     """The verified identity and the run header for this request, each possibly empty."""
-    headers = {str(k).lower(): v for k, v in request_headers(context).items()}
-    return caller_identity(), (headers.get(RUN_HEADER) or "").strip()
+    return caller_identity(), (request_header(context, RUN_HEADER) or "").strip()
 
 
 def request_session_key(context: Any) -> SessionKey:

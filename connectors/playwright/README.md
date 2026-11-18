@@ -89,8 +89,8 @@ a capture of the pinned image's own `tools/list` (regenerate with
 annotations have drifted from that snapshot is withheld and logged rather than
 relayed unreviewed, so bumping the pinned image and regenerating the snapshot go
 together. A relayed result comes back as the upstream sent it: screenshots stay
-image content, and `browser_take_screenshot`'s description gains a note to call
-it with no arguments for a full-page shot.
+image content, and `browser_take_screenshot`'s description gains a note that no
+arguments captures the viewport while `fullPage: true` captures the whole page.
 
 Deliberately **not** on the allowlist: `browser_file_upload` (puts a file from
 the browser container's disk into a page), `browser_install` (installs browser

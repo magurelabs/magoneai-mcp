@@ -331,7 +331,7 @@ async def test_live_run_guidance_is_added_to_the_relayed_descriptions(upstream):
         tools = {t.name: t for t in (await client.list_tools()).tools}
     shot = tools["browser_take_screenshot"].description
     # The upstream's own description, with the connector's guidance appended.
-    assert shot.startswith("Take a screenshot") and "no arguments" in shot
+    assert shot.startswith("Take a screenshot") and "fullPage: true" in shot
     assert tools["browser_navigate"].description == "Navigate to a URL"
     # A tool with no guidance keeps the upstream description unchanged.
     assert described("browser_snapshot", "Capture a snapshot.") == "Capture a snapshot."

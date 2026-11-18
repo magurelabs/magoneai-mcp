@@ -112,11 +112,14 @@ outbound budget around that handler in `_run_relayed`, so a relayed call is held
 to the same guarantees as a local one. `before_list_tools` and
 `before_call_tool` register hooks that run before a listing and before a call —
 for refreshing the upstream's tool list and for refusing a name — and
-`tool_names()` reads the registered set. `request_headers(ctx)` is the public
-reader a relaying connector uses to key its upstream session off a request
-header. These keep the connector out of the SDK's tool table and request
-context, so an SDK change lands in one place in the framework rather than in
-every relaying connector.
+`tool_names()` reads the registered set. `request_header(ctx, name)` reads one
+named request header — a relaying connector keys its upstream session off a
+routing header such as `X-Execution-Id` — and deliberately not the whole set, so
+it is no second, bulk route to `Authorization` or a credential header; a tool's
+credentials still come only through its declared `credential_headers=`. These
+keep the connector out of the SDK's tool table and request context, so an SDK
+change lands in one place in the framework rather than in every relaying
+connector.
 
 ## Authentication modes
 
