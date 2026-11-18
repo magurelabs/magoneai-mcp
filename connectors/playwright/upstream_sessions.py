@@ -113,7 +113,17 @@ class SessionPool:
         return session
 
     async def _enforce_caller_limit(self, identity: str) -> None:
-        """Hold one caller under its own cap by ending its own idle sessions, never another's."""
+        """Hold one caller under its own cap by ending its own idle sessions, never another's.
+
+        Only for a verified identity. Without a token verifier (platform mode on
+        the service token) every run shares identity ``""``, so a per-caller cap
+        would treat all of them as one caller and let the cap bound the whole
+        pool — one run evicting another's idle browser. Those are left to the
+        overall capacity cap; the per-caller cap exists to keep one *verified*
+        caller from crowding others out.
+        """
+        if not identity:
+            return
         while sum(1 for k in self._sessions if k[0] == identity) > self.max_per_caller:
             victim = self._oldest_unlocked(identity)
             if victim is None:  # all of this caller's others are busy

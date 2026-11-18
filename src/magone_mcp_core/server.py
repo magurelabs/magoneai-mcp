@@ -47,6 +47,16 @@ def _request_headers(ctx: Any) -> dict:
         return {}
 
 
+def request_headers(ctx: Any) -> dict:
+    """The inbound HTTP headers for this request, or an empty dict.
+
+    The public reader a connector uses to inspect request headers — a relaying
+    connector needs this to key its upstream session — without reaching into the
+    SDK's request context itself.
+    """
+    return _request_headers(ctx)
+
+
 def _run_on_shutdown(app: Any, hooks: list[Callable[[], Any]], logger: Any) -> Any:
     """Wrap an ASGI app so `hooks` run before it reports shutdown complete.
 

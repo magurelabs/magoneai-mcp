@@ -125,6 +125,16 @@ async def test_per_caller_limit_evicts_the_callers_own_oldest_not_anothers():
     assert session_key("c2", "x") in keys and session_key("c1", "a") not in keys
 
 
+async def test_unverified_runs_are_not_per_caller_capped():
+    """Without a verified identity every run shares identity "", so the per-caller
+    cap must not apply to them — only the overall capacity cap does."""
+    fake = FakeUpstream()
+    pool = _pool(fake, cap=64, max_per_caller=1)
+    for execution in ("a", "b", "c"):
+        await pool.call_tool(session_key("", execution), "browser_navigate", {})
+    assert len(pool.active_keys()) == 3 and fake.deleted == []
+
+
 async def test_close_all_ends_every_session():
     fake = FakeUpstream()
     pool = _pool(fake)

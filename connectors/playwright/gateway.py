@@ -34,8 +34,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import ValidationError
 
-import magone_mcp_core.server as core_server
-from magone_mcp_core import ConnectorServer
+from magone_mcp_core import ConnectorServer, request_headers
 
 from .allowlist import ALLOWED_NAMES, schema_matches_snapshot
 from .artifact_scope import ArtifactScope
@@ -109,7 +108,7 @@ def caller_identity() -> str:
 
 def request_run(context: Any) -> tuple[str, str]:
     """The verified identity and the run header for this request, each possibly empty."""
-    headers = {str(k).lower(): v for k, v in core_server._request_headers(context).items()}
+    headers = {str(k).lower(): v for k, v in request_headers(context).items()}
     return caller_identity(), (headers.get(RUN_HEADER) or "").strip()
 
 
