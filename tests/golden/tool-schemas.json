@@ -6449,7 +6449,7 @@
           "type": "object"
         },
         "video_path": {
-          "description": "The recording, exactly as browser_stop_video printed it.",
+          "description": "The recording's .webm path in the output dir (list_artifacts finds it).",
           "type": [
             "string",
             "null"
