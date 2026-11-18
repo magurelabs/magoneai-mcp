@@ -4600,22 +4600,6 @@
       "type": "object"
     }
   },
-  "onedrive/onedrive_list_recent": {
-    "annotations": {
-      "destructiveHint": false,
-      "readOnlyHint": true
-    },
-    "schema": {
-      "properties": {
-        "max_results": {
-          "default": 25,
-          "description": "Max items to return (default: 25, max: 200)",
-          "type": "integer"
-        }
-      },
-      "type": "object"
-    }
-  },
   "onedrive/onedrive_move_item": {
     "annotations": {
       "destructiveHint": true,
