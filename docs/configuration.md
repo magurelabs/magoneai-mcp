@@ -86,10 +86,11 @@ instance queries).
 | `SERPER_API_KEY` | empty | Serper key fallback. When a Serper key is available (per call or here), Serper is used instead of SearXNG. |
 | `WEB_SEARCH_PROVIDER` | auto | Overrides the automatic choice. `serper` uses Serper (a key is still required); any other value, such as `searxng`, uses SearXNG even when a Serper key is present. |
 | `PERPLEXITY_API_KEY` | empty | Perplexity key fallback, for the tool that uses it. |
-| `CRAWL4AI_URL` | `http://localhost:11235` | Crawl4AI service used for page extraction. |
+| `CRAWL4AI_URL` | empty | Crawl4AI service used as the fallback for pages the direct fetch cannot read (JavaScript-rendered pages) and for `scrape_url` with `return_full`. Unset, the fallback is skipped. |
+| `WEB_SEARCH_EXTRACT_THREADS` | `4` | Threads that turn fetched pages into text (HTML, PDF). Kept apart from the threads DNS lookups use, so slow parses cannot hold up fetches. |
 | `WEB_RESEARCH_PAGE_TIMEOUT_S` | `5` | `web_research`: how long one page may take to read, in seconds. |
 | `WEB_RESEARCH_DEADLINE_S` | `8` | `web_research`: the budget for the whole call, in seconds. Pages not read by then are listed in `unread_pages` with reason `deadline`. |
-| `WEB_RESEARCH_OUTPUT_CHARS` | `24000` | `web_research`: the most passage text one call returns. |
+| `WEB_RESEARCH_OUTPUT_CHARS` | `24000` | `web_research`: the most passage text one call returns. A page read but left with no passage inside this budget is listed in `unread_pages` with reason `budget`. |
 | `WEB_RESEARCH_CACHE_TTL_S` | `900` | `web_research`: how long a read page is cached, in seconds. |
 | `WEB_RESEARCH_CACHE_MAX` | `256` | `web_research`: how many read pages the cache holds. |
 | `WEB_RESEARCH_LOGIN_WALLED_HOSTS` | built-in list | `web_research`: comma-separated hosts whose pages sit behind a sign-in, so only their search snippet is used (subdomains match too). Replaces the built-in list of common social sites; `-` reads every host. |

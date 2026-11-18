@@ -25,11 +25,15 @@ Every failure is raised as ScrapeError carrying a stable, actionable code.
 from __future__ import annotations
 
 import asyncio
+import contextvars
+import functools
 import ipaddress
+import os
 import re
 import socket
 import ssl
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -98,8 +102,19 @@ class ScrapeError(Exception):
 class Fetched:
     final_url: str
     status: int
+    # The media type only, lower-cased ("text/html"); its parameters are cut.
     content_type: str
     body: bytes
+    # The charset parameter of the Content-Type header, if the server sent one.
+    charset: str = ""
+
+
+_CHARSET = re.compile(r"charset\s*=\s*[\"']?([\w.:-]+)", re.I)
+
+
+def _charset(content_type: str) -> str:
+    m = _CHARSET.search(content_type or "")
+    return m.group(1) if m else ""
 
 
 # --------------------------------------------------------------------------
@@ -454,7 +469,11 @@ async def _stream_get(url: str, ctx: ssl.SSLContext) -> Fetched:
     for _ in range(MAX_REDIRECTS + 1):
         _check_url(url)
         u = urlparse(url)
-        ips = await _resolve(u.hostname or "", u.port or (443 if u.scheme == "https" else 80))
+        try:
+            port = u.port or (443 if u.scheme == "https" else 80)
+        except ValueError as e:  # e.g. a redirect to http://host:99999/
+            raise ScrapeError(FETCH_FAILED, f"invalid port in {url}: {e}") from e
+        ips = await _resolve(u.hostname or "", port)
         for n, ip in enumerate(ips):
             target, host_header, ext = _pin(url, ip)
             try:
@@ -488,9 +507,11 @@ async def _stream_get(url: str, ctx: ssl.SSLContext) -> Fetched:
 
 
 async def _read_response(url: str, resp: httpx.Response) -> Fetched:
-    ctype = resp.headers.get("content-type", "").split(";")[0].strip().lower()
+    header = resp.headers.get("content-type", "")
+    ctype = header.split(";")[0].strip().lower()
+    charset = _charset(header)
     if resp.status_code != 200:
-        return Fetched(url, resp.status_code, ctype, b"")
+        return Fetched(url, resp.status_code, ctype, b"", charset)
     declared = resp.headers.get("content-length")
     if declared and declared.isdigit() and int(declared) > MAX_DOWNLOAD_BYTES:
         raise ScrapeError(
@@ -505,7 +526,7 @@ async def _read_response(url: str, resp: httpx.Response) -> Fetched:
             raise ScrapeError(
                 TOO_LARGE, f"download exceeded {MAX_DOWNLOAD_BYTES // 1024 // 1024} MB limit"
             )
-    return Fetched(url, 200, ctype, bytes(buf))
+    return Fetched(url, 200, ctype, bytes(buf), charset)
 
 
 async def _get_once(url: str) -> Fetched:
@@ -569,6 +590,13 @@ async def fetch_url(url: str) -> Fetched:
                             TLS_ERROR, f"TLS failure for {parsed.hostname}: {e}"
                         ) from e
                     last = e
+                except (httpx.HTTPError, httpx.InvalidURL, ValueError) as e:
+                    # Not transient, so no retry: a body that does not match
+                    # its Content-Encoding (httpx.DecodingError), a malformed
+                    # URL or port. Still an error code, never an exception.
+                    raise ScrapeError(
+                        FETCH_FAILED, f"could not read {parsed.hostname}: {e}"
+                    ) from e
                 else:
                     if res.status in _RETRY_STATUS and i == 0:
                         last = None
@@ -815,8 +843,8 @@ def _dropped_tables(doc, extracted: str) -> list:
 
 def decode_html(res: Fetched) -> str:
     body = res.body[:MAX_HTML_BYTES]
-    m = re.search(r"charset=([\w-]+)", res.content_type)
-    enc = m.group(1) if m else None
+    # The header wins over <meta>, as in a browser.
+    enc = res.charset or _charset(res.content_type) or None
     if enc is None:
         m2 = re.search(rb"<meta[^>]+charset=[\"']?([\w-]+)", body[:4096], re.I)
         enc = m2.group(1).decode("ascii") if m2 else "utf-8"
@@ -870,7 +898,7 @@ def extract_html(html: str, max_chars: int) -> str:
 
 
 def extract(res: Fetched, max_chars: int) -> tuple[str, str]:
-    """Return (content, kind) where kind is 'pdf' or 'html'. Raises ScrapeError."""
+    """Return (content, kind) where kind is 'pdf', 'html' or 'text'. Raises ScrapeError."""
     if is_pdf(res):
         return extract_pdf(res.body, max_chars), "pdf"
     ct = res.content_type
@@ -894,15 +922,35 @@ def extract(res: Fetched, max_chars: int) -> tuple[str, str]:
     return extract_html(raw, max_chars), "html"
 
 
+def _extract_threads() -> int:
+    try:
+        return max(1, int(os.environ.get("WEB_SEARCH_EXTRACT_THREADS", "4")))
+    except ValueError:
+        return 4
+
+
+# Extraction has its own small pool rather than the loop's default executor,
+# which DNS lookups (_resolve) also use. A parse that outlives its budget is
+# abandoned but keeps its thread, so on the shared pool a run of slow PDFs
+# could leave lookups queued behind them and later fetches would end as
+# `deadline`. Here they can only hold up other extractions.
+_EXTRACT_POOL = ThreadPoolExecutor(
+    max_workers=_extract_threads(), thread_name_prefix="web-search-extract"
+)
+
+
 async def extract_async(res: Fetched, max_chars: int) -> tuple[str, str]:
-    """extract() off the event loop with a time budget.
+    """extract() off the event loop, on _EXTRACT_POOL, with a time budget.
 
     Threads cannot be cancelled, so a runaway parse is abandoned rather than
     killed; the byte and page caps keep that bounded.
     """
+    loop = asyncio.get_running_loop()
+    # As asyncio.to_thread does: log context set by the caller carries over.
+    call = functools.partial(contextvars.copy_context().run, extract, res, max_chars)
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(extract, res, max_chars), timeout=EXTRACT_TIMEOUT_S
+            loop.run_in_executor(_EXTRACT_POOL, call), timeout=EXTRACT_TIMEOUT_S
         )
     except TimeoutError as e:
         raise ScrapeError(TIMEOUT, f"content extraction exceeded {EXTRACT_TIMEOUT_S}s") from e
