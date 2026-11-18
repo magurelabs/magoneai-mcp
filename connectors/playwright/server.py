@@ -83,10 +83,10 @@ def _require_own_artifact(resolved: Any, ctx: Any) -> None:
     description=(
         "Return a screenshot, recording (.webm), trace (.zip), PDF or snapshot that the "
         "Playwright browser saved, as an embedded resource in this tool result. Call it "
-        "after browser_take_screenshot, browser_pdf_save or browser_stop_tracing, passing "
-        "the path Playwright reported; for a recording (the browser is launched with "
-        "--save-video) use list_artifacts to find the .webm. The local copy is deleted "
-        "once read unless the server keeps it."
+        "after browser_take_screenshot, browser_pdf_save, browser_stop_tracing or "
+        "browser_stop_video, passing the path Playwright reported; if none was reported, "
+        "use list_artifacts to find the file. The local copy is deleted once read "
+        "unless the server keeps it."
     ),
     # Not read-only: by default the file is removed from the shared volume
     # once it has been read, so a second call finds nothing.

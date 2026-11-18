@@ -23,7 +23,12 @@ Deliberately excluded, even though the pinned image lists them:
   ``gateway.UNSAFE_TOOLS``, exposed only behind ``PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS``).
 - ``browser_file_upload`` — puts a file from the browser container's filesystem
   into a page.
-- ``browser_install`` — installs browser binaries into the container.
+- ``browser_drop`` — like ``browser_file_upload``, its ``paths`` drop files from
+  the browser container's filesystem onto a page.
+- ``browser_annotate``, ``browser_start_recording``, ``browser_stop_recording``,
+  ``browser_resume`` — interactive: they wait for, or record, a human at the
+  browser (annotation, a demonstrated flow, a paused debugger), which never
+  happens in a headless relay and would hold the call until it times out.
 """
 
 from __future__ import annotations
@@ -33,13 +38,24 @@ from pathlib import Path
 from typing import Any
 
 # The upstream image the snapshot was captured from, and the capabilities it was
-# started with. The allowlist (browser_pdf_save, the tracing tools) assumes these
-# caps; the connector README's compose file enables them.
-UPSTREAM_IMAGE = "mcr.microsoft.com/playwright/mcp:v0.0.42"
-UPSTREAM_CAPS = ("pdf", "tracing")
+# started with. The allowlist (browser_pdf_save, the tracing and video tools)
+# assumes these caps; the connector README's compose file enables them. In
+# 0.0.85 `devtools` adds tracing, video recording and the action recorder.
+UPSTREAM_IMAGE = "mcr.microsoft.com/playwright/mcp:v0.0.85"
+UPSTREAM_CAPS = ("devtools", "pdf")
 
 # Listed by the pinned image but never relayed; see the module docstring.
-EXCLUDED = frozenset({"browser_evaluate", "browser_file_upload", "browser_install"})
+EXCLUDED = frozenset(
+    {
+        "browser_annotate",
+        "browser_drop",
+        "browser_evaluate",
+        "browser_file_upload",
+        "browser_resume",
+        "browser_start_recording",
+        "browser_stop_recording",
+    }
+)
 
 _SNAPSHOT_PATH = Path(__file__).with_name("upstream_snapshot.json")
 _SNAPSHOT: dict[str, dict[str, Any]] = {

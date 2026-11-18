@@ -55,7 +55,7 @@ FIRST_RETRY_SECONDS = 5.0
 MAX_RETRY_SECONDS = 60.0
 _TRUE = {"1", "true", "yes", "on"}
 
-# Appended to the upstream's own description. For browser_take_screenshot (0.0.42)
+# Appended to the upstream's own description. For browser_take_screenshot (0.0.85)
 # no arguments captures the viewport; fullPage: true captures the whole scrollable
 # page. browser_snapshot is the one to use before acting on a page.
 GUIDANCE = {

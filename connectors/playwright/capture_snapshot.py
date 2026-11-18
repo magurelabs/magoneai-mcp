@@ -5,8 +5,8 @@ The allowlist's reviewed schemas come from the pinned upstream image's own
 refresh the snapshot when bumping ``UPSTREAM_IMAGE``:
 
     # start the pinned image (the caps the allowlist assumes), then:
-    docker run --rm -p 8931:8931 mcr.microsoft.com/playwright/mcp:v0.0.42 \\
-        --port 8931 --host 0.0.0.0 --headless --caps pdf,tracing
+    docker run --rm -p 8931:8931 mcr.microsoft.com/playwright/mcp:v0.0.85 \\
+        --port 8931 --host 0.0.0.0 --headless --caps devtools,pdf
     python -m connectors.playwright.capture_snapshot http://127.0.0.1:8931/mcp
 
 It writes the tools exactly as the server sends them (so the gateway's drift

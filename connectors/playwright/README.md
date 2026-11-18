@@ -25,22 +25,29 @@ services:
     # allowlist in `allowlist.py` is a snapshot captured from THIS tag (via
     # `capture_snapshot.py`) and only relays tools whose schema still matches it;
     # bump the tag and regenerate the snapshot together (`UPSTREAM_IMAGE` there).
-    image: mcr.microsoft.com/playwright/mcp:v0.0.42
+    image: mcr.microsoft.com/playwright/mcp:v0.0.85
     working_dir: /artifacts          # files the agent names land on the volume too
     command: >
-      --isolated --host 0.0.0.0 --port 8931 --caps pdf,tracing
-      --save-video=800x600
+      --isolated --host 0.0.0.0 --port 8931 --caps devtools,pdf
       --allowed-hosts playwright:8931
       --output-dir /artifacts
       --blocked-origins "http://169.254.169.254;http://metadata.google.internal;http://localhost;http://127.0.0.1;http://mcp-playwright:8000"
     volumes: [playwright-output:/artifacts]
     networks: [playwright-network]   # no published port
-    # 0.0.42's capabilities are `vision`, `pdf`, `testing` and `tracing`. The
-    # allowlist's snapshot was captured with `--caps pdf,tracing` (for
-    # browser_pdf_save and browser_start_tracing/browser_stop_tracing). A tool a
-    # cap adds is relayed only if it is in that snapshot, so adding a cap without
-    # regenerating the snapshot exposes nothing. Recording is the `--save-video`
-    # launch option, not a tool; the .webm lands in the output dir.
+    # 0.0.85's capabilities are `vision`, `pdf` and `devtools`. The allowlist's
+    # snapshot was captured with `--caps devtools,pdf`: `pdf` adds
+    # browser_pdf_save, `devtools` adds tracing (browser_start_tracing /
+    # browser_stop_tracing) and screen recording (browser_start_video /
+    # browser_stop_video / browser_video_chapter; the .webm lands in the output
+    # dir and browser_stop_video reports its path). A tool a cap adds is relayed
+    # only if it is in that snapshot, so adding a cap without regenerating the
+    # snapshot exposes nothing.
+    #
+    # Pinned at 0.0.85, not 0.0.42: 0.0.42 starts with a relative `cli.js`, so
+    # the `working_dir` above stops it starting; its image ships no
+    # chromium_headless_shell, so a headless launch fails and every navigation
+    # comes back as an empty reply; and once launched it closed the page right
+    # after navigating on some sites. 0.0.85 runs this compose file as written.
 
   mcp-playwright:
     build:
@@ -79,8 +86,8 @@ networks: { playwright-network: {} }
 
 Relaying is an **allowlist**, not "everything except a few". Only the browser
 tools named in [`allowlist.py`](allowlist.py) are relayed (`browser_navigate`,
-`browser_click`, `browser_take_screenshot`, `browser_start_tracing`, ... — 21 of
-the 24 the pinned image lists), each with its own schema and annotations, in
+`browser_click`, `browser_take_screenshot`, `browser_start_video`, ... — 31 of
+the 39 the pinned image lists), each with its own schema and annotations, in
 permission group `browser`, so `MCP_READ_ONLY`,
 `X-MCP-Enabled-Tools`/`-Groups` and the outbound text budget apply to them as to
 any tool. The allowlist is built from [`upstream_snapshot.json`](upstream_snapshot.json),
@@ -92,9 +99,11 @@ together. A relayed result comes back as the upstream sent it: screenshots stay
 image content, and `browser_take_screenshot`'s description gains a note that no
 arguments captures the viewport while `fullPage: true` captures the whole page.
 
-Deliberately **not** on the allowlist: `browser_file_upload` (puts a file from
-the browser container's disk into a page), `browser_install` (installs browser
-binaries), and `browser_evaluate` / `browser_run_code` / `browser_run_code_unsafe`
+Deliberately **not** on the allowlist: `browser_file_upload` and
+`browser_drop` (put files from the browser container's disk into a page),
+`browser_annotate`, `browser_start_recording`, `browser_stop_recording` and
+`browser_resume` (interactive: they wait for or record a human at the browser,
+which never happens in a headless relay), and `browser_evaluate` / `browser_run_code` / `browser_run_code_unsafe`
 (run arbitrary code — these stay hidden and are refused unless
 `PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS=true`).
 

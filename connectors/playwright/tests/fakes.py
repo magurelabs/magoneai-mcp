@@ -31,7 +31,7 @@ TOOLS = [
     SNAPSHOT["browser_file_upload"],
     # browser_evaluate runs arbitrary code: hidden unless PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS.
     SNAPSHOT["browser_evaluate"],
-    # Not in 0.0.42; kept to exercise the unsafe-tool refusal for a run-code name.
+    # 0.0.85 lists it too; a minimal shape is enough to exercise the unsafe-tool refusal.
     {
         "name": "browser_run_code_unsafe",
         "description": "Run code",
