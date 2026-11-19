@@ -69,3 +69,27 @@ async def test_healthz_does_not_open_the_mcp_endpoint():
             )
 
     assert response.status_code == 421
+
+
+async def test_healthz_does_not_wait_on_a_relaying_connectors_upstream():
+    """A before-list hook (an upstream manifest refresh) never runs on the probe path."""
+    import asyncio
+    import time
+
+    server = build({})
+    refreshed: list[str] = []
+
+    async def slow_upstream_refresh() -> None:
+        refreshed.append("refresh")
+        await asyncio.sleep(3)
+
+    server.before_list_tools(slow_upstream_refresh)
+    with serving(server) as url:
+        async with httpx.AsyncClient(base_url=url, timeout=10) as client:
+            started = time.monotonic()
+            response = await client.get("/healthz")
+            elapsed = time.monotonic() - started
+
+    assert response.status_code == 200 and response.json()["tools"] == 2
+    assert elapsed < 1.0
+    assert refreshed == []

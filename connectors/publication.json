@@ -48,6 +48,10 @@
     "otp_verification": { "status": "ready" },
     "outlook_calendar": { "status": "ready" },
     "outlook_email": { "status": "ready" },
+    "playwright": {
+      "status": "blocked",
+      "reason": "Relays a browser container the operator runs (Microsoft's Playwright MCP server) over a shared artifacts volume, and has not run end to end in any of our own environments. It also keeps per-run browser sessions and artifact scoping in-process, so it needs a single replica or sticky routing. Run the live checks in its README's 'Before unblocking' list against that container, record the results in the pull request that unblocks it, and settle the deployment shape before presenting it."
+    },
     "surveymonkey": {
       "status": "blocked",
       "reason": "Not yet verified against a live deployment, and at 40 tools it is the largest connector in the catalogue. Same rule as google_drive: run it end to end before presenting it as a flagship."

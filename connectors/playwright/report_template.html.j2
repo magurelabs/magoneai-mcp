@@ -1,0 +1,157 @@
+{#- Autoescape is ON for this template (report_render.py). Never add |safe: every
+    report value is text from a page under test. -#}
+{% set STATUS = {"pass": "Passed", "fail": "Failed", "blocked": "Blocked", "skipped": "Skipped"} %}
+{% set STATUS_VAR = {"pass": "pass", "fail": "fail", "blocked": "blocked", "skipped": "skipped"} %}
+{% macro tone(name) %}--c: var(--{{ name }}); --cb: var(--{{ name }}-bg);{% endmacro %}
+{% macro shots(paths) %}
+{% if paths %}
+<div class="shots">
+{% for p in paths %}
+{% set s = shot(p) %}
+{% if s.state == "embedded" %}
+<details><summary title="{{ s.label }}"><img src="{{ s.uri }}" alt="Screenshot {{ s.label }}"></summary></details>
+{% elif s.state == "omitted" %}
+<span class="shot-missing">Screenshot left out (size limit): {{ s.label }}</span>
+{% else %}
+<span class="shot-missing">Screenshot unavailable: {{ s.label }}</span>
+{% endif %}
+{% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+{% macro recording(v, none_text) %}
+{% if v.state == "embedded" %}
+<video controls preload="metadata" src="{{ v.uri }}"></video>
+{% elif v.state == "omitted" %}
+<p class="note">The recording ({{ v.name }}) was left out to stay within the size limit.</p>
+{% elif v.state == "excluded" %}
+<p class="note">The recording ({{ v.name }}) is not embedded in this report.</p>
+{% elif v.state == "unavailable" %}
+<p class="note">The recording could not be found.</p>
+{% else %}
+<p class="note">{{ none_text }}</p>
+{% endif %}
+{% endmacro %}
+{% macro steps_list(steps) %}
+{% if steps %}<ol>{% for step in steps %}<li>{{ step }}</li>{% endfor %}</ol>{% else %}<span class="note">None given</span>{% endif %}
+{% endmacro %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>{{ r.title }}</title>
+<style>
+{% include "report_styles.css" %}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>{{ r.title }}</h1>
+<div class="meta">
+<span class="url">URL: {% if url_href %}<a href="{{ url_href }}" rel="noopener noreferrer">{{ r.url }}</a>{% else %}{{ r.url }}{% endif %}</span>
+<span>Tested: {{ tested_at }}</span>
+{% if r.environment %}<span>Environment: {{ r.environment }}</span>{% endif %}
+</div>
+{% if r.summary %}<p class="summary-text">{{ r.summary }}</p>{% endif %}
+{% if dropped %}
+<div class="notice">Left out to stay within the size limit: {{ dropped | join(", ") }}. Publish them separately with publish_artifact.</div>
+{% endif %}
+</header>
+
+<section>
+<h2>Summary</h2>
+<div class="group-label">Test cases ({{ r.test_cases | length }})</div>
+<div class="cards">
+{% for status, n in status_counts %}
+<div class="card" style="{{ tone(STATUS_VAR[status]) }}"><div class="n">{{ n }}</div><div class="l">{{ STATUS[status] }}</div></div>
+{% endfor %}
+</div>
+<div class="group-label">Issues ({{ r.issues | length }})</div>
+<div class="cards">
+{% for sev, n in severity_counts %}
+<div class="card" style="{{ tone(sev | lower) }}"><div class="n">{{ n }}</div><div class="l">{{ sev }}</div></div>
+{% endfor %}
+</div>
+</section>
+
+{% if not (video.state == "none" and has_case_videos) %}
+<section>
+<h2>{{ "Full run recording" if has_case_videos else "Screen recording" }}</h2>
+<div class="panel">
+{{ recording(video, "No recording was attached to this report.") }}
+</div>
+</section>
+{% endif %}
+
+<section>
+<h2>Issues</h2>
+{% for sev, items in issue_groups %}
+<div class="group-label">{{ sev }} ({{ items | length }})</div>
+{% for issue in items %}
+<article class="panel issue" style="{{ tone(sev | lower) }}">
+<div class="issue-head">
+<span class="badge">{{ sev }}</span><span class="id">{{ issue.id }}</span><h3>{{ issue.title }}</h3>
+{% if issue.test_case_id in case_anchor %}<a class="rec-link" href="#case-{{ case_anchor[issue.test_case_id] }}">Recording</a>{% endif %}
+</div>
+<dl class="fields">
+{% if issue.test_case_id %}<dt>Test case</dt><dd>{{ issue.test_case_id }}</dd>{% endif %}
+<dt>Steps</dt><dd>{{ steps_list(issue.steps) }}</dd>
+<dt>Expected</dt><dd>{{ issue.expected }}</dd>
+<dt>Actual</dt><dd>{{ issue.actual }}</dd>
+{% if issue.console_errors %}<dt>Console</dt><dd>{% for line in issue.console_errors %}<pre class="console">{{ line }}</pre>{% endfor %}</dd>{% endif %}
+{% if issue.screenshot_paths %}<dt>Screenshots</dt><dd>{{ shots(issue.screenshot_paths) }}</dd>{% endif %}
+</dl>
+</article>
+{% endfor %}
+{% else %}
+<p class="note">No issues were found.</p>
+{% endfor %}
+</section>
+
+<section>
+<h2>Test cases</h2>
+{% if r.test_cases %}
+<div class="panel table">
+<div class="thead"><span>ID</span><span>Category</span><span>Title</span><span>Status</span><span>Video</span></div>
+{% for case in r.test_cases %}
+<details class="row" id="case-{{ loop.index0 }}">
+<summary>
+<span class="id">{{ case.id }}{% if case.priority %} · {{ case.priority }}{% endif %}</span>
+<span class="cat"><span class="badge" style="--c: var(--{{ case.category }});">{{ case.category | capitalize }}</span></span>
+<span>{{ case.title }}</span>
+<span><span class="badge" style="{{ tone(STATUS_VAR[case.status]) }}">{{ STATUS[case.status] }}</span></span>
+<span class="chapter">{{ case.video_chapter or "" }}</span>
+</summary>
+<div class="body">
+<dl class="fields">
+<dt>Steps</dt><dd>{{ steps_list(case.steps) }}</dd>
+<dt>Expected</dt><dd>{{ case.expected }}</dd>
+<dt>Actual</dt><dd>{{ case.actual }}</dd>
+{% if case.screenshot_paths %}<dt>Screenshots</dt><dd>{{ shots(case.screenshot_paths) }}</dd>{% endif %}
+{% if case.video_path %}<dt>Recording</dt><dd>{{ recording(case_video(loop.index0, case.video_path), "") }}</dd>{% endif %}
+</dl>
+</div>
+</details>
+{% endfor %}
+</div>
+{% else %}
+<p class="note">No test cases were recorded.</p>
+{% endif %}
+</section>
+
+<section>
+<h2>Console errors</h2>
+{% if r.console_errors %}
+<div class="panel">{% for line in r.console_errors %}<pre class="console">{{ line }}</pre>{% endfor %}</div>
+{% else %}
+<p class="note">No console errors were recorded.</p>
+{% endif %}
+</section>
+
+<footer>Generated from a Playwright browser session.</footer>
+</main>
+</body>
+</html>

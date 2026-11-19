@@ -42,6 +42,22 @@ ahead of the first release.
     that stay text.
   - A provenance marker for third-party text, and a content-handle interface
     (not yet used by any connector).
+  - A public seam for relaying another MCP server's tools:
+    `register_relayed_tool`/`unregister_relayed_tool`, the `before_list_tools`
+    and `before_call_tool` hooks, `tool_names()` and `request_header(ctx, name)`.
+    A relayed call is held to read-only mode, selection and the budget in
+    `_run_relayed`, and every text item of its result is wrapped in the
+    `<<<UNTRUSTED_CONTENT>>>` envelope (images and resources untouched), so a
+    relaying connector reaches into no SDK internals and its upstream's text is
+    marked like any other third-party text. `register_relayed_tool` refuses a
+    name that is already a local tool and `unregister_relayed_tool` removes
+    only relayed tools. `request_header` reads one routing header and returns
+    None for any credential header (`Authorization`, `Cookie`,
+    `Proxy-Authorization`, `X-Service-Token`, any name the log redaction treats
+    as secret, and any header a tool declared in `credential_headers=`).
+    `/healthz` counts the registered tools without running the before-list
+    hooks, so a probe never waits on a relayed upstream. Used by the
+    `playwright` connector; see [docs/architecture.md](docs/architecture.md).
 - Connectors for third-party APIs under `connectors/`, each with its own
   tests and an optional dependency extra. [docs/TOOLS.md](docs/TOOLS.md) lists
   every tool, and `connectors/publication.json` records which connectors are
@@ -58,6 +74,21 @@ ahead of the first release.
   arrive per call as `X-Microsoft-*` headers; its own Graph scopes are
   `Files.ReadWrite`, `User.Read` and `offline_access`, and no other connector's
   scopes change. Blocked from publication until it has run end to end.
+- `playwright` connector: relays the browser tools of an operator-run Microsoft
+  Playwright MCP server (one browser session per caller run, idle and per-caller
+  limits, a reviewed allowlist with a checked-in schema snapshot), plus three
+  own tools, `publish_artifact`, `list_artifacts` and `publish_test_report`,
+  that return the browser's screenshots, recordings, traces and HTML/PDF/CSV
+  test reports in the tool result as embedded resources. A file is scoped to
+  the run whose own call reported writing it (Playwright's report lines only,
+  never page text or a tool that echoes it, such as console messages) and wrote it during that call; a run this process has no
+  record of (a restart, another replica) gets an explicit refusal, and an idle
+  run's unfetched files are deleted. Relayed images are capped at
+  `ARTIFACTS_MAX_BYTES` per result. The README's compose example keeps the
+  browser on an internal network behind an egress proxy that refuses private
+  and metadata addresses. Needs a single replica. Blocked from publication
+  until the live checks in its README have been run against the browser
+  container.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - Each `server.json` names the connector's Docker Hub image,
