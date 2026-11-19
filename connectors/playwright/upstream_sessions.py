@@ -118,7 +118,7 @@ class SessionPool:
         Only for a verified identity. Without a token verifier (platform mode on
         the service token) every run shares identity ``""``, so a per-caller cap
         would treat all of them as one caller and let the cap bound the whole
-        pool — one run evicting another's idle browser. Those are left to the
+        pool, one run evicting another's idle browser. Those are left to the
         overall capacity cap; the per-caller cap exists to keep one *verified*
         caller from crowding others out.
         """

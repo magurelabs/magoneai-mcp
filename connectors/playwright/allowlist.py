@@ -3,8 +3,8 @@
 Relaying is an allowlist, not a blocklist. The official Playwright MCP server
 lists dozens of tools and a new image can add more (and change the ones it has),
 so "relay everything the upstream lists except a few" would put tools nobody has
-looked at — ``browser_file_upload`` reads the browser container's disk into a
-page, and whatever a future release adds — in front of callers the moment the
+looked at (``browser_file_upload`` reads the browser container's disk into a
+page, and whatever a future release adds) in front of callers the moment the
 image is pulled. Instead only the tools in ``ALLOWED`` below are ever relayed.
 
 ``ALLOWED`` is derived from ``upstream_snapshot.json``, a **capture of the pinned
@@ -19,14 +19,14 @@ regenerating the snapshot go together.
 
 Deliberately excluded, even though the pinned image lists them:
 
-- ``browser_evaluate`` — runs arbitrary page code (kept in
+- ``browser_evaluate``: runs arbitrary page code (kept in
   ``gateway.UNSAFE_TOOLS``, exposed only behind ``PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS``).
-- ``browser_file_upload`` — puts a file from the browser container's filesystem
+- ``browser_file_upload``: puts a file from the browser container's filesystem
   into a page.
-- ``browser_drop`` — like ``browser_file_upload``, its ``paths`` drop files from
+- ``browser_drop``: like ``browser_file_upload``, its ``paths`` drop files from
   the browser container's filesystem onto a page.
 - ``browser_annotate``, ``browser_start_recording``, ``browser_stop_recording``,
-  ``browser_resume`` — interactive: they wait for, or record, a human at the
+  ``browser_resume``: interactive, they wait for, or record, a human at the
   browser (annotation, a demonstrated flow, a paused debugger), which never
   happens in a headless relay and would hold the call until it times out.
 """
