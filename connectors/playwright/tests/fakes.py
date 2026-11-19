@@ -50,7 +50,14 @@ class FakeUpstream:
         self.deleted: list[str] = []
         self.calls: list[tuple[str, str]] = []  # (session id, tool name)
         self.big_text = ""
-        self.saved_path = ""  # when set, a tool result names this file, as Playwright does
+        # When set, a tool call writes this file under `write_root` (if given) and
+        # reports it the way Playwright 0.0.85 does, a link in `### Result`.
+        self.saved_path = ""
+        self.write_root: Path | None = None
+        # When set, the reply carries this text where a page's own words appear:
+        # its URL and title (`### Page`) and an inline snapshot.
+        self.page_text = ""
+        self.image = IMAGE
         self.n = 0
 
     @property
@@ -97,8 +104,16 @@ class FakeUpstream:
         self.calls.append((sid, name))
         text = self.big_text or f"ran {name}"
         if self.saved_path:
-            text = f"{text}\nSaved to {self.saved_path}"
-        result = {"content": [{"type": "text", "text": text}, IMAGE]}
+            if self.write_root is not None:
+                write(self.write_root / self.saved_path, 64)
+            text = f"{text}\n### Result\n- [Screenshot of viewport]({self.saved_path})"
+        if self.page_text:
+            text = (
+                f"{text}\n### Page\n- Page URL: data:text/html,{self.page_text}\n"
+                f"- Page Title: {self.page_text}\n### Snapshot\n```yaml\n"
+                f'- heading "{self.page_text}" [ref=e1]\n```'
+            )
+        result = {"content": [{"type": "text", "text": text}, self.image]}
         return self._reply({"jsonrpc": "2.0", "id": body["id"], "result": result})
 
 

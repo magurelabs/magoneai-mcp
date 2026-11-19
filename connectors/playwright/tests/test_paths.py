@@ -135,3 +135,42 @@ def test_allowed_extensions(root, name):
 def test_empty_or_nul_path_is_refused(root, raw):
     with pytest.raises(ArtifactError):
         resolve_artifact(raw, root)
+
+
+# A reply captured from the pinned 0.0.85 image, with page text that names files.
+LIVE_REPLY = """### Result
+- [Screenshot of viewport](page-2026-11-19T08-11-40-598Z.png)
+### Ran Playwright code
+```js
+// Screenshot viewport and save it as page-2026-11-19T08-11-40-598Z.png
+await page.screenshot({ path: 'other-in-code.png' });
+```
+### Page
+- Page URL: data:text/html,<h1>login.png page-1.png</h1>
+- Page Title: [x](title.png)
+### Snapshot
+- [Snapshot](page-2026-11-19T08-11-40-503Z.yml)
+```yaml
+- [inline](fenced.png)
+```
+"""
+
+
+def test_reported_paths_reads_only_playwrights_own_report_lines(root):
+    from connectors.playwright.paths import reported_paths
+
+    assert reported_paths(LIVE_REPLY, root) == [
+        str(root / "page-2026-11-19T08-11-40-598Z.png"),
+        str(root / "page-2026-11-19T08-11-40-503Z.yml"),
+    ]
+
+
+def test_reported_paths_ignores_free_text_and_other_sections(root):
+    from connectors.playwright.paths import reported_paths
+
+    assert reported_paths("Saved to login.png\n- [x](login.png)", root) == []
+    assert reported_paths("### Page\n- [x](login.png)", root) == []
+    assert reported_paths("### Result\n- [x](../../etc/passwd.png)", root) == [
+        str(root / "passwd.png")  # the basename inside the root, never outside it
+    ]
+    assert reported_paths("### Result\n- [x](notes.exe)", root) == []

@@ -127,7 +127,7 @@ async def test_per_caller_limit_evicts_the_callers_own_oldest_not_anothers():
 
 async def test_unverified_runs_are_not_per_caller_capped():
     """Without a verified identity every run shares identity "", so the per-caller
-    cap must not apply to them — only the overall capacity cap does."""
+    cap must not apply to them; only the overall capacity cap does."""
     fake = FakeUpstream()
     pool = _pool(fake, cap=64, max_per_caller=1)
     for execution in ("a", "b", "c"):

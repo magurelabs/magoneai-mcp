@@ -6,14 +6,20 @@ each tool is registered in the SDK's tool table as a ``RelayedTool``, with the
 upstream's own name, description, input schema and annotations. So relayed
 tools show up in ``tools/list`` beside the local ones and are subject to the
 same framework controls: ``MCP_READ_ONLY`` (on the upstream's own
-``readOnlyHint``), per-connection tool selection (group ``browser``) and the
-outbound text budget. A relayed call returns the upstream's content items
-untouched otherwise, screenshots included as image content.
+``readOnlyHint``), per-connection tool selection (group ``browser``), the
+outbound text budget and the untrusted-content envelope around every text item.
+Screenshots come back as image content, up to ``ARTIFACTS_MAX_BYTES`` per
+result; a larger one is replaced by a short note (``cap_media``).
+
+Each run's artifact scope (``artifact_scope.py``) records only the files its
+own calls reported writing and that were written during that call, so the
+local tools never serve one run another run's files.
 
 While the upstream is unreachable the local tools keep working, ``tools/list``
 lists only them, and a browser tool answers "not available right now". Failed
-fetches back off (5 seconds, doubling to a minute) so a health probe cannot
-hammer a dead upstream.
+fetches back off (5 seconds, doubling to a minute) so repeated listings cannot
+hammer a dead upstream. ``/healthz`` never triggers a fetch: the framework
+counts the registered tools without running the before-list hook.
 
 Tools that run arbitrary page or Playwright code are hidden and refused unless
 ``PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS`` is on.
@@ -23,7 +29,9 @@ from __future__ import annotations
 
 import asyncio
 import os
+import stat
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -31,15 +39,23 @@ import structlog
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import principal_components
 from mcp.server.mcpserver.exceptions import ToolError
-from mcp.types import CallToolResult, TextContent, ToolAnnotations
+from mcp.types import (
+    AudioContent,
+    BlobResourceContents,
+    CallToolResult,
+    EmbeddedResource,
+    ImageContent,
+    TextContent,
+    ToolAnnotations,
+)
 from pydantic import ValidationError
 
 from magone_mcp_core import ConnectorServer, request_header
 
+from . import config
 from .allowlist import ALLOWED_NAMES, schema_matches_snapshot
-from .artifact_scope import ArtifactScope
-from .config import artifacts_root
-from .paths import extract_paths
+from .artifact_scope import RUN_UNKNOWN, ArtifactScope, Produced
+from .paths import ArtifactError, reported_paths
 from .upstream_rpc import UpstreamError, UpstreamRpc
 from .upstream_sessions import SessionKey, SessionPool, session_key
 
@@ -54,6 +70,9 @@ SWEEP_SECONDS = 60.0
 FIRST_RETRY_SECONDS = 5.0
 MAX_RETRY_SECONDS = 60.0
 _TRUE = {"1", "true", "yes", "on"}
+# A file counts as written by a call when its mtime is no older than the call's
+# start less this much: room for filesystems that keep whole-second mtimes.
+MTIME_ALLOWANCE_NS = 2_000_000_000
 
 # Appended to the upstream's own description. For browser_take_screenshot (0.0.85)
 # no arguments captures the viewport; fullPage: true captures the whole scrollable
@@ -125,8 +144,64 @@ def _annotations(raw: Any) -> ToolAnnotations | None:
         return None
 
 
-def _error(text: str) -> CallToolResult:
-    return CallToolResult(content=[TextContent(type="text", text=text)], isError=True)
+def _encoded_bytes(item: Any) -> int:
+    """Decoded size of a binary content item (image, audio, blob resource), else 0."""
+    if isinstance(item, (ImageContent, AudioContent)):
+        data = item.data
+    elif isinstance(item, EmbeddedResource) and isinstance(item.resource, BlobResourceContents):
+        data = item.resource.blob
+    else:
+        return 0
+    return len(data or "") * 3 // 4
+
+
+def cap_media(result: CallToolResult, limit: int) -> CallToolResult:
+    """Keep a relayed result's binary items under ``limit`` bytes in total.
+
+    The outbound budget measures text only, so without this a full-page
+    screenshot of a very long page would go back however big it is. An item
+    that would take the total over the limit is replaced by a note naming its
+    size and what to do instead; text items and smaller binaries are kept.
+    """
+    total, content, replaced = 0, [], 0
+    for item in result.content:
+        size = _encoded_bytes(item)
+        if size and total + size > limit:
+            replaced += 1
+            content.append(
+                TextContent(
+                    type="text",
+                    text=(
+                        f"[A {item.type} of {size:,} bytes was left out of this result: it is "
+                        f"over the {limit:,} byte limit (ARTIFACTS_MAX_BYTES). Take a smaller "
+                        "screenshot (the viewport rather than fullPage, or a lower scale), or "
+                        "fetch a saved file with publish_artifact.]"
+                    ),
+                )
+            )
+            continue
+        total += size
+        content.append(item)
+    if not replaced:
+        return result
+    logger.warning("relayed_media_over_limit", items=replaced, limit=limit)
+    return result.model_copy(update={"content": content})
+
+
+def produced_files(paths: list[str], since_ns: int) -> list[Produced]:
+    """The reported paths that are real returnable files written since ``since_ns``."""
+    found: list[Produced] = []
+    for real in paths:
+        try:
+            info = os.stat(real)
+        except OSError:
+            continue
+        if not stat.S_ISREG(info.st_mode) or info.st_mtime_ns < since_ns:
+            continue
+        if config.content_type_for(Path(real)) is None:
+            continue
+        found.append(Produced.of(real, info))
+    return found
 
 
 class Gateway:
@@ -156,9 +231,9 @@ class Gateway:
         )
         self.local_names = server.tool_names()
         self.upstream: dict[str, dict] = {}
-        # Per caller session, the real artifact paths that showed up in that
-        # session's own relayed results. The local tools scope to this set.
-        self.scope = ArtifactScope()
+        # Per caller run, the files its own calls reported writing and wrote
+        # during the call. The local tools scope to this set.
+        self.scope = ArtifactScope(options["idle_seconds"], clock)
         self._next_fetch = 0.0
         self._backoff = FIRST_RETRY_SECONDS
         self._sweeper: asyncio.Task | None = None
@@ -252,17 +327,22 @@ class Gateway:
             )
 
     async def _relay(self, name: str, arguments: dict, context: Any) -> CallToolResult:
-        """The upstream's result for one call. Read-only, selection and the budget
-        are applied by ``ConnectorServer._run_relayed`` around this; here is the
-        browser-specific part: run identity, the session and recording artifacts."""
+        """The upstream's result for one call. Read-only, selection, the budget and
+        the untrusted-content envelope are applied by ``ConnectorServer._run_relayed``
+        around this; here is the browser-specific part: run identity, the session,
+        the media size cap and recording which files this run produced.
+
+        Refusals are raised as ``ToolError``: they are this connector's words, not
+        the upstream's, so they are not wrapped as untrusted content.
+        """
         identity, execution_id = request_run(context)
         if not identity and not execution_id and self.server.mode != "local":
             # In platform or hosted mode several callers reach one connector, so
             # without either a verified identity or a run header every anonymous
-            # caller would land in one shared "default" browser — same cookies,
+            # caller would land in one shared "default" browser: same cookies,
             # same logins. Refuse rather than silently co-mingle runs. `local`
             # mode is a single user on loopback, where one default session is fine.
-            return _error(
+            raise ToolError(
                 "This browser tool needs a run identity so your calls get their own "
                 "isolated browser session. Send an X-Execution-Id header (any id unique "
                 "to your run), or run this connector behind a token verifier. Without "
@@ -272,44 +352,70 @@ class Gateway:
         self._ensure_sweeper()
         logger.info("tool_relayed", tool=name, argument_keys=sorted(arguments))
         key = session_key(identity, execution_id)
+        self.scope.open(key)
+        started_ns = time.time_ns()
         try:
             result = await self.pool.call_tool(key, name, arguments)
         except UpstreamError as exc:
             logger.warning("upstream_call_failed", tool=name, reason=str(exc)[:200])
-            return _error(str(exc))
+            raise ToolError(str(exc)) from None
         if not isinstance(result.get("content"), list):
-            return _error("The browser service returned no content.")
+            raise ToolError("The browser service returned no content.")
         try:
             shaped = CallToolResult.model_validate(result)
         except ValidationError:
-            return _error("The browser service returned a result this server cannot read.")
-        self._record_artifacts(key, shaped)
-        return shaped
+            raise ToolError(
+                "The browser service returned a result this server cannot read."
+            ) from None
+        self._record_artifacts(key, shaped, started_ns - MTIME_ALLOWANCE_NS)
+        return cap_media(shaped, config.max_bytes())
 
-    def _record_artifacts(self, key: SessionKey, result: CallToolResult) -> None:
-        """Remember the files this relayed result names, so only this session may fetch them."""
-        texts = [
-            block.text
+    def _record_artifacts(self, key: SessionKey, result: CallToolResult, since_ns: int) -> None:
+        """Record the files this call reported writing, so only this run may fetch them.
+
+        Authoritative signals only: a path counts when Playwright's own report
+        lines name it (``reported_paths``: the ``### Result`` / ``### Snapshot``
+        links, never page text), the file exists, and it was written during this
+        call. A name a page puts in its URL, title or text is never recorded, and
+        neither is a guessed name of a file someone else wrote earlier.
+        """
+        root = config.artifacts_root()
+        paths = [
+            path
             for block in result.content
-            if getattr(block, "type", None) == "text" and getattr(block, "text", None)
+            if isinstance(block, TextContent) and block.text
+            for path in reported_paths(block.text, root)
         ]
-        if not texts:
-            return
-        root = artifacts_root()
-        paths = [p for text in texts for p in extract_paths(text, root)]
-        if paths:
-            self.scope.record(key, paths)
+        produced = produced_files(paths, since_ns) if paths else []
+        if len(produced) < len(paths):
+            logger.info("artifact_report_unverified", reported=len(paths), kept=len(produced))
+        if produced:
+            self.scope.record(key, produced)
 
     def allowed_paths(self, context: Any) -> set[str] | None:
         """The artifact paths the caller may read/list/delete, or None for no restriction.
 
-        None in ``local`` mode (a single caller on loopback). Otherwise the real
-        paths this caller's session has produced: a session that has run no browser
-        tool, or an anonymous caller with no run of its own, gets an empty set.
+        None in ``local`` mode (a single caller on loopback). Otherwise the files
+        this caller's run produced that are still as recorded: a run that has
+        produced nothing, or an anonymous caller with no run, gets an empty set.
         """
         if self.server.mode == "local":
             return None
-        return self.scope.allowed(request_session_key(context))
+        key = request_session_key(context)
+        self.scope.touch(key)
+        return self.scope.allowed(key)
+
+    def require_known_run(self, context: Any) -> None:
+        """Refuse, with the reason, a run this process holds no record for.
+
+        Outside ``local`` mode only. Without this, a run whose record a restart,
+        a different replica or idle expiry lost would see an empty listing and
+        "not produced by this run", which reads as if its files never existed.
+        """
+        if self.server.mode == "local":
+            return
+        if not self.scope.known(request_session_key(context)):
+            raise ArtifactError(RUN_UNKNOWN)
 
     # -- lifecycle -----------------------------------------------------------
 
@@ -326,10 +432,34 @@ class Gateway:
             await asyncio.sleep(SWEEP_SECONDS)
             try:
                 await self.pool.evict_idle()
-                # Drop the artifact record of any session that is no longer open.
-                self.scope.retain(self.pool.active_keys())
+                self.cleanup_expired_runs()
             except Exception as exc:  # noqa: BLE001 - the sweeper must outlive one bad tick
                 logger.error("idle_sweep_failed", error_type=type(exc).__name__)
+
+    def cleanup_expired_runs(self) -> int:
+        """Forget runs idle past the limit and delete the files they never fetched.
+
+        Once a run's record is gone nobody can fetch its files, so they would
+        only fill the shared volume. Kept when ``ARTIFACTS_DELETE_AFTER_PUBLISH``
+        is off (the operator wants files left on the volume) and in ``local``
+        mode (a laptop user's own output directory). A file rewritten since it
+        was recorded is not this run's any more and is left alone.
+        """
+        left = self.scope.expire()
+        if not left or self.server.mode == "local" or not config.delete_after_publish():
+            return 0
+        removed = 0
+        for item in left:
+            if not item.still_current():
+                continue
+            try:
+                os.unlink(item.real_path)
+                removed += 1
+            except OSError as exc:
+                logger.warning("expired_artifact_delete_failed", error=type(exc).__name__)
+        if removed:
+            logger.info("expired_artifacts_deleted", count=removed)
+        return removed
 
     async def close(self) -> None:
         if self._sweeper is not None:

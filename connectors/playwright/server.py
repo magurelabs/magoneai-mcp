@@ -28,7 +28,8 @@ them, image content.
 
 Each caller run gets its own browser session, keyed by the verified caller
 (when a token verifier authenticates requests) and the ``X-Execution-Id``
-header. Without that header a caller's calls share one ``default`` session.
+header. Outside ``local`` mode a browser call with neither is refused. The
+local tools only see files the caller's own run produced (``artifact_scope.py``).
 """
 
 from typing import Any
@@ -41,7 +42,7 @@ from magone_mcp_core import ConnectorServer, declare_schema
 from . import config, gateway
 from .files import read_artifact
 from .listing import list_recent
-from .paths import ArtifactError, resolve_artifact
+from .paths import ArtifactError, candidate_real_path, resolve_artifact
 from .report_build import build_report
 from .report_model import TestReport, format_validation_error
 
@@ -68,14 +69,22 @@ def _json_text(payload: dict) -> TextContent:
     return TextContent(type="text", text=json.dumps(payload, indent=2))
 
 
-def _require_own_artifact(resolved: Any, ctx: Any) -> None:
-    """Refuse a file this caller's own run did not produce (outside ``local`` mode)."""
+NOT_THIS_RUN = (
+    "That file was not produced by this run. Only files the browser saved in "
+    "your own run can be returned; call list_artifacts to see them."
+)
+
+
+def _require_own_artifact(raw_path: str, root: Any, ctx: Any) -> None:
+    """Refuse a path this caller's own run did not produce (outside ``local`` mode).
+
+    Checked on the path the caller named BEFORE anything looks at the disk, and
+    with one message whether or not such a file exists, so a guessed name never
+    tells a run that another run's file is there.
+    """
     allowed = browser.allowed_paths(ctx)
-    if allowed is not None and str(resolved) not in allowed:
-        raise ArtifactError(
-            "That file was not produced by this run. Only files the browser saved in "
-            "your own run can be returned; call list_artifacts to see them."
-        )
+    if allowed is not None and candidate_real_path(raw_path, root) not in allowed:
+        raise ArtifactError(NOT_THIS_RUN)
 
 
 @server.tool(
@@ -125,8 +134,10 @@ async def publish_artifact(path: str, filename: str | None = None, ctx: Any = No
         "delete": config.delete_after_publish(),
     }
     try:
-        resolved = resolve_artifact(path, config.artifacts_root())
-        _require_own_artifact(resolved, ctx)
+        browser.require_known_run(ctx)
+        root = config.artifacts_root()
+        _require_own_artifact(path, root, ctx)
+        resolved = resolve_artifact(path, root)
         summary, resource = read_artifact(resolved, options)
     except ArtifactError as exc:
         server.logger.warning("artifact_refused", reason=str(exc)[:200])
@@ -173,6 +184,10 @@ async def publish_artifact(path: str, filename: str | None = None, ctx: Any = No
 async def list_artifacts(since_minutes: int = 60, limit: int = 50, ctx: Any = None) -> dict:
     since = max(1, min(int(since_minutes), MAX_SINCE_MINUTES))
     capped = max(1, min(int(limit), MAX_LIST_LIMIT))
+    try:
+        browser.require_known_run(ctx)
+    except ArtifactError as exc:
+        return {"error": str(exc)}
     result = list_recent(config.artifacts_root(), since, capped, browser.allowed_paths(ctx))
     server.logger.info("artifacts_listed", count=result["count"], since_minutes=since)
     return result

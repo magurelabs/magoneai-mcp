@@ -44,6 +44,8 @@ def upstream():
         browser.apply_manifest([])
         browser.pool._sessions.clear()
         browser.pool._locks.clear()
+        browser.scope._runs.clear()
+        browser.scope._owner.clear()
         browser._next_fetch = 0.0
         browser._backoff = gateway_module.FIRST_RETRY_SECONDS
         browser.expose_unsafe = expose_unsafe

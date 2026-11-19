@@ -23,11 +23,20 @@ _ALLOWED = ", ".join(sorted(CONTENT_TYPES))
 
 _MARKDOWN_LINK = re.compile(r"^\s*-?\s*\[[^\]]*\]\((?P<path>[^)]+)\)\s*$")
 
-# Tokens a relayed result's text is split into to find the files it names
-# ("Saved to /artifacts/page-1.png", or a "[Video](path)" link). Splitting first
-# and testing each token's extension avoids running a regex over a huge blob,
-# where a backtracking pattern would hang on, say, a megabyte of console output.
-_TOKEN_SPLIT = re.compile(r"[\s()\[\]<>'\"`,;]+")
+# Where a Playwright reply names the files its call wrote (0.0.85, captured live):
+#
+#   ### Result
+#   - [Screenshot of viewport](out/page-2026-11-19T08-11-40-598Z.png)
+#   ### Snapshot
+#   - [Snapshot](out/page-2026-11-19T08-11-40-503Z.yml)
+#
+# Only a whole line of that shape, inside one of these sections, counts. The
+# `### Page` section (URL, title), the `### Ran Playwright code` section and
+# any snapshot or console text are the page's words, not Playwright's, so a name
+# that appears there is never taken as a file this run produced.
+_REPORTING_SECTIONS = frozenset({"result", "snapshot"})
+_SECTION = re.compile(r"^###\s+(?P<name>.+?)\s*$")
+_REPORTED_LINE = re.compile(r"^-\s\[[^\]\n]{0,200}\]\((?P<path>[^()\n]{1,1024})\)$")
 _RETURNABLE_SUFFIXES = tuple(sorted(CONTENT_TYPES))
 
 
@@ -99,9 +108,8 @@ def resolve_artifact(raw_path: str, root: Path) -> Path:
 def candidate_real_path(raw_path: str, root: Path) -> str | None:
     """The real path a raw string would address under ``root``, or None if outside it.
 
-    Like the first half of ``resolve_artifact`` but without the existence, file-type
-    or content-type checks: used to record, from a relayed result's text, the files
-    a session has produced, which may not have finished being written yet.
+    The first half of ``resolve_artifact``, without the existence and type
+    checks, which the caller makes itself on the real path.
     """
     text = unwrap_path(raw_path)
     if not text or "\x00" in text:
@@ -110,16 +118,32 @@ def candidate_real_path(raw_path: str, root: Path) -> str | None:
     return str(real) if _is_within(root, real) else None
 
 
-def extract_paths(text: str, root: Path) -> list[str]:
-    """The real paths of returnable files a relayed result's text names, inside ``root``."""
+def reported_paths(text: str, root: Path) -> list[str]:
+    """Real paths, inside ``root``, that a Playwright reply reports writing.
+
+    Only whole ``- [label](path)`` lines, outside a code fence, in a
+    ``### Result`` or ``### Snapshot`` section count, and only for a returnable
+    file type. The caller still checks
+    that each file exists and was written during the call before trusting it.
+    """
     found: list[str] = []
-    seen: set[str] = set()
-    for token in _TOKEN_SPLIT.split(text or ""):
-        if not token.lower().endswith(_RETURNABLE_SUFFIXES):
+    section, fenced = "", False
+    for line in (text or "").splitlines():
+        if line.startswith("```"):
+            # An inline snapshot or code block: page content, never a report.
+            fenced = not fenced
             continue
-        real = candidate_real_path(token, root)
-        if real is not None and real not in seen:
-            seen.add(real)
+        header = None if fenced else _SECTION.match(line)
+        if header:
+            section = header.group("name").strip().lower()
+            continue
+        if fenced or section not in _REPORTING_SECTIONS:
+            continue
+        match = _REPORTED_LINE.match(line.rstrip())
+        if not match or not match.group("path").lower().endswith(_RETURNABLE_SUFFIXES):
+            continue
+        real = candidate_real_path(match.group("path"), root)
+        if real is not None and real not in found:
             found.append(real)
     return found
 

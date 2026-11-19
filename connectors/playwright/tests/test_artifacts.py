@@ -167,6 +167,7 @@ async def test_listing_limit_truncates(root):
 
 
 async def test_missing_root_lists_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(module.server, "mode", "local")
     monkeypatch.setenv("ARTIFACTS_ROOT", str(tmp_path / "absent"))
     out = json.loads((await call("list_artifacts", {})).content[0].text)
     assert out == {"artifacts": [], "count": 0, "truncated": False}
