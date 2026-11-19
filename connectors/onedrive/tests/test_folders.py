@@ -35,11 +35,33 @@ async def test_create_folder_sends_a_trimmed_folder_body(monkeypatch):
     }
 
 
-@pytest.mark.parametrize("behavior", ["rename", "fail"])
+@pytest.mark.parametrize("behavior", ["rename", "fail", " FAIL "])
 async def test_create_folder_passes_the_conflict_behavior_through(monkeypatch, behavior):
     graph = _created()
     await run(monkeypatch, "onedrive_create_folder", graph, name="New", conflict_behavior=behavior)
-    assert body(graph.requests[0])["@microsoft.graph.conflictBehavior"] == behavior
+    expected = behavior.strip().lower()
+    assert body(graph.requests[0])["@microsoft.graph.conflictBehavior"] == expected
+
+
+@pytest.mark.parametrize("behavior", ["replace", "overwrite", ""])
+async def test_create_folder_refuses_a_conflict_behavior_outside_its_enum(monkeypatch, behavior):
+    """The SDK checks the argument is a str, not that it is in the schema's enum.
+
+    `replace` could replace an existing folder from a tool marked non-destructive,
+    so it is refused here before any request. An empty string means the default.
+    """
+    graph = _created()
+    result = await run(
+        monkeypatch, "onedrive_create_folder", graph, name="New", conflict_behavior=behavior
+    )
+    if behavior == "":
+        assert body(graph.requests[0])["@microsoft.graph.conflictBehavior"] == "rename"
+        return
+    assert result == {
+        "success": False,
+        "error": "conflict_behavior must be one of ['rename', 'fail']",
+    }
+    assert graph.requests == [] and graph.token_requests == []
 
 
 async def test_create_folder_reports_a_name_conflict(monkeypatch):

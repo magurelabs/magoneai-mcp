@@ -15,6 +15,8 @@ UPLOAD_CHUNK_BYTES = 32 * CHUNK_ALIGN_BYTES  # 10 MiB
 DEFAULT_MAX_UPLOAD_MB = 250
 MAX_UPLOAD_ENV = "ONEDRIVE_MAX_UPLOAD_MB"
 CONFLICT_BEHAVIORS = ["rename", "replace", "fail"]
+# A folder create never replaces an existing folder, so it offers no "replace".
+FOLDER_CONFLICT_BEHAVIORS = ["rename", "fail"]
 
 VALID_LINK_TYPES = ["view", "edit", "embed"]
 VALID_LINK_SCOPES = ["anonymous", "organization"]

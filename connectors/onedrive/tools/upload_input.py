@@ -62,10 +62,15 @@ def item_path(folder_path: str | None, folder_id: str | None, filename: str) -> 
     return f"/me/drive/root:/{'/'.join([*encoded, name])}:"
 
 
-def check_conflict(value: str | None) -> str:
+def check_conflict(value: str | None, allowed: list[str] = CONFLICT_BEHAVIORS) -> str:
+    """The conflict behavior to send, or UploadInputError for one not in `allowed`.
+
+    The schema's enum does not guard this: the MCP SDK validates an argument by
+    its Python type (`str`), not by the declared enum, so each tool re-checks.
+    """
     behavior = (value or "rename").strip().lower()
-    if behavior not in CONFLICT_BEHAVIORS:
-        raise UploadInputError(f"conflict_behavior must be one of {CONFLICT_BEHAVIORS}")
+    if behavior not in allowed:
+        raise UploadInputError(f"conflict_behavior must be one of {allowed}")
     return behavior
 
 

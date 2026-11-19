@@ -117,6 +117,18 @@ async def test_a_graph_refusal_for_one_file_fails_alone(monkeypatch):
     assert [u["name"] for u in result["uploaded"]] == ["b.txt"]
 
 
+async def test_a_bad_conflict_behavior_is_refused_over_mcp(monkeypatch):
+    """The SDK validates `conflict_behavior` as a str, not against the enum."""
+    result, graph, is_error = await upload(
+        monkeypatch, [attachment("a.txt", b"x")], conflict_behavior="merge"
+    )
+    assert result == {
+        "success": False,
+        "error": "conflict_behavior must be one of ['rename', 'replace', 'fail']",
+    }
+    assert graph.requests == [] and graph.token_requests == []
+
+
 async def test_a_file_over_the_size_cap_fails_alone(monkeypatch):
     install(monkeypatch, _graph())
     monkeypatch.setenv("ONEDRIVE_MAX_UPLOAD_MB", "1")
@@ -186,7 +198,7 @@ async def test_a_bad_conflict_behavior_is_refused_before_any_request(monkeypatch
 
 
 async def upload_many_direct(**kwargs):
-    """The handler directly: the schema's enum would stop this over MCP."""
+    """The handler directly, as a caller that skips the MCP client would."""
     module = importlib.import_module("connectors.onedrive.server")
     return await module.onedrive_upload_files({}, attachments=[attachment("a", b"x")], **kwargs)
 

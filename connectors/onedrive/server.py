@@ -56,6 +56,7 @@ from magone_mcp_core.redact import scrub_text, upstream_error
 from ._shared import get_access_token, graph_request
 from .tools import copy_item, upload_graph, upload_many
 from .tools._constants import (
+    FOLDER_CONFLICT_BEHAVIORS,
     MAX_LINK_EXPIRY_DAYS,
     MAX_RESULTS_CAP,
     MIN_LINK_EXPIRY_DAYS,
@@ -677,6 +678,7 @@ async def onedrive_create_folder(
 ) -> dict[str, Any]:
     try:
         name = check_name(name, "name")
+        conflict = check_conflict(conflict_behavior, FOLDER_CONFLICT_BEHAVIORS)
     except UploadInputError as exc:
         return {"success": False, "error": str(exc)}
     if parent_folder_id:
@@ -690,7 +692,7 @@ async def onedrive_create_folder(
     body = {
         "name": name,
         "folder": {},
-        "@microsoft.graph.conflictBehavior": conflict_behavior,
+        "@microsoft.graph.conflictBehavior": conflict,
     }
     try:
         item = await graph_request(credentials, "POST", endpoint, json_data=body)
