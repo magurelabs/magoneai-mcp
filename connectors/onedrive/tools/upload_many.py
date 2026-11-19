@@ -14,6 +14,7 @@ whose list is not inline objects at all is refused before any request.
 from typing import Any
 
 import httpx
+import structlog
 
 from ._constants import max_upload_bytes
 from ._format import format_uploaded
@@ -21,6 +22,8 @@ from .upload_graph import UPLOAD_TIMEOUT, UploadError, upload_bytes
 from .upload_input import UploadInputError, item_path, resolve_payload
 
 MAX_FILES_PER_CALL = 20
+
+logger = structlog.get_logger("mcp.onedrive")
 
 UNRESOLVED_MESSAGE = (
     "Each attachment needs filename and content_base64. A run-file key or "
@@ -75,4 +78,11 @@ async def upload_many(
                 uploaded.append(await _upload_one(client, token, item, destination, conflict))
             except (UploadInputError, UploadError, httpx.HTTPError) as exc:
                 failed.append({"filename": name, "error": str(exc) or type(exc).__name__})
+            except Exception as exc:
+                # Earlier files are already in OneDrive. Letting this escape
+                # would drop `uploaded`, and a retry would upload them twice.
+                # Only the type is logged or returned: the text may echo a body.
+                kind = type(exc).__name__
+                logger.warning("onedrive_upload_files_item_error", error_type=kind)
+                failed.append({"filename": name, "error": f"Upload failed unexpectedly ({kind})"})
     return {"success": not failed, "uploaded": uploaded, "failed": failed}

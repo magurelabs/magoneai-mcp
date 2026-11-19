@@ -117,6 +117,32 @@ async def test_a_graph_refusal_for_one_file_fails_alone(monkeypatch):
     assert [u["name"] for u in result["uploaded"]] == ["b.txt"]
 
 
+async def test_an_unexpected_error_mid_batch_keeps_what_already_uploaded(monkeypatch):
+    """A 200 with an HTML body (a proxy, say) makes `.json()` raise JSONDecodeError.
+
+    Before, that escaped the loop and the call returned only an error, although
+    a.txt was already in OneDrive; a retry under `rename` then made "a 1.txt".
+    Now b.txt fails alone, c.txt still goes, and the result says which is which.
+    Only the exception's type reaches the caller and the log.
+    """
+    html = httpx.Response(200, text="<html>proxy says hi rt-secret</html>")
+    graph = FakeGraph().on(
+        "PUT",
+        "/content",
+        httpx.Response(201, json=drive_item("a.txt")),
+        html,
+        httpx.Response(201, json=drive_item("c.txt")),
+    )
+    files = [attachment(n, b"x") for n in ("a.txt", "b.txt", "c.txt")]
+    result, graph, is_error = await upload(monkeypatch, files, graph)
+    assert result["success"] is False and is_error is False
+    assert [u["name"] for u in result["uploaded"]] == ["a.txt", "c.txt"]
+    assert result["failed"] == [
+        {"filename": "b.txt", "error": "Upload failed unexpectedly (JSONDecodeError)"}
+    ]
+    assert len(graph.matching("PUT")) == 3
+
+
 async def test_a_bad_conflict_behavior_is_refused_over_mcp(monkeypatch):
     """The SDK validates `conflict_behavior` as a str, not against the enum."""
     result, graph, is_error = await upload(
