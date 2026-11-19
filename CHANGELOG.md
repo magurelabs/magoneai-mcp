@@ -50,7 +50,7 @@ ahead of the first release.
   post's reactions and comments, and report on who engages with an
   organization's posts. Blocked from publication until it has run end to end.
 - `onedrive` connector: 11 tools over the signed-in user's own OneDrive
-  (`/me/drive`) through Microsoft Graph's delegated flow — list, get, upload
+  (`/me/drive`) through Microsoft Graph's delegated flow: list, get, upload
   (one file or up to 20 inline in one call, with resumable sessions above
   4 MB), download, delete, create folder, copy, move, share link and search.
   v1's "shared with me" listing is not ported: Microsoft has deprecated both
