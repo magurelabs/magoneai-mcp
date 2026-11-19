@@ -35,6 +35,31 @@ _MARKDOWN_LINK = re.compile(r"^\s*-?\s*\[[^\]]*\]\((?P<path>[^)]+)\)\s*$")
 # any snapshot or console text are the page's words, not Playwright's, so a name
 # that appears there is never taken as a file this run produced.
 _REPORTING_SECTIONS = frozenset({"result", "snapshot"})
+
+# `### Result` is trusted only for tools whose result IS the file they wrote.
+# Other tools put text there that a page controls (console output, network
+# bodies, search matches), and a page can print a line shaped like a report.
+_FILE_WRITING_TOOLS = frozenset(
+    {
+        "browser_pdf_save",
+        "browser_snapshot",
+        "browser_stop_tracing",
+        "browser_stop_video",
+        "browser_take_screenshot",
+    }
+)
+
+# Tools whose reply echoes page content: nothing in it ever counts as a report,
+# `### Snapshot` included, since the echoed text can open that section too.
+_PAGE_ECHO_TOOLS = frozenset(
+    {
+        "browser_console_messages",
+        "browser_find",
+        "browser_network_request",
+        "browser_network_requests",
+        "browser_run_code_unsafe",
+    }
+)
 _SECTION = re.compile(r"^###\s+(?P<name>.+?)\s*$")
 _REPORTED_LINE = re.compile(r"^-\s\[[^\]\n]{0,200}\]\((?P<path>[^()\n]{1,1024})\)$")
 _RETURNABLE_SUFFIXES = tuple(sorted(CONTENT_TYPES))
@@ -118,15 +143,21 @@ def candidate_real_path(raw_path: str, root: Path) -> str | None:
     return str(real) if _is_within(root, real) else None
 
 
-def reported_paths(text: str, root: Path) -> list[str]:
-    """Real paths, inside ``root``, that a Playwright reply reports writing.
+def reported_paths(text: str, root: Path, tool: str) -> list[str]:
+    """Real paths, inside ``root``, that a Playwright reply to ``tool`` reports writing.
 
-    Only whole ``- [label](path)`` lines, outside a code fence, in a
-    ``### Result`` or ``### Snapshot`` section count, and only for a returnable
-    file type. The caller still checks
-    that each file exists and was written during the call before trusting it.
+    Only whole ``- [label](path)`` lines, outside a code fence, count, and only
+    for a returnable file type: in ``### Snapshot`` for any tool that does not
+    echo page content, and in ``### Result`` only for a tool that writes files.
+    A reply that opens a reporting section twice has page text posing as a
+    section, so it reports nothing. The caller still checks that each file
+    exists and was written during the call before trusting it.
     """
+    if tool in _PAGE_ECHO_TOOLS:
+        return []
+    trusted = _REPORTING_SECTIONS if tool in _FILE_WRITING_TOOLS else frozenset({"snapshot"})
     found: list[str] = []
+    seen: set[str] = set()
     section, fenced = "", False
     for line in (text or "").splitlines():
         if line.startswith("```"):
@@ -136,8 +167,11 @@ def reported_paths(text: str, root: Path) -> list[str]:
         header = None if fenced else _SECTION.match(line)
         if header:
             section = header.group("name").strip().lower()
+            if section in _REPORTING_SECTIONS and section in seen:
+                return []
+            seen.add(section)
             continue
-        if fenced or section not in _REPORTING_SECTIONS:
+        if fenced or section not in trusted:
             continue
         match = _REPORTED_LINE.match(line.rstrip())
         if not match or not match.group("path").lower().endswith(_RETURNABLE_SUFFIXES):

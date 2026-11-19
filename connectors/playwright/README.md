@@ -227,9 +227,11 @@ single user on loopback, where one default session is fine.
 
 **Artifacts are scoped to the run that produced them.** A file joins a run's
 scope only when all three hold: Playwright's own report lines in that run's
-reply name it (the `- [Screenshot of viewport](path)` links under `### Result`
-or `### Snapshot`; never the page's URL, title or text), the file exists, and
-it was written during that call. `publish_artifact`, `list_artifacts` and
+reply name it (the `- [Screenshot of viewport](path)` links under `### Snapshot`,
+or under `### Result` for a tool that writes files: screenshot, PDF, snapshot,
+video and trace stop; never the page's URL, title or text, and nothing from a
+tool that echoes the page, such as `browser_console_messages`), the file
+exists, and it was written during that call. `publish_artifact`, `list_artifacts` and
 `publish_test_report` only read, list, embed or delete files in the caller's
 scope, and a file rewritten since it was recorded drops out of it. So a page
 that shows another run's file name, or a list of guessed names, gets a run

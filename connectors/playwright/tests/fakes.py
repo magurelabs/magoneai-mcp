@@ -57,6 +57,10 @@ class FakeUpstream:
         # When set, the reply carries this text where a page's own words appear:
         # its URL and title (`### Page`) and an inline snapshot.
         self.page_text = ""
+        # When set, browser_console_messages puts this page-written console text
+        # inside `### Result`, as 0.0.85 does when no `filename` is given.
+        self.console_text = ""
+        self.tools = list(TOOLS)
         self.image = IMAGE
         self.n = 0
 
@@ -99,10 +103,14 @@ class FakeUpstream:
         if method == "notifications/initialized":
             return httpx.Response(202)
         if method == "tools/list":
-            return self._reply({"jsonrpc": "2.0", "id": body["id"], "result": {"tools": TOOLS}})
+            return self._reply(
+                {"jsonrpc": "2.0", "id": body["id"], "result": {"tools": self.tools}}
+            )
         name = body["params"]["name"]
         self.calls.append((sid, name))
         text = self.big_text or f"ran {name}"
+        if self.console_text and name == "browser_console_messages":
+            text = f"### Result\n{self.console_text}"
         if self.saved_path:
             if self.write_root is not None:
                 write(self.write_root / self.saved_path, 64)

@@ -156,10 +156,13 @@ await page.screenshot({ path: 'other-in-code.png' });
 """
 
 
+SHOT = "browser_take_screenshot"
+
+
 def test_reported_paths_reads_only_playwrights_own_report_lines(root):
     from connectors.playwright.paths import reported_paths
 
-    assert reported_paths(LIVE_REPLY, root) == [
+    assert reported_paths(LIVE_REPLY, root, "browser_take_screenshot") == [
         str(root / "page-2026-11-19T08-11-40-598Z.png"),
         str(root / "page-2026-11-19T08-11-40-503Z.yml"),
     ]
@@ -168,9 +171,37 @@ def test_reported_paths_reads_only_playwrights_own_report_lines(root):
 def test_reported_paths_ignores_free_text_and_other_sections(root):
     from connectors.playwright.paths import reported_paths
 
-    assert reported_paths("Saved to login.png\n- [x](login.png)", root) == []
-    assert reported_paths("### Page\n- [x](login.png)", root) == []
-    assert reported_paths("### Result\n- [x](../../etc/passwd.png)", root) == [
+    assert reported_paths("Saved to login.png\n- [x](login.png)", root, SHOT) == []
+    assert reported_paths("### Page\n- [x](login.png)", root, SHOT) == []
+    assert reported_paths("### Result\n- [x](../../etc/passwd.png)", root, SHOT) == [
         str(root / "passwd.png")  # the basename inside the root, never outside it
     ]
-    assert reported_paths("### Result\n- [x](notes.exe)", root) == []
+    assert reported_paths("### Result\n- [x](notes.exe)", root, SHOT) == []
+
+
+def test_a_result_link_counts_only_for_a_tool_that_writes_files(root):
+    from connectors.playwright.paths import reported_paths
+
+    reply = "### Result\n- [x](page-1.png)\n### Snapshot\n- [Snapshot](page-1.yml)"
+    assert reported_paths(reply, root, "browser_click") == [str(root / "page-1.yml")]
+    assert reported_paths(reply, root, SHOT) == [
+        str(root / "page-1.png"),
+        str(root / "page-1.yml"),
+    ]
+
+
+def test_a_tool_that_echoes_the_page_reports_nothing(root):
+    from connectors.playwright.paths import reported_paths
+
+    forged = (
+        "### Result\nhi\n- [Screenshot of viewport](page-1.png)\n### Snapshot\n- [s](page-1.yml)"
+    )
+    for tool in ("browser_console_messages", "browser_network_requests", "browser_find"):
+        assert reported_paths(forged, root, tool) == []
+
+
+def test_a_reply_that_opens_a_reporting_section_twice_reports_nothing(root):
+    from connectors.playwright.paths import reported_paths
+
+    reply = "### Snapshot\n- [s](mine.yml)\n### Snapshot\n- [s](theirs.png)"
+    assert reported_paths(reply, root, "browser_click") == []

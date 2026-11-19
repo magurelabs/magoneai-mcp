@@ -81,7 +81,7 @@ ahead of the first release.
   that return the browser's screenshots, recordings, traces and HTML/PDF/CSV
   test reports in the tool result as embedded resources. A file is scoped to
   the run whose own call reported writing it (Playwright's report lines only,
-  never page text) and wrote it during that call; a run this process has no
+  never page text or a tool that echoes it, such as console messages) and wrote it during that call; a run this process has no
   record of (a restart, another replica) gets an explicit refusal, and an idle
   run's unfetched files are deleted. Relayed images are capped at
   `ARTIFACTS_MAX_BYTES` per result. The README's compose example keeps the

@@ -367,15 +367,18 @@ class Gateway:
             raise ToolError(
                 "The browser service returned a result this server cannot read."
             ) from None
-        self._record_artifacts(key, shaped, started_ns - MTIME_ALLOWANCE_NS)
+        self._record_artifacts(key, name, shaped, started_ns - MTIME_ALLOWANCE_NS)
         return cap_media(shaped, config.max_bytes())
 
-    def _record_artifacts(self, key: SessionKey, result: CallToolResult, since_ns: int) -> None:
+    def _record_artifacts(
+        self, key: SessionKey, tool: str, result: CallToolResult, since_ns: int
+    ) -> None:
         """Record the files this call reported writing, so only this run may fetch them.
 
         Authoritative signals only: a path counts when Playwright's own report
         lines name it (``reported_paths``: the ``### Result`` / ``### Snapshot``
-        links, never page text), the file exists, and it was written during this
+        links, never page text, and never from a tool whose reply echoes the
+        page, such as console messages), the file exists, and it was written during this
         call. A name a page puts in its URL, title or text is never recorded, and
         neither is a guessed name of a file someone else wrote earlier.
         """
@@ -384,7 +387,7 @@ class Gateway:
             path
             for block in result.content
             if isinstance(block, TextContent) and block.text
-            for path in reported_paths(block.text, root)
+            for path in reported_paths(block.text, root, tool)
         ]
         produced = produced_files(paths, since_ns) if paths else []
         if len(produced) < len(paths):
