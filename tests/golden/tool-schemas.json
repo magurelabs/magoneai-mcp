@@ -4431,7 +4431,7 @@
     "schema": {
       "properties": {
         "destination_folder_id": {
-          "description": "Target folder item ID (omit for root)",
+          "description": "Target folder item ID (omit, or 'root', for the drive root)",
           "type": "string"
         },
         "item_id": {
@@ -4608,7 +4608,7 @@
     "schema": {
       "properties": {
         "destination_folder_id": {
-          "description": "Target folder item ID",
+          "description": "Target folder item ID, or 'root' for the drive root",
           "type": "string"
         },
         "item_id": {
