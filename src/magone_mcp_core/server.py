@@ -47,15 +47,43 @@ def _request_headers(ctx: Any) -> dict:
         return {}
 
 
+# Every header any tool in this process declared in `credential_headers=`,
+# lower-cased. `request_header` refuses these, so the one-header reader cannot
+# hand a connector a credential that was declared for a different tool.
+_DECLARED_CREDENTIAL_HEADERS: set[str] = set()
+
+
+def is_credential_header(name: str) -> bool:
+    """A header `request_header` will not read.
+
+    ``Authorization``, ``Cookie``, ``Proxy-Authorization``, the service-token
+    header and anything else whose name the log redaction treats as secret
+    (``token``, ``secret``, ``api_key``, ``password``, ``session``, ...), plus
+    every header some tool declared with ``credential_headers=``.
+    """
+    from .auth import SERVICE_TOKEN_HEADER
+    from .redact import is_secret_key
+
+    lowered = str(name).strip().lower()
+    return (
+        lowered == SERVICE_TOKEN_HEADER
+        or is_secret_key(lowered)
+        or lowered in _DECLARED_CREDENTIAL_HEADERS
+    )
+
+
 def request_header(ctx: Any, name: str) -> str | None:
-    """One inbound request header by name (case-insensitive), or None.
+    """One inbound non-credential request header by name (case-insensitive), or None.
 
     The public reader a relaying connector uses to key its upstream session off a
-    routing header such as ``X-Execution-Id``. Deliberately one header at a time,
-    not the whole set: a tool's credentials must still be declared with
-    ``credential_headers=`` and are delivered only to that tool, so this does not
-    become a second, bulk way to reach ``Authorization`` or a credential header.
+    routing header such as ``X-Execution-Id``. It never returns a credential:
+    for a name `is_credential_header` matches (``Authorization``, ``Cookie``,
+    the service token, any secret-looking name, any header a tool declared with
+    ``credential_headers=``) it returns None whether or not the header was sent.
+    Credentials reach a tool only through its own ``credential_headers=``.
     """
+    if is_credential_header(name):
+        return None
     headers = {str(k).lower(): v for k, v in _request_headers(ctx).items()}
     return headers.get(name.lower())
 
@@ -157,6 +185,12 @@ class ConnectorServer:
         self._list_hooks: list[Callable[[], Any]] = []
         self._call_hooks: list[Callable[[str], Any]] = []
         self._dynamic_hooks_installed = False
+        # `list_tools` without the before-list hooks, for /healthz: a probe must
+        # not wait on an upstream the hooks would refresh (set with the hooks).
+        self._list_tools_without_hooks: Callable[[], Any] | None = None
+        # Names registered by `register_relayed_tool`, so neither it nor
+        # `unregister_relayed_tool` can replace or remove a local tool.
+        self._relayed_names: set[str] = set()
 
         self._token_verifier = token_verifier
         # The SDK refuses a token verifier without auth settings, so the seam
@@ -293,7 +327,10 @@ class ConnectorServer:
 
         @self.mcp.custom_route("/healthz", methods=["GET"])
         async def healthz(request: Any) -> JSONResponse:
-            tools = await self.mcp.list_tools()
+            # Never through the before-list hooks: a relaying connector's hook
+            # refreshes its upstream's tool list, and a probe that waited on a
+            # slow or hung upstream would fail and restart a healthy process.
+            tools = await (self._list_tools_without_hooks or self.mcp.list_tools)()
             return JSONResponse(
                 {"status": "ok", "name": self.name, "version": self.version, "tools": len(tools)}
             )
@@ -417,6 +454,7 @@ class ConnectorServer:
             self._annotations[name] = annotations
             self._permission_groups[name] = permission_group
             self._required_scopes[name] = list(required_scopes)
+            _DECLARED_CREDENTIAL_HEADERS.update(str(h).lower() for h in credential_headers)
             return fn
 
         return decorator
@@ -589,9 +627,10 @@ class ConnectorServer:
         handler: Callable[[dict, Any], Any],
         required_scopes: tuple | list = (),
         title: str | None = None,
+        source: str | None = None,
     ) -> Any:
-        """Register a tool whose body is supplied at runtime — a relay to an upstream
-        MCP server — with the guarantees a local tool gets.
+        """Register a tool whose body is supplied at runtime (a relay to an upstream
+        MCP server) with the guarantees a local tool gets.
 
         ``handler(arguments, ctx)`` runs the relay and returns the upstream's
         ``CallToolResult`` (or a dict shaped like one); the server applies
@@ -601,8 +640,20 @@ class ConnectorServer:
         for refreshing that list and for intercepting a call to a name not yet
         registered. The connector never has to reach into the SDK tool table or
         this class's bookkeeping, which it would otherwise do unreviewed.
+
+        Every text item of a relayed result is third-party content and is
+        wrapped in the ``<<<UNTRUSTED_CONTENT source=...>>>`` envelope
+        (``provenance.wrap``), labelled ``source`` (default: this server's
+        name); image and resource items are left as they are.
+
+        A name that is already a local tool is refused with ``ValueError``: a
+        relay must never replace a tool the connector defines itself, with its
+        own annotations, group and scopes.
         """
         from .relay import RelayedTool, _placeholder
+
+        if name in self.mcp._tool_manager._tools and name not in self._relayed_names:
+            raise ValueError(f"'{name}' is a local tool of {self.name}; a relay cannot replace it.")
 
         tool = RelayedTool.from_function(
             _placeholder,
@@ -619,14 +670,19 @@ class ConnectorServer:
         }
         tool.server = self
         tool.handler = handler
+        tool.source = source or self.name
         self.mcp._tool_manager._tools[name] = tool
+        self._relayed_names.add(name)
         self._annotations[name] = annotations
         self._permission_groups[name] = permission_group
         self._required_scopes[name] = list(required_scopes)
         return tool
 
     def unregister_relayed_tool(self, name: str) -> None:
-        """Remove a tool registered by ``register_relayed_tool``."""
+        """Remove a tool registered by ``register_relayed_tool``; a local tool is never removed."""
+        if name not in self._relayed_names:
+            return
+        self._relayed_names.discard(name)
         self.mcp._tool_manager._tools.pop(name, None)
         self._annotations.pop(name, None)
         self._permission_groups.pop(name, None)
@@ -641,6 +697,7 @@ class ConnectorServer:
         from mcp.types import CallToolResult
 
         from .redact import argument_keys
+        from .relay import mark_relayed_text
 
         headers = _request_headers(context)
         # The same checks `_apply_guarantees` makes for a local tool, so a
@@ -654,7 +711,7 @@ class ConnectorServer:
         result = await tool.handler(arguments, context)
         if isinstance(result, dict):
             result = CallToolResult.model_validate(result)
-        return budget_call_result(result, self.budget)
+        return budget_call_result(mark_relayed_text(result, tool.source), self.budget)
 
     def before_list_tools(self, fn: Callable[[], Any]) -> Callable[[], Any]:
         """Run ``fn`` before each ``tools/list`` (e.g. to refresh an upstream manifest)."""
@@ -679,6 +736,7 @@ class ConnectorServer:
         self._dynamic_hooks_installed = True
         list_tools = self.mcp.list_tools
         call_tool = self.mcp.call_tool
+        self._list_tools_without_hooks = list_tools
 
         async def list_with_hooks() -> Any:
             for hook in self._list_hooks:
