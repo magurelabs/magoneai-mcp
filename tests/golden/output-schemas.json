@@ -1065,6 +1065,515 @@
     ],
     "type": "object"
   },
+  "onedrive/onedrive_copy_item": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "note": {
+        "type": "string"
+      },
+      "resource_id": {
+        "description": "Item ID of the copy",
+        "type": "string"
+      },
+      "status": {
+        "description": "Graph copies asynchronously; only 'completed' carries resource_id",
+        "enum": [
+          "completed",
+          "accepted",
+          "in_progress"
+        ],
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_create_folder": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "web_url": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_create_share_link": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "expiry": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "link_type": {
+        "type": "string"
+      },
+      "scope": {
+        "type": "string"
+      },
+      "share_url": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_delete_item": {
+    "properties": {
+      "deleted_id": {
+        "type": "string"
+      },
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_download_file": {
+    "properties": {
+      "download_url": {
+        "description": "Pre-authorized URL, valid for roughly an hour",
+        "type": "string"
+      },
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "size": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_get_file": {
+    "properties": {
+      "child_count": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "created_date": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "mime_type": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "modified_date": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "parent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "parent_path": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "size": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "type": {
+        "enum": [
+          "file",
+          "folder"
+        ],
+        "type": "string"
+      },
+      "web_url": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_list_files": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "has_more": {
+        "type": "boolean"
+      },
+      "items": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "mime_type": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "modified_date": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "size": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "type": {
+              "enum": [
+                "file",
+                "folder"
+              ],
+              "type": "string"
+            },
+            "web_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "next_cursor": {
+        "description": "Pass back as cursor for the next page; null when has_more is false",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_move_item": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "web_url": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_search_files": {
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "has_more": {
+        "type": "boolean"
+      },
+      "items": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "mime_type": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "modified_date": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "size": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "type": {
+              "enum": [
+                "file",
+                "folder"
+              ],
+              "type": "string"
+            },
+            "web_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "query": {
+        "type": "string"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_upload_file": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "parent_id": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "parent_path": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "size": {
+        "type": [
+          "integer",
+          "null"
+        ]
+      },
+      "success": {
+        "type": "boolean"
+      },
+      "upload_method": {
+        "enum": [
+          "simple",
+          "session"
+        ],
+        "type": "string"
+      },
+      "web_url": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
+  "onedrive/onedrive_upload_files": {
+    "properties": {
+      "error": {
+        "description": "Present when success is false",
+        "type": "string"
+      },
+      "failed": {
+        "items": {
+          "properties": {
+            "error": {
+              "type": "string"
+            },
+            "filename": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "success": {
+        "description": "True when no file failed",
+        "type": "boolean"
+      },
+      "uploaded": {
+        "items": {
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "parent_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "parent_path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "size": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "upload_method": {
+              "enum": [
+                "simple",
+                "session"
+              ],
+              "type": "string"
+            },
+            "web_url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "success"
+    ],
+    "type": "object"
+  },
   "otp_verification/check_verification_status": {
     "properties": {
       "error": {

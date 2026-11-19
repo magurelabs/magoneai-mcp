@@ -49,6 +49,15 @@ ahead of the first release.
 - `linkedin` connector: 11 tools to post as a member or a company page, read a
   post's reactions and comments, and report on who engages with an
   organization's posts. Blocked from publication until it has run end to end.
+- `onedrive` connector: 11 tools over the signed-in user's own OneDrive
+  (`/me/drive`) through Microsoft Graph's delegated flow: list, get, upload
+  (one file or up to 20 inline in one call, with resumable sessions above
+  4 MB), download, delete, create folder, copy, move, share link and search.
+  v1's "shared with me" listing is not ported: Microsoft has deprecated both
+  `/me/drive/sharedWithMe` and `/me/drive/recent` with no successor. Credentials
+  arrive per call as `X-Microsoft-*` headers; its own Graph scopes are
+  `Files.ReadWrite`, `User.Read` and `offline_access`, and no other connector's
+  scopes change. Blocked from publication until it has run end to end.
 - `server.json` registry manifests for every publishable connector, derived
   from the connector's own name and version.
 - Each `server.json` names the connector's Docker Hub image,
