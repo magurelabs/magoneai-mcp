@@ -54,7 +54,7 @@ from magone_mcp_core import ConnectorServer, declare_output_schema, declare_sche
 from magone_mcp_core.redact import scrub_text, upstream_error
 
 from ._shared import get_access_token, graph_request
-from .tools import copy_item, upload_graph, upload_many
+from .tools import copy_item, drive_root, upload_graph, upload_many
 from .tools._constants import (
     FOLDER_CONFLICT_BEHAVIORS,
     MAX_LINK_EXPIRY_DAYS,
@@ -712,7 +712,8 @@ async def onedrive_create_folder(
     name="onedrive_copy_item",
     description=(
         "Copy a file or folder to a new location in OneDrive. "
-        "Pass `item_id` (source), `destination_folder_id` (target folder: omit to copy to root), "
+        "Pass `item_id` (source), `destination_folder_id` (target folder: omit, or pass "
+        "'root', to copy to the drive root), "
         "and optionally `new_name` to rename the copy. "
         "Returns the new item's ID and name once the copy completes."
     ),
@@ -733,7 +734,7 @@ async def onedrive_create_folder(
             "item_id": {"type": "string", "description": "Source item ID to copy"},
             "destination_folder_id": {
                 "type": "string",
-                "description": "Target folder item ID (omit for root)",
+                "description": "Target folder item ID (omit, or 'root', for the drive root)",
             },
             "new_name": {
                 "type": "string",
@@ -774,7 +775,7 @@ async def onedrive_copy_item(
         if err:
             return {"success": False, "error": err}
 
-    body: dict[str, Any] = {"parentReference": {"id": destination_folder_id or "root"}}
+    body: dict[str, Any] = {}
     if new_name:
         try:
             body["name"] = check_name(new_name, "new_name")
@@ -782,6 +783,9 @@ async def onedrive_copy_item(
             return {"success": False, "error": str(exc)}
     try:
         token = await get_access_token(credentials)
+        body["parentReference"] = await drive_root.parent_reference(
+            token, destination_folder_id, with_drive_id=True
+        )
         return await copy_item.copy(token, item_id, body)
     except Exception as exc:
         return _failed("onedrive_copy_item", exc)
@@ -793,8 +797,8 @@ async def onedrive_copy_item(
     name="onedrive_move_item",
     description=(
         "Move a file or folder to a different folder in OneDrive. "
-        "Pass `item_id` (source), `destination_folder_id` (target folder), "
-        "and optionally `new_name` to rename while moving."
+        "Pass `item_id` (source), `destination_folder_id` (target folder, or 'root' "
+        "for the drive root), and optionally `new_name` to rename while moving."
     ),
     annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True),
     credential_headers=[
@@ -813,7 +817,7 @@ async def onedrive_copy_item(
             "item_id": {"type": "string", "description": "Item ID to move"},
             "destination_folder_id": {
                 "type": "string",
-                "description": "Target folder item ID",
+                "description": "Target folder item ID, or 'root' for the drive root",
             },
             "new_name": {
                 "type": "string",
@@ -853,6 +857,11 @@ async def onedrive_move_item(
         except UploadInputError as exc:
             return {"success": False, "error": str(exc)}
     try:
+        if drive_root.is_root(destination_folder_id):
+            token = await get_access_token(credentials)
+            body["parentReference"] = await drive_root.parent_reference(
+                token, destination_folder_id, with_drive_id=False
+            )
         item = await graph_request(
             credentials, "PATCH", f"/me/drive/items/{encode_id(item_id)}", json_data=body
         )
