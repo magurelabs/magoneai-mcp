@@ -4423,6 +4423,343 @@
       "type": "object"
     }
   },
+  "onedrive/onedrive_copy_item": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "destination_folder_id": {
+          "description": "Target folder item ID (omit, or 'root', for the drive root)",
+          "type": "string"
+        },
+        "item_id": {
+          "description": "Source item ID to copy",
+          "type": "string"
+        },
+        "new_name": {
+          "description": "New name for the copied item (optional)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_create_folder": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "conflict_behavior": {
+          "default": "rename",
+          "description": "What to do if folder name exists: 'rename' or 'fail'",
+          "enum": [
+            "rename",
+            "fail"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "description": "Folder name",
+          "type": "string"
+        },
+        "parent_folder_id": {
+          "description": "Parent folder item ID (omit for root)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_create_share_link": {
+    "annotations": {
+      "destructiveHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "expiry_days": {
+          "description": "Link expiry in days (1-30); required when scope is 'anonymous'",
+          "type": "integer"
+        },
+        "item_id": {
+          "description": "OneDrive item ID",
+          "type": "string"
+        },
+        "link_type": {
+          "default": "view",
+          "description": "Link permission type",
+          "enum": [
+            "view",
+            "edit",
+            "embed"
+          ],
+          "type": "string"
+        },
+        "scope": {
+          "default": "organization",
+          "description": "Link scope",
+          "enum": [
+            "anonymous",
+            "organization"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_delete_item": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "item_id": {
+          "description": "OneDrive item ID to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_download_file": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "item_id": {
+          "description": "OneDrive item ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_get_file": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "item_id": {
+          "description": "OneDrive item ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_list_files": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "cursor": {
+          "description": "Page cursor: a previous call's next_cursor (omit for page one)",
+          "type": "string"
+        },
+        "folder_id": {
+          "description": "Item ID of the folder to list (omit for root)",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 50,
+          "description": "Max items to return (default: 50, max: 200)",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_move_item": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "destination_folder_id": {
+          "description": "Target folder item ID, or 'root' for the drive root",
+          "type": "string"
+        },
+        "item_id": {
+          "description": "Item ID to move",
+          "type": "string"
+        },
+        "new_name": {
+          "description": "New name for the item after moving (optional)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "destination_folder_id"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_search_files": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "file_type": {
+          "description": "Filter by file extension, e.g. 'pdf', 'docx' (optional)",
+          "type": "string"
+        },
+        "max_results": {
+          "default": 25,
+          "description": "Max results (default: 25, max: 200)",
+          "type": "integer"
+        },
+        "query": {
+          "description": "Search query (filename or content)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_upload_file": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "conflict_behavior": {
+          "default": "rename",
+          "description": "What to do when the name is taken",
+          "enum": [
+            "rename",
+            "replace",
+            "fail"
+          ],
+          "type": "string"
+        },
+        "content": {
+          "description": "Plain-text file content",
+          "type": "string"
+        },
+        "content_base64": {
+          "description": "Base64-encoded file content",
+          "type": "string"
+        },
+        "content_type": {
+          "description": "MIME type (guessed if omitted)",
+          "type": "string"
+        },
+        "filename": {
+          "description": "Name to save the file as",
+          "type": "string"
+        },
+        "folder_id": {
+          "description": "Destination folder item ID",
+          "type": "string"
+        },
+        "folder_path": {
+          "description": "Destination folder path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "filename"
+      ],
+      "type": "object"
+    }
+  },
+  "onedrive/onedrive_upload_files": {
+    "annotations": {
+      "destructiveHint": true,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "attachments": {
+          "description": "Files to upload, each {filename, content_base64, content_type}",
+          "items": {
+            "description": "An inline file; a reference only if a platform resolves it",
+            "properties": {
+              "content_base64": {
+                "description": "Base64-encoded file content",
+                "type": "string"
+              },
+              "content_type": {
+                "description": "MIME type (guessed if omitted)",
+                "type": "string"
+              },
+              "filename": {
+                "description": "Name to save as",
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "string"
+            ]
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "conflict_behavior": {
+          "default": "rename",
+          "description": "What to do when a name is taken",
+          "enum": [
+            "rename",
+            "replace",
+            "fail"
+          ],
+          "type": "string"
+        },
+        "folder_id": {
+          "description": "Destination folder item ID",
+          "type": "string"
+        },
+        "folder_path": {
+          "description": "Destination folder path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachments"
+      ],
+      "type": "object"
+    }
+  },
   "otp_verification/check_verification_status": {
     "annotations": {
       "destructiveHint": false,
@@ -5781,6 +6118,346 @@
         "mailbox",
         "notification_url",
         "client_state"
+      ],
+      "type": "object"
+    }
+  },
+  "playwright/list_artifacts": {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "limit": {
+          "default": 50,
+          "description": "Maximum number of files to return.",
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "since_minutes": {
+          "default": 60,
+          "description": "Only files modified within this many minutes.",
+          "maximum": 10080,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "playwright/publish_artifact": {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "filename": {
+          "description": "Optional name to return it under; the extension is kept.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Path of the file exactly as Playwright printed it, e.g. '../../artifacts/video-1.webm', '/artifacts/page-1.png' or the whole '[Video](...)' link.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "type": "object"
+    }
+  },
+  "playwright/publish_test_report": {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "schema": {
+      "properties": {
+        "include_videos": {
+          "default": false,
+          "description": "Embed the recordings in the HTML report. Off by default: one recording usually exceeds the result size budget.",
+          "type": "boolean"
+        },
+        "report": {
+          "description": "The test report: what was tested, the test cases, the issues found.",
+          "properties": {
+            "console_errors": {
+              "items": {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              "maxItems": 500,
+              "title": "Console Errors",
+              "type": "array"
+            },
+            "environment": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Environment"
+            },
+            "issues": {
+              "items": {
+                "properties": {
+                  "actual": {
+                    "maxLength": 20000,
+                    "title": "Actual",
+                    "type": "string"
+                  },
+                  "console_errors": {
+                    "items": {
+                      "maxLength": 4000,
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "title": "Console Errors",
+                    "type": "array"
+                  },
+                  "expected": {
+                    "maxLength": 20000,
+                    "title": "Expected",
+                    "type": "string"
+                  },
+                  "id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "screenshot_paths": {
+                    "items": {
+                      "maxLength": 2000,
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "title": "Screenshot Paths",
+                    "type": "array"
+                  },
+                  "severity": {
+                    "enum": [
+                      "Blocker",
+                      "Major",
+                      "Minor"
+                    ],
+                    "title": "Severity",
+                    "type": "string"
+                  },
+                  "steps": {
+                    "items": {
+                      "maxLength": 4000,
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "title": "Steps",
+                    "type": "array"
+                  },
+                  "test_case_id": {
+                    "default": "",
+                    "maxLength": 200,
+                    "title": "Test Case Id",
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 20000,
+                    "minLength": 1,
+                    "title": "Title",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "severity",
+                  "title",
+                  "expected",
+                  "actual"
+                ],
+                "title": "Issue",
+                "type": "object"
+              },
+              "maxItems": 500,
+              "title": "Issues",
+              "type": "array"
+            },
+            "summary": {
+              "maxLength": 20000,
+              "title": "Summary",
+              "type": "string"
+            },
+            "test_cases": {
+              "items": {
+                "properties": {
+                  "actual": {
+                    "maxLength": 20000,
+                    "title": "Actual",
+                    "type": "string"
+                  },
+                  "category": {
+                    "enum": [
+                      "positive",
+                      "negative",
+                      "edge"
+                    ],
+                    "title": "Category",
+                    "type": "string"
+                  },
+                  "expected": {
+                    "maxLength": 20000,
+                    "title": "Expected",
+                    "type": "string"
+                  },
+                  "id": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "title": "Id",
+                    "type": "string"
+                  },
+                  "priority": {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "P0",
+                          "P1",
+                          "P2"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Priority"
+                  },
+                  "screenshot_paths": {
+                    "items": {
+                      "maxLength": 2000,
+                      "type": "string"
+                    },
+                    "maxItems": 20,
+                    "title": "Screenshot Paths",
+                    "type": "array"
+                  },
+                  "status": {
+                    "enum": [
+                      "pass",
+                      "fail",
+                      "blocked",
+                      "skipped"
+                    ],
+                    "title": "Status",
+                    "type": "string"
+                  },
+                  "steps": {
+                    "items": {
+                      "maxLength": 4000,
+                      "type": "string"
+                    },
+                    "maxItems": 500,
+                    "title": "Steps",
+                    "type": "array"
+                  },
+                  "title": {
+                    "maxLength": 20000,
+                    "minLength": 1,
+                    "title": "Title",
+                    "type": "string"
+                  },
+                  "video_chapter": {
+                    "anyOf": [
+                      {
+                        "maxLength": 200,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Video Chapter"
+                  },
+                  "video_path": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "default": null,
+                    "title": "Video Path"
+                  }
+                },
+                "required": [
+                  "id",
+                  "title",
+                  "category",
+                  "expected",
+                  "actual",
+                  "status"
+                ],
+                "title": "TestCase",
+                "type": "object"
+              },
+              "maxItems": 500,
+              "title": "Test Cases",
+              "type": "array"
+            },
+            "tested_at": {
+              "format": "date-time",
+              "title": "Tested At",
+              "type": "string"
+            },
+            "title": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Title",
+              "type": "string"
+            },
+            "url": {
+              "maxLength": 4000,
+              "title": "Url",
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "url",
+            "summary"
+          ],
+          "title": "TestReport",
+          "type": "object"
+        },
+        "video_path": {
+          "description": "The recording's .webm path in the output dir (list_artifacts finds it).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "report"
       ],
       "type": "object"
     }
@@ -8129,6 +8806,48 @@
       },
       "required": [
         "query"
+      ],
+      "type": "object"
+    }
+  },
+  "web_search/web_research": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "language": {
+          "default": "en",
+          "description": "Language code for results (default 'en').",
+          "type": "string"
+        },
+        "max_pages": {
+          "default": 5,
+          "description": "How many pages to read (default 5, max 8).",
+          "type": "integer"
+        },
+        "queries": {
+          "description": "1 to 5 specific search queries covering everything needed.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array"
+        },
+        "region": {
+          "description": "Optional two-letter region for local results, e.g. 'ae'.",
+          "type": "string"
+        },
+        "time_range": {
+          "default": "",
+          "description": "Recency filter: day, week, month or year. Omit for all-time results; set it only for news-type questions.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "queries"
       ],
       "type": "object"
     }

@@ -70,6 +70,7 @@ DISTRIBUTION = {
     "dateutil": "python-dateutil",
     "yaml": "PyYAML",
     "PIL": "pillow",
+    "fpdf": "fpdf2",
 }
 
 
