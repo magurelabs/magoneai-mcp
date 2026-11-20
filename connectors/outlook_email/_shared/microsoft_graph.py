@@ -26,6 +26,48 @@ _MAX_BACKOFF_SECONDS = 60.0
 _UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024
 
 
+class GraphAuthError(ValueError):
+    """The caller has no usable Microsoft credentials: a missing refresh token or
+    OAuth app credentials, a failed token refresh, or a 401 from Graph. Tools
+    surface its message so the caller can tell "not connected" from a failure."""
+
+
+_AUTH_REASON_MAX_CHARS = 200
+
+
+def auth_reason(reason: Any) -> str:
+    """The identity provider's own explanation, bounded for a tool result.
+
+    A GraphAuthError message reaches the caller, so only a structured reason
+    (an OAuth `error_description`, a Graph `error.message`) goes into it, cut
+    to its first line and _AUTH_REASON_MAX_CHARS. A raw response body never
+    does: without a structured reason this returns "no reason given"."""
+    if not isinstance(reason, str) or not reason.strip():
+        return "no reason given"
+    line = " ".join(reason.strip().splitlines()[0].split())
+    if len(line) > _AUTH_REASON_MAX_CHARS:
+        line = line[: _AUTH_REASON_MAX_CHARS - 3].rstrip() + "..."
+    return line
+
+
+def graph_reason(error_data: Any) -> str:
+    """``auth_reason`` for a Graph error body: its ``error.message`` only."""
+    error_obj = error_data.get("error") if isinstance(error_data, dict) else None
+    return auth_reason(error_obj.get("message") if isinstance(error_obj, dict) else None)
+
+
+def graph_failure(action: str, exc: Exception) -> Dict[str, Any]:
+    """Error result for a tool whose Graph call raised.
+
+    A credential problem keeps its message, in the "<action>: <reason>" shape the
+    calendar connector uses, so the caller sees the mailbox is not connected
+    instead of an opaque failure it would retry. Anything else stays a bare
+    `action`, so Graph internals do not leak."""
+    if isinstance(exc, GraphAuthError):
+        return {"success": False, "error": f"{action}: {exc}"}
+    return {"success": False, "error": action}
+
+
 class GraphNotFoundError(ValueError):
     """Raised only for an actual Graph 404 — distinguishes a real "resource
     doesn't exist" from other errors whose message text happens to mention
@@ -79,7 +121,7 @@ class MicrosoftGraph:
                     error_data = response.json()
                 except Exception:
                     error_data = {}
-                error_desc = error_data.get("error_description", response.text[:500])
+                error_desc = auth_reason(error_data.get("error_description"))
                 raise ValueError(f"Token refresh failed ({response.status_code}): {error_desc}")
 
             token_data = response.json()
@@ -144,7 +186,7 @@ class MicrosoftGraph:
                     error_data = response.json() if response.content else {}
                 except Exception:
                     error_data = {}
-                error_msg = error_data.get("error", {}).get("message", response.text[:500])
+                error_msg = graph_reason(error_data)
                 raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
             if response.status_code in (204, 202):
@@ -274,9 +316,7 @@ class MicrosoftGraph:
                         error_data = response.json()
                     except Exception:
                         error_data = {}
-                    error_desc = error_data.get(
-                        "error_description", response.text[:500] or "Token acquisition failed"
-                    )
+                    error_desc = auth_reason(error_data.get("error_description"))
                     raise ValueError(
                         f"App-only token acquisition failed ({response.status_code}): {error_desc}"
                     )
@@ -360,7 +400,7 @@ class MicrosoftGraph:
                     error_data = response.json() if response.content else {}
                 except Exception:
                     error_data = {}
-                detail = error_data.get("error", {}).get("message", response.text[:500])
+                detail = graph_reason(error_data)
                 if response.status_code == 401:
                     raise ValueError(
                         f"Authentication failed. Check app credentials and admin consent. ({detail})"
@@ -376,10 +416,7 @@ class MicrosoftGraph:
                     error_data = response.json() if response.content else {}
                 except Exception:
                     error_data = {}
-                detail = error_data.get("error", {}).get("message", response.text[:500])
-                raise GraphNotFoundError(
-                    f"Resource not found. ({detail})" if detail else "Resource not found."
-                )
+                raise GraphNotFoundError(f"Resource not found. ({graph_reason(error_data)})")
             elif response.status_code == 410:
                 # deltaLink expired — caller should reset and re-list.
                 return {"_error": "delta_expired", "_status": 410}
@@ -393,7 +430,7 @@ class MicrosoftGraph:
                     error_data = response.json() if response.content else {}
                 except Exception:
                     error_data = {}
-                error_msg = error_data.get("error", {}).get("message", response.text[:500])
+                error_msg = graph_reason(error_data)
                 raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
             if response.status_code in (204, 202):
