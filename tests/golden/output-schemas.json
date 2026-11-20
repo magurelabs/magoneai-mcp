@@ -2039,6 +2039,12 @@
       "content": {
         "type": "string"
       },
+      "content_type": {
+        "type": "string"
+      },
+      "error_code": {
+        "type": "string"
+      },
       "final_url": {
         "type": "string"
       },
@@ -2111,6 +2117,34 @@
         "items": {
           "type": "object"
         },
+        "type": "array"
+      }
+    },
+    "type": "object"
+  },
+  "web_search/web_research": {
+    "properties": {
+      "errors": {
+        "type": "array"
+      },
+      "note": {
+        "type": "string"
+      },
+      "other_results": {
+        "description": "Further results not read: url, title, snippet, published_date.",
+        "type": "array"
+      },
+      "queries": {
+        "type": "array"
+      },
+      "sources": {
+        "description": "Pages read, most relevant first: url, title, source_domain, published_date, snippet, content_type, passages[].",
+        "type": "array"
+      },
+      "timing_ms": {
+        "type": "object"
+      },
+      "unread_pages": {
         "type": "array"
       }
     },

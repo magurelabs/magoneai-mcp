@@ -8810,6 +8810,48 @@
       "type": "object"
     }
   },
+  "web_search/web_research": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "language": {
+          "default": "en",
+          "description": "Language code for results (default 'en').",
+          "type": "string"
+        },
+        "max_pages": {
+          "default": 5,
+          "description": "How many pages to read (default 5, max 8).",
+          "type": "integer"
+        },
+        "queries": {
+          "description": "1 to 5 specific search queries covering everything needed.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array"
+        },
+        "region": {
+          "description": "Optional two-letter region for local results, e.g. 'ae'.",
+          "type": "string"
+        },
+        "time_range": {
+          "default": "",
+          "description": "Recency filter: day, week, month or year. Omit for all-time results; set it only for news-type questions.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "queries"
+      ],
+      "type": "object"
+    }
+  },
   "zoom/create_meeting": {
     "annotations": {
       "destructiveHint": false,

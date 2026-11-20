@@ -92,7 +92,16 @@ trino = ["trino>=0.328.0"]
 # module named legacy is the first thing a release is entitled to move. 2.0.1
 # is the version the v1 image ran.
 vanna = ["asyncpg>=0.29.0", "openai>=2.15.0,<3", "vanna==2.0.2"]
-web_search = ["trafilatura>=1.8.0"]
+# pypdf reads PDFs in scrape_url and web_research; cryptography validates an
+# AIA-recovered certificate chain before anything is trusted; certifi and lxml
+# are transitive today but imported directly, so they are declared.
+web_search = [
+  "trafilatura>=1.8.0",
+  "pypdf>=6.0.0,<7",
+  "cryptography>=43.0.0",
+  "certifi>=2024.2.2",
+  "lxml>=5.0.0",
+]
 
 # Every connector dependency at once. Not for users - a deployment installs
 # the one connector it runs - but CI needs it, because the import gate and the
