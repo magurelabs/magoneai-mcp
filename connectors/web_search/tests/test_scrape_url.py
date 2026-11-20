@@ -746,3 +746,87 @@ def test_ip_literal_host_validates_with_ip_san():
     with patch.object(_scrape, "_certifi_store", lambda: Store([root])):
         with pytest.raises(ScrapeError):  # leaf has a DNS SAN only, so IP subject must not match
             _scrape._validate_chain(leaf, [inter], "93.184.216.34")
+
+
+# ---- Review fixes: charset, odd responses, extraction pool ----------------
+
+
+def test_header_charset_is_used_when_the_page_has_no_meta(monkeypatch):
+    body = "café au lait, crème brûlée. ".encode("iso-8859-1") * 5
+
+    def handler(request):
+        return httpx.Response(
+            200, content=body, headers={"content-type": "text/plain; charset=iso-8859-1"}
+        )
+
+    _mock_client(monkeypatch, handler)
+    res = _run(search_tools.scrape_url({}, URL))
+    assert "café au lait" in res["content"] and "�" not in res["content"]
+
+
+def test_decode_html_prefers_the_header_charset_over_utf8():
+    html = "<html><body><p>café</p></body></html>".encode("iso-8859-1")
+    assert "café" in _scrape.decode_html(Fetched(URL, 200, "text/html", html, "iso-8859-1"))
+    # No header charset: <meta> still decides.
+    meta = b'<meta charset="iso-8859-1"><p>caf\xe9</p>'
+    assert "café" in _scrape.decode_html(Fetched(URL, 200, "text/html", meta))
+
+
+def test_redirect_to_an_out_of_range_port_is_an_error_code(monkeypatch):
+    def handler(request):
+        return httpx.Response(302, headers={"location": "http://example.com:99999/"})
+
+    _mock_client(monkeypatch, handler)
+    res = _run(search_tools.scrape_url({}, URL))
+    assert res["error_code"] == "fetch_failed" and "port" in res["error"]
+
+
+def test_body_that_does_not_match_its_content_encoding_is_an_error_code(monkeypatch):
+    def handler(request):
+        return httpx.Response(
+            200,
+            content=b"this is not gzip data at all",
+            headers={"content-type": "text/html", "content-encoding": "gzip"},
+        )
+
+    _mock_client(monkeypatch, handler)
+    res = _run(search_tools.scrape_url({}, URL))
+    assert res["error_code"] == "fetch_failed"
+
+
+def test_extraction_runs_on_its_own_pool():
+    import threading
+
+    seen = []
+
+    def spy(res, max_chars):
+        seen.append(threading.current_thread().name)
+        return "x", "html"
+
+    with patch.object(_scrape, "extract", spy):
+        _run(_scrape.extract_async(_fetched(b"<p>x</p>"), 100))
+    assert seen and seen[0].startswith("web-search-extract")
+
+
+def test_abandoned_extractions_do_not_hold_up_dns(monkeypatch):
+    # Far more stuck parses than the loop's default executor has threads.
+    import threading
+    import time
+
+    release = threading.Event()
+    monkeypatch.setattr(_scrape, "EXTRACT_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(_scrape, "extract", lambda r, m: release.wait(5) and ("x", "html"))
+
+    async def scenario():
+        stuck = [_scrape.extract_async(_fetched(b"<p>x</p>"), 100) for _ in range(40)]
+        results = await asyncio.gather(*stuck, return_exceptions=True)
+        assert all(isinstance(r, ScrapeError) and r.code == "timeout" for r in results)
+        t0 = time.monotonic()
+        ips = await _scrape._resolve("example.test", 443)
+        return ips, time.monotonic() - t0
+
+    try:
+        ips, took = _run(scenario())
+    finally:
+        release.set()
+    assert ips == ["93.184.216.34"] and took < 1.0

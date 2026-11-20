@@ -439,3 +439,41 @@ def test_web_research_logs_why_pages_went_unread(monkeypatch):
     assert logged[0]["sources"] == 1
     assert logged[0]["unread"] == 1
     assert logged[0]["unread_reasons"] == {TIMEOUT: 1}
+
+
+def _three_pages():
+    search = _search_fake({"q": [_hit(f"https://s{i}.org/p", f"S{i}") for i in range(3)]})
+    text = "\n\n".join("q relevant text about the question " * 20 for _ in range(4))
+    fetch = _fetch_fake({f"https://s{i}.org/p": text for i in range(3)})
+    return search, fetch
+
+
+def test_a_page_trimmed_by_the_budget_is_listed_as_unread():
+    search, fetch = _three_pages()
+    out = _run(
+        research(
+            ["q"], search=search, fetch=fetch, normalize=_normalize_url, output_chars=1500,
+            cache=None,
+        )
+    )
+    shown = {s["url"] for s in out["sources"]}
+    unread = {u["url"]: u["reason"] for u in out["unread_pages"]}
+    assert shown and len(shown) < 3
+    # Every page read is in sources or in unread_pages, never in neither.
+    assert shown | set(unread) == {f"https://s{i}.org/p" for i in range(3)}
+    assert set(unread.values()) == {"budget"}
+    # Its search snippet stays available too.
+    assert set(unread) <= {o["url"] for o in out["other_results"]}
+
+
+def test_pages_read_but_all_trimmed_are_not_called_unreadable():
+    search, fetch = _three_pages()
+    out = _run(
+        research(
+            ["q"], search=search, fetch=fetch, normalize=_normalize_url, output_chars=10,
+            cache=None,
+        )
+    )
+    assert out["sources"] == []
+    assert out["note"] == "output_budget_too_small"
+    assert [u["reason"] for u in out["unread_pages"]] == ["budget"] * 3

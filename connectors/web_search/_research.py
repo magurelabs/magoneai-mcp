@@ -578,8 +578,13 @@ async def research(
     # Most relevant sources first; a page that only had boilerplate sinks.
     readable.sort(key=lambda p: (p.get("_best", 0.0), p["_score"]), reverse=True)
     budget(readable, output_chars)
+    # A page read whose passages were all trimmed is reported as unread with
+    # reason "budget", so it is never missing from every list.
+    for p in readable:
+        if not p.get("passages"):
+            p["fetch"] = "budget"
 
-    picked_keys = {p["_key"] for p in readable}
+    picked_keys = {p["_key"] for p in readable if p.get("passages")}
     sources = [
         {
             "url": p["url"],
@@ -623,7 +628,7 @@ async def research(
         },
     }
     if not sources:
-        out["note"] = "no_readable_pages"
+        out["note"] = "output_budget_too_small" if readable else "no_readable_pages"
     if search_errors:
         out["errors"] = search_errors
     return out
