@@ -57,7 +57,7 @@ from .tools._constants import MAX_TOTAL_ATTACHMENT_SIZE
 import base64
 import os
 import re
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 import io
 import zipfile
 from typing import List
@@ -88,12 +88,22 @@ from .tools._constants import CREDENTIAL_HEADERS, MAX_RESULTS_CAP, VALID_FOLDERS
 from typing import Any, Dict, List
 from .tools._constants import CREDENTIAL_HEADERS, MAX_BATCH_SIZE
 import html as _html_module
+from email import message_from_bytes as _message_from_bytes
+from email import policy as _email_policy
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE, MAX_RESULTS_CAP, VALID_FOLDERS, VALID_FOLDERS_LIST
 from .tools._constants import CREDENTIAL_HEADERS, MAX_BODY_SIZE
 from .tools._constants import CREDENTIAL_HEADERS, INLINE_ATTACHMENT_LIMIT, MAX_ATTACHMENTS, VALID_IMPORTANCE_LIST
 from datetime import datetime, timedelta, timezone
 from datetime import timezone as _dt_timezone
-from ._shared.microsoft_graph import GraphNotFoundError
+from ._shared.microsoft_graph import (
+    SEND_UNCONFIRMED,
+    GraphAuthError,
+    GraphNotFoundError,
+    SendUnconfirmed,
+    auth_reason,
+    graph_failure,
+    graph_reason,
+)
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE
 import time
 
@@ -529,6 +539,49 @@ def _extract_zip(filename: str, content_bytes: bytes) -> str:
 
         return _truncate("\n".join(lines))
 
+# An email attached from Outlook ("Attach item") is an itemAttachment: it has no
+# contentBytes, and its headers and body are read through $expand instead.
+_ITEM_ATTACHMENT = "#microsoft.graph.itemAttachment"
+
+
+def message_text(headers: List[Tuple[str, str]], body: str, body_is_html: bool) -> str:
+    """An email as text: its header lines, a blank line, then the body.
+
+    Shared by an attached Outlook item and an attached .eml file, so an
+    attached email reads the same whichever way it was attached. The headers
+    are what an attached email is usually opened for (who it went to, who was
+    copied), so they come first and are never truncated away.
+    """
+    head = "\n".join(f"{name}: {value}" for name, value in headers if value)
+    text = _strip_html(body or "") if body_is_html else (body or "").strip()
+    return _truncate(f"{head}\n\n{text}" if head else text) or "(empty email)"
+
+
+def _extract_eml(content_bytes: bytes) -> str:
+    msg = _message_from_bytes(content_bytes, policy=_email_policy.default)
+    headers = [(h, str(msg.get(h, ""))) for h in ("From", "To", "Cc", "Date", "Subject")]
+    part = msg.get_body(preferencelist=("plain", "html"))
+    if part is None:
+        return message_text(headers, "", False)
+    return message_text(headers, part.get_content(), part.get_content_subtype() == "html")
+
+
+def _item_text(item: Dict[str, Any]) -> str:
+    """Text of the Outlook item inside an itemAttachment (usually an email)."""
+    body = item.get("body") or {}
+    sender = item.get("from")
+    headers = [
+        ("From", _fmt_addr(sender) if isinstance(sender, dict) else ""),
+        ("To", _fmt_addr_list(item.get("toRecipients"))),
+        ("Cc", _fmt_addr_list(item.get("ccRecipients"))),
+        ("Date", item.get("sentDateTime") or item.get("receivedDateTime") or ""),
+        ("Subject", item.get("subject") or ""),
+    ]
+    return message_text(
+        headers, body.get("content") or "", (body.get("contentType") or "").lower() == "html"
+    )
+
+
 def extract_text(
     filename: str, content_bytes: bytes, content_type: str = "", _depth: int = 0
 ) -> str:
@@ -548,6 +601,11 @@ def extract_text(
 
         if name.endswith(".xlsx") or "spreadsheetml" in ct:
             return _extract_xlsx(content_bytes)
+
+        # Before the text branch: message/rfc822 is not text/*, and an .eml read
+        # as raw text would bury the headers in MIME boundaries and base64.
+        if name.endswith(".eml") or ct == "message/rfc822":
+            return _extract_eml(content_bytes)
 
         if name.endswith(_TEXT_EXTS) or ct.startswith("text/") or "json" in ct or "xml" in ct:
             return _truncate(content_bytes.decode("utf-8", errors="replace"))
@@ -608,6 +666,53 @@ def build_message_body(fields: Dict[str, Any]) -> Tuple[Optional[str], Optional[
 
     return None, message_body
 
+_BODY_OPEN_RE = re.compile(r"<body[^>]*>", re.IGNORECASE)
+_PARAGRAPH_SPLIT_RE = re.compile(r"\n[ \t]*\n")
+# Graph-built HTML has no default font, and Outlook desktop then falls back to
+# Times New Roman. Match Outlook's own compose default instead.
+_REPLY_FONT_STYLE = (
+    "font-family:Aptos,Calibri,Arial,Helvetica,sans-serif;font-size:11pt;color:#000000"
+)
+
+
+def text_to_html(text: str) -> str:
+    """Plain text to HTML: blank lines become paragraphs, single newlines <br>."""
+    normalised = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    paragraphs = [p for p in _PARAGRAPH_SPLIT_RE.split(normalised) if p.strip()]
+    return "".join(
+        '<p style="margin:0 0 12pt 0">' + _html_module.escape(p).replace("\n", "<br>") + "</p>"
+        for p in paragraphs
+    )
+
+
+def reply_body(new_body: str, is_html: bool, quoted: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """The reply's full body: the new text above the thread createReply quoted."""
+    piece = new_body if is_html else text_to_html(new_body)
+    piece = f'<div style="{_REPLY_FONT_STYLE}">{piece}</div><br>'
+    quoted = quoted or {}
+    content = quoted.get("content") or ""
+    if content and str(quoted.get("contentType", "")).lower() != "html":
+        content = f'<div style="{_REPLY_FONT_STYLE}">{text_to_html(content)}</div>'
+    match = _BODY_OPEN_RE.search(content)
+    if match:
+        content = content[: match.end()] + piece + content[match.end() :]
+    else:
+        content = piece + content
+    return {"contentType": "HTML", "content": content}
+
+
+def _union_recipients(existing: Any, extra: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep createReply(All)'s recipients and add the extra ones, no duplicates."""
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for r in list(existing or []) + list(extra or []):
+        address = str(((r or {}).get("emailAddress") or {}).get("address") or "").lower()
+        if address and address not in seen:
+            seen.add(address)
+            merged.append(r)
+    return merged
+
+
 async def reply_via_draft(
     graph: Any,
     credentials: Dict[str, str],
@@ -617,8 +722,22 @@ async def reply_via_draft(
     inline_attachments: List[Dict[str, Any]],
     large_attachments: List[Dict[str, Any]],
     mailbox: Optional[str] = None,
-) -> Optional[str]:
-    """Create a reply draft, attach, send. Returns the sent message id.
+    body: Optional[str] = None,
+    is_html: bool = False,
+    send: bool = True,
+) -> Dict[str, Optional[str]]:
+    """Create a reply draft, fill it, attach, and send it unless `send` is False.
+
+    Returns {"id", "web_link"}: the reply's immutable id (the sent message when
+    sent, the draft otherwise) and its Outlook web link.
+
+    Every reply takes this path. The one-call `/reply` takes the new text as a
+    plain-text `comment`, and Outlook drops its line breaks when it lands in an
+    HTML thread, so a five-paragraph reply arrived as one block. Here `body`
+    goes into the draft as HTML, above the quoted thread createReply already
+    put there, so paragraphs survive and the thread stays. cc/bcc in
+    `message_patch` are added to the ones createReply(All) set rather than
+    replacing them; anything else in it (to, subject, importance) overrides.
 
     Attachments are POSTed to the draft one at a time rather than PATCHed onto
     it: Graph does not accept an `attachments` collection on a message PATCH,
@@ -627,7 +746,8 @@ async def reply_via_draft(
     of failure this whole function exists to fix.
 
     Any failure deletes the half-built draft, so a failed reply never leaves an
-    orphan sitting in the user's Drafts folder.
+    orphan sitting in the user's Drafts folder; except a send that failed in
+    transit, which may have gone out (SendUnconfirmed): that draft is kept.
 
     Pass `mailbox` (an address) to run the whole sequence, including the
     large-attachment upload and the cleanup, against a shared mailbox via
@@ -661,8 +781,14 @@ async def reply_via_draft(
         if not draft_id:
             raise ValueError("createReply returned no draft id")
 
-        if message_patch:
-            await _request("PATCH", f"{base_path}/messages/{draft_id}", json_data=message_patch)
+        patch: Dict[str, Any] = dict(message_patch or {})
+        for key in ("ccRecipients", "bccRecipients"):
+            if key in patch:
+                patch[key] = _union_recipients(created.get(key), patch[key])
+        if body is not None:
+            patch["body"] = reply_body(body, is_html, created.get("body"))
+        if patch:
+            await _request("PATCH", f"{base_path}/messages/{draft_id}", json_data=patch)
 
         for att in inline_attachments:
             await _request("POST", f"{base_path}/messages/{draft_id}/attachments", json_data=att)
@@ -679,8 +805,11 @@ async def reply_via_draft(
                 base_path=base_path,
             )
 
-        await _request("POST", f"{base_path}/messages/{draft_id}/send")
-        return draft_id
+        if send:
+            await _post_send(lambda: _request("POST", f"{base_path}/messages/{draft_id}/send"))
+        return {"id": draft_id, "web_link": created.get("webLink")}
+    except SendUnconfirmed:
+        raise
     except (ValueError, httpx.HTTPError):
         if draft_id:
             await _cleanup_draft(
@@ -806,8 +935,10 @@ async def send_via_draft(
     attachments into it, then send it. Returns the immutable message id.
 
     On any failure the partially-built draft is deleted before re-raising, so
-    no orphan draft is left behind. Sending a draft always lands it in Sent
-    Items, so this path is only used when save_to_sent is True.
+    no orphan draft is left behind, except when the send itself failed in
+    transit (SendUnconfirmed): the message may have gone out, and deleting the
+    draft would then delete the sent copy. Sending a draft always lands it in
+    Sent Items, so this path is only used when save_to_sent is True.
     """
     # Fetch the token once and reuse it across create + upload(s) + send
     # instead of refreshing on each call.
@@ -832,17 +963,31 @@ async def send_via_draft(
                 large["content_type"],
                 access_token=access_token,
             )
-        await graph._graph_request(
-            credentials,
-            "POST",
-            f"/me/messages/{draft_id}/send",
-            access_token=access_token,
+        await _post_send(
+            lambda: graph._graph_request(
+                credentials,
+                "POST",
+                f"/me/messages/{draft_id}/send",
+                access_token=access_token,
+            )
         )
         return draft_id
+    except SendUnconfirmed:
+        raise
     except (ValueError, httpx.HTTPError):
         if draft_id:
             await _cleanup_draft(graph, credentials, draft_id)
         raise
+
+
+async def _post_send(send: Callable[[], Awaitable[Any]]) -> None:
+    """Run a draft's /send. A timeout or dropped connection leaves the outcome
+    unknown (Graph may have sent it), so it is raised as SendUnconfirmed: the
+    caller must not delete the draft, whose id may now be the sent message."""
+    try:
+        await send()
+    except httpx.TransportError as exc:
+        raise SendUnconfirmed(SEND_UNCONFIRMED) from exc
 
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
 
@@ -1083,14 +1228,14 @@ async def _get_access_token(credentials: Dict[str, str]) -> str:
     """Exchange refresh token for access token."""
     refresh_token = credentials.get("microsoft_refresh_token")
     if not refresh_token:
-        raise ValueError("Missing X-Microsoft-Refresh-Token header")
+        raise GraphAuthError("Missing X-Microsoft-Refresh-Token header")
 
     client_id = credentials.get("microsoft_client_id")
     client_secret = credentials.get("microsoft_client_secret")
     tenant_id = credentials.get("microsoft_tenant_id") or "common"
 
     if not client_id or not client_secret:
-        raise ValueError(
+        raise GraphAuthError(
             "Missing OAuth credentials. Pass client_id and client_secret via headers."
         )
 
@@ -1111,8 +1256,8 @@ async def _get_access_token(credentials: Dict[str, str]) -> str:
                 error_data = response.json()
             except Exception:
                 error_data = {}
-            error_desc = error_data.get("error_description", response.text[:500])
-            raise ValueError(f"Token refresh failed ({response.status_code}): {error_desc}")
+            error_desc = auth_reason(error_data.get("error_description"))
+            raise GraphAuthError(f"Token refresh failed ({response.status_code}): {error_desc}")
 
         token_data = response.json()
         if "access_token" not in token_data:
@@ -1162,9 +1307,12 @@ async def _graph_request(credentials: Dict[str, str],
         )
 
         if response.status_code == 401:
-            raise ValueError("Authentication failed. Please re-authenticate.")
+            raise GraphAuthError("Authentication failed. Please re-authenticate.")
         elif response.status_code == 403:
-            raise ValueError("Access denied. Check permissions.")
+            raise GraphAuthError(
+                "Access denied. The connected account lacks the permission or "
+                "consent this operation needs (e.g. Mail.Read or Mail.Send)."
+            )
         elif response.status_code == 404:
             raise GraphNotFoundError("Resource not found.")
         elif response.status_code == 429:
@@ -1174,7 +1322,7 @@ async def _graph_request(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            error_msg = error_data.get("error", {}).get("message", response.text[:500])
+            error_msg = graph_reason(error_data)
             raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
@@ -1266,11 +1414,11 @@ async def _get_app_only_token(credentials: Dict[str, str]) -> str:
     tenant_id = credentials.get("microsoft_tenant_id")
 
     if not client_id or not client_secret:
-        raise ValueError(
+        raise GraphAuthError(
             "Missing app-only credentials. Pass client_id and client_secret via headers."
         )
     if not tenant_id:
-        raise ValueError("Missing tenant_id. App-only OAuth requires an explicit tenant id.")
+        raise GraphAuthError("Missing tenant_id. App-only OAuth requires an explicit tenant id.")
 
     cache_key = (tenant_id, client_id)
     now = time.monotonic()
@@ -1303,10 +1451,8 @@ async def _get_app_only_token(credentials: Dict[str, str]) -> str:
                     error_data = response.json()
                 except Exception:
                     error_data = {}
-                error_desc = error_data.get(
-                    "error_description", response.text[:500] or "Token acquisition failed"
-                )
-                raise ValueError(
+                error_desc = auth_reason(error_data.get("error_description"))
+                raise GraphAuthError(
                     f"App-only token acquisition failed ({response.status_code}): {error_desc}"
                 )
 
@@ -1394,12 +1540,13 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            detail = error_data.get("error", {}).get("message", response.text[:500])
+            error_obj = error_data.get("error") if isinstance(error_data, dict) else None
+            detail = auth_reason(error_obj.get("message") if isinstance(error_obj, dict) else None)
             if response.status_code == 401:
-                raise ValueError(
+                raise GraphAuthError(
                     f"Authentication failed. Check app credentials and admin consent. ({detail})"
                 )
-            raise ValueError(
+            raise GraphAuthError(
                 "Access denied. Verify the app has the required admin-consented "
                 "application permission for this resource (e.g. Mail.Read for mailbox "
                 "access, or a Sites.Selected per-site grant for SharePoint). "
@@ -1410,10 +1557,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            detail = error_data.get("error", {}).get("message", response.text[:500])
-            raise GraphNotFoundError(
-                f"Resource not found. ({detail})" if detail else "Resource not found."
-            )
+            raise GraphNotFoundError(f"Resource not found. ({graph_reason(error_data)})")
         elif response.status_code == 410:
             # deltaLink expired — caller should reset and re-list.
             return {"_error": "delta_expired", "_status": 410}
@@ -1427,7 +1571,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            error_msg = error_data.get("error", {}).get("message", response.text[:500])
+            error_msg = graph_reason(error_data)
             raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
@@ -1442,7 +1586,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
 # Evidence: POST /me/messages
 @server.tool(
     name='create_draft',
-    description="Create a draft email (saved, not sent). Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `is_html` (true for HTML body), `importance` (low/normal/high), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. Returns the draft_id for use with send_draft.",
+    description="Create a draft email (saved, not sent). Pass `to` (comma-separated), `subject`, and `body` (required). Optional: `cc`, `is_html` (true for HTML body), `importance` (low/normal/high), `attachment_urls` (array of file URLs, max 10, up to 25MB each, 50MB combined), `attachment_filename` (custom name for first URL attachment), and `attachments` (max 10; each item is a platform file_id/storage-key string, {\"file_id\": \"...\"}, or a pre-fetched {filename, content_base64, content_type} - pass a file_id as-is, the platform inlines the bytes before this tool sees them). `attachment_urls` and `attachments` share the same max-10-count and 50MB-combined limits. To draft a REPLY inside an existing thread, also pass `reply_to_id` (the message id being answered, from list_emails or search_emails) and optionally `reply_all`; the draft then carries the quoted thread like a reply typed in Outlook. Returns the draft_id for use with send_draft, and `web_link` to open it in Outlook.",
     annotations=ToolAnnotations(
         readOnlyHint=False,
         destructiveHint=False,
@@ -1506,7 +1650,14 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                                                    'without an attachment and say so - do '
                                                    'not improvise one, and do not retype '
                                                    'data from the conversation into a '
-                                                   'file.'}},
+                                                   'file.'},
+                    'reply_to_id': {'type': 'string',
+                                    'description': 'Message id to reply to; makes this a '
+                                                   'reply draft in that thread'},
+                    'reply_all': {'type': 'boolean',
+                                  'description': 'With reply_to_id: reply to all '
+                                                 'recipients',
+                                  'default': False}},
      'required': ['to', 'subject', 'body']})
 async def create_draft(credentials: Dict[str, str],
     to: str,
@@ -1518,8 +1669,10 @@ async def create_draft(credentials: Dict[str, str],
     attachment_urls: Optional[List[str]] = None,
     attachment_filename: Optional[str] = None,
     attachments: Optional[List[Dict[str, Any]]] = None,
+    reply_to_id: str = "",
+    reply_all: bool = False,
 ) -> Dict[str, Any]:
-    """Create a draft email."""
+    """Create a draft email, or a reply draft in a thread when reply_to_id is set."""
     try:
         if len(subject) > MAX_SUBJECT_LEN:
             return {"success": False, "error": f"Subject exceeds {MAX_SUBJECT_LEN} characters"}
@@ -1556,6 +1709,39 @@ async def create_draft(credentials: Dict[str, str],
         ) = await gather_attachments(attachment_urls, attachment_filename, attachments)
         if attachment_error:
             return {"success": False, "error": attachment_error}
+
+        if reply_to_id:
+            err = validate_id(reply_to_id, "reply_to_id")
+            if err:
+                return {"success": False, "error": err}
+            # createReply builds the draft with the quoted thread; the fields
+            # the caller gave then override its defaults.
+            patch = {k: v for k, v in message.items() if k != "body"}
+            reply = await reply_via_draft(
+                _GRAPH_SCOPE_OWNER,
+                credentials,
+                reply_to_id,
+                reply_all,
+                patch,
+                inline_attachments,
+                large_attachments,
+                body=body,
+                is_html=is_html,
+                send=False,
+            )
+            reply_result: Dict[str, Any] = {
+                "success": True,
+                "draft_id": reply["id"],
+                "web_link": reply["web_link"],
+                "subject": subject,
+                "message": "Reply draft created",
+            }
+            if attachments_info:
+                reply_result["attachments"] = attachments_info
+                reply_result["message"] = (
+                    f"Reply draft created with {len(attachments_info)} attachment(s)"
+                )
+            return reply_result
 
         if inline_attachments:
             message["attachments"] = inline_attachments
@@ -1602,6 +1788,7 @@ async def create_draft(credentials: Dict[str, str],
         draft_result: Dict[str, Any] = {
             "success": True,
             "draft_id": draft_id,
+            "web_link": result.get("webLink"),
             "subject": subject,
             "message": "Draft created",
         }
@@ -1620,7 +1807,7 @@ async def create_draft(credentials: Dict[str, str],
         return draft_result
     except Exception as e:
         logger.exception("create_draft_error", error=str(e))
-        return {"success": False, "error": "Failed to create draft"}
+        return graph_failure("Failed to create draft", e)
 
 
 
@@ -1661,7 +1848,7 @@ async def delete_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("delete_email_error", error=str(e))
-        return {"success": False, "error": "Failed to delete email"}
+        return graph_failure("Failed to delete email", e)
 
 
 
@@ -1761,7 +1948,7 @@ async def download_attachment(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("download_attachment_error", error=str(e))
-        return {"success": False, "error": "Failed to download attachment"}
+        return graph_failure("Failed to download attachment", e)
 
 
 
@@ -1829,7 +2016,7 @@ async def forward_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("forward_email_error", error=str(e))
-        return {"success": False, "error": "Failed to forward email"}
+        return graph_failure("Failed to forward email", e)
 
 
 
@@ -1977,7 +2164,7 @@ async def get_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("get_email_error", error=str(e))
-        return {"success": False, "error": "Failed to get email"}
+        return graph_failure("Failed to get email", e)
 
 
 
@@ -2060,6 +2247,8 @@ async def get_email_bodies(credentials: Dict[str, str],
                         "body": body_text,
                     }
                 )
+            except GraphAuthError:
+                raise  # not connected: the whole call fails, never a per-ID entry
             except Exception:
                 failed.append({"id": eid, "error": "Failed to fetch"})
 
@@ -2073,7 +2262,7 @@ async def get_email_bodies(credentials: Dict[str, str],
         return response
     except Exception as e:
         logger.exception("get_email_bodies_error", error=str(e))
-        return {"success": False, "error": "Failed to fetch email bodies"}
+        return graph_failure("Failed to fetch email bodies", e)
 
 
 
@@ -2222,7 +2411,7 @@ async def get_email_thread(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("get_email_thread_error", error=str(e))
-        return {"success": False, "error": "Failed to get email thread"}
+        return graph_failure("Failed to get email thread", e)
 
 
 
@@ -2277,6 +2466,8 @@ async def get_my_manager(credentials: Dict[str, str]) -> Dict[str, Any]:
             "email": email,
             "job_title": r.get("jobTitle"),
         }
+    except GraphAuthError as e:
+        return graph_failure("Failed to get manager", e)
     except Exception:
         return {
             "success": False,
@@ -2378,7 +2569,7 @@ async def get_unread_count(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("get_unread_count_error", error=str(e))
-        return {"success": False, "error": "Failed to get unread count"}
+        return graph_failure("Failed to get unread count", e)
 
 
 
@@ -2447,7 +2638,7 @@ async def list_attachments(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_attachments_error", error=str(e))
-        return {"success": False, "error": "Failed to list attachments"}
+        return graph_failure("Failed to list attachments", e)
 
 
 
@@ -2520,7 +2711,7 @@ async def list_drafts(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_drafts_error", error=str(e))
-        return {"success": False, "error": "Failed to list drafts"}
+        return graph_failure("Failed to list drafts", e)
 
 
 
@@ -2612,7 +2803,7 @@ async def list_email_headers(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_email_headers_error", error=str(e))
-        return {"success": False, "error": "Failed to list email headers"}
+        return graph_failure("Failed to list email headers", e)
 
 
 
@@ -2743,7 +2934,7 @@ async def list_emails(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to list emails"}
+        return graph_failure("Failed to list emails", e)
 
 
 
@@ -2812,7 +3003,7 @@ async def list_folders(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_folders_error", error=str(e))
-        return {"success": False, "error": "Failed to list folders"}
+        return graph_failure("Failed to list folders", e)
 
 
 
@@ -2913,6 +3104,8 @@ async def mark_emails(credentials: Dict[str, str],
                     json_data={"isRead": is_read},
                 )
                 marked += 1
+            except GraphAuthError:
+                raise  # not connected: the whole call fails, never a per-ID entry
             except ValueError as e:
                 if "Rate limit" in str(e):
                     rate_limited = True
@@ -2933,7 +3126,7 @@ async def mark_emails(credentials: Dict[str, str],
         return result
     except Exception as e:
         logger.exception("mark_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to mark emails"}
+        return graph_failure("Failed to mark emails", e)
 
 
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
@@ -3029,7 +3222,7 @@ async def set_email_categories(credentials: Dict[str, str],
         return {"success": True, "email_id": email_id, "categories": new_categories}
     except Exception as e:
         logger.exception("set_email_categories_error", error=str(e))
-        return {"success": False, "error": "Failed to update email categories"}
+        return graph_failure("Failed to update email categories", e)
 
 
 
@@ -3161,7 +3354,7 @@ async def match_emails(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("match_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to match emails"}
+        return graph_failure("Failed to match emails", e)
 
 
 
@@ -3220,7 +3413,7 @@ async def move_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("move_email_error", error=str(e))
-        return {"success": False, "error": "Failed to move email"}
+        return graph_failure("Failed to move email", e)
 
 
 
@@ -3230,7 +3423,7 @@ async def move_email(credentials: Dict[str, str],
 # Evidence: GET, path built at runtime
 @server.tool(
     name='read_attachment',
-    description="Read the TEXT CONTENT of an email attachment (PDF, Word .docx, Excel .xlsx, text/csv/json/html/xml, or a .zip archive). Pass `email_id` and `attachment_id` (from list_attachments). Returns the extracted text so you can summarize or answer questions about the attachment. A .zip returns a list of what it contains plus the text of the readable members. Images and other binary types return a short note instead of text. 25MB limit, set via MAX_ATTACHMENT_DOWNLOAD_SIZE_MB.",
+    description="Read the TEXT CONTENT of an email attachment (PDF, Word .docx, Excel .xlsx, text/csv/json/html/xml, an attached email, or a .zip archive). An attached email returns its From/To/Cc/Date/Subject lines and its body. Pass `email_id` and `attachment_id` (from list_attachments). Returns the extracted text so you can summarize or answer questions about the attachment. A .zip returns a list of what it contains plus the text of the readable members. Images and other binary types return a short note instead of text. 25MB limit, set via MAX_ATTACHMENT_DOWNLOAD_SIZE_MB.",
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -3281,6 +3474,24 @@ async def read_attachment(credentials: Dict[str, str],
         )
         name = meta.get("name", "attachment")
         size = meta.get("size", 0)
+        # An attached Outlook item has no contentBytes, so the file path below
+        # would read nothing. Its headers and body come back as JSON instead,
+        # and its size counts its own attachments, which are not fetched, so
+        # the size cap does not apply to it.
+        if meta.get("@odata.type") == _ITEM_ATTACHMENT:
+            expanded = await request(
+                credentials,
+                "GET",
+                f"{base}/messages/{email_id}/attachments/{attachment_id}",
+                params={"$expand": "microsoft.graph.itemattachment/item"},
+            )
+            return {
+                "success": True,
+                "name": name,
+                "content_type": "message/rfc822",
+                "size": size,
+                "text": _item_text(expanded.get("item") or {}),
+            }
         if size > MAX_ATTACHMENT_SIZE:
             return {
                 "success": False,
@@ -3311,7 +3522,7 @@ async def read_attachment(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("read_attachment_error", error=str(e))
-        return {"success": False, "error": "Failed to read attachment"}
+        return graph_failure("Failed to read attachment", e)
 
 
 
@@ -3458,8 +3669,7 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
                                                        'type': 'array'},
                                        'email_id': {'description': 'ID of the email replied to', 'type': 'string'},
                                        'message': {'type': 'string'},
-                                       'message_id': {'description': 'Immutable id of the sent reply (attachment path '
-                                                                     'only)',
+                                       'message_id': {'description': 'Immutable id of the sent reply',
                                                       'type': 'string'},
                                        'reply_all': {'type': 'boolean'},
                                        'success': {'type': 'boolean'}},
@@ -3495,8 +3705,6 @@ async def reply_email(credentials: Dict[str, str],
             if err:
                 return {"success": False, "error": err}
 
-        action = "replyAll" if reply_all else "reply"
-
         message: Dict[str, Any] = {}
         if cc:
             err, cc_recipients = parse_recipients(cc, "cc")
@@ -3509,67 +3717,45 @@ async def reply_email(credentials: Dict[str, str],
                 return {"success": False, "error": err}
             message["bccRecipients"] = bcc_recipients
 
-        # With attachments the immediate /reply action cannot be used: it
-        # has nowhere to carry a file. Build the reply as a draft, attach,
-        # then send. Without attachments the original one-call path stays,
-        # so the common case keeps its single round trip.
+        inline: List[Dict[str, Any]] = []
+        large: List[Dict[str, Any]] = []
+        info: List[Dict[str, Any]] = []
         if attachments or attachment_urls:
             inline, large, info, err = await gather_attachments(
                 attachment_urls, attachment_filename, attachments
             )
             if err:
                 return {"success": False, "error": err}
-            patch: Dict[str, Any] = dict(message)
-            patch["body"] = {
-                "contentType": "HTML" if is_html else "Text",
-                "content": body,
-            }
-            sent_id = await reply_via_draft(
-                _GRAPH_SCOPE_OWNER,
-                credentials,
-                email_id,
-                reply_all,
-                patch,
-                inline,
-                large,
-                mailbox=mailbox,
-            )
-            return {
-                "success": True,
-                "email_id": email_id,
-                "reply_all": reply_all,
-                "message": f"Reply sent with {len(info)} attachment(s)",
-                "message_id": sent_id,
-                "attachments": info,
-            }
 
-        # Use comment for plain text, message.body for HTML — not both.
-        # Extra cc/bcc go on the message object regardless.
-        if is_html:
-            message["body"] = {"contentType": "HTML", "content": body}
-            json_data: Dict[str, Any] = {"message": message}
-        else:
-            json_data = {"comment": body}
-            if message:
-                json_data["message"] = message
-
-        request, base = resolve_graph_scope(_GRAPH_SCOPE_OWNER, mailbox)
-        await request(
+        # Always the draft flow (see reply_via_draft): the body goes in as HTML
+        # above the quoted thread, so its paragraphs reach the recipient, and
+        # the sent reply has an id to return.
+        reply = await reply_via_draft(
+            _GRAPH_SCOPE_OWNER,
             credentials,
-            "POST",
-            f"{base}/messages/{email_id}/{action}",
-            json_data=json_data,
+            email_id,
+            reply_all,
+            message,
+            inline,
+            large,
+            mailbox=mailbox,
+            body=body,
+            is_html=is_html,
         )
-
-        return {
+        result: Dict[str, Any] = {
             "success": True,
             "email_id": email_id,
             "reply_all": reply_all,
             "message": "Reply sent",
+            "message_id": reply["id"],
         }
+        if info:
+            result["message"] = f"Reply sent with {len(info)} attachment(s)"
+            result["attachments"] = info
+        return result
     except Exception as e:
         logger.exception("reply_email_error", error=str(e))
-        return {"success": False, "error": "Failed to reply to email"}
+        return graph_failure("Failed to reply to email", e)
 
 
 
@@ -3647,6 +3833,8 @@ async def search_emails(credentials: Dict[str, str],
                     credentials, "GET", "/me", params={"$select": "mail,userPrincipalName"}
                 )
                 my_address = (me.get("mail") or me.get("userPrincipalName") or "").strip()
+            except GraphAuthError:
+                raise  # not connected, not a 'me' problem: graph_failure below says so
             except Exception:
                 pass
             if my_address:
@@ -3715,7 +3903,7 @@ async def search_emails(credentials: Dict[str, str],
         return response
     except Exception as e:
         logger.exception("search_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to search emails"}
+        return graph_failure("Failed to search emails", e)
 
 
 
@@ -3747,10 +3935,12 @@ async def send_draft(credentials: Dict[str, str],
         if err:
             return {"success": False, "error": err}
 
-        await _graph_request(
-            credentials,
-            "POST",
-            f"/me/messages/{draft_id}/send",
+        await _post_send(
+            lambda: _graph_request(
+                credentials,
+                "POST",
+                f"/me/messages/{draft_id}/send",
+            )
         )
 
         return {
@@ -3760,7 +3950,7 @@ async def send_draft(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("send_draft_error", error=str(e))
-        return {"success": False, "error": "Failed to send draft"}
+        return graph_failure("Failed to send draft", e)
 
 
 
@@ -3931,7 +4121,7 @@ async def send_email(credentials: Dict[str, str],
         return result
     except Exception as e:
         logger.exception("send_email_error", error=str(e))
-        return {"success": False, "error": "Failed to send email"}
+        return graph_failure("Failed to send email", e)
 
 
 
