@@ -2247,6 +2247,8 @@ async def get_email_bodies(credentials: Dict[str, str],
                         "body": body_text,
                     }
                 )
+            except GraphAuthError:
+                raise  # not connected: the whole call fails, never a per-ID entry
             except Exception:
                 failed.append({"id": eid, "error": "Failed to fetch"})
 
@@ -2464,6 +2466,8 @@ async def get_my_manager(credentials: Dict[str, str]) -> Dict[str, Any]:
             "email": email,
             "job_title": r.get("jobTitle"),
         }
+    except GraphAuthError as e:
+        return graph_failure("Failed to get manager", e)
     except Exception:
         return {
             "success": False,
@@ -3100,6 +3104,8 @@ async def mark_emails(credentials: Dict[str, str],
                     json_data={"isRead": is_read},
                 )
                 marked += 1
+            except GraphAuthError:
+                raise  # not connected: the whole call fails, never a per-ID entry
             except ValueError as e:
                 if "Rate limit" in str(e):
                     rate_limited = True
@@ -3827,6 +3833,8 @@ async def search_emails(credentials: Dict[str, str],
                     credentials, "GET", "/me", params={"$select": "mail,userPrincipalName"}
                 )
                 my_address = (me.get("mail") or me.get("userPrincipalName") or "").strip()
+            except GraphAuthError:
+                raise  # not connected, not a 'me' problem: graph_failure below says so
             except Exception:
                 pass
             if my_address:
