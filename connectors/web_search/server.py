@@ -82,6 +82,15 @@ SEARXNG_URL = os.getenv("SEARXNG_URL", "http://localhost:8888")
 # deployment that runs Crawl4AI sets this explicitly.
 CRAWL4AI_URL = os.getenv("CRAWL4AI_URL", "")
 
+# Search-flow scrape budget. The model picks max_chars per call, and a model
+# that asks for a whole report puts tens of thousands of tokens of page text
+# into its context, most of it unrelated to the question. WEB_RESULT_MAX_CHARS
+# caps what one scrape_url call returns (return_full is not affected; KB
+# ingestion has its own limits). With `focus`, up to WEB_FOCUS_READ_CHARS of
+# the page is read and only the passages matching the focus come back.
+WEB_RESULT_MAX_CHARS = int(os.getenv("WEB_RESULT_MAX_CHARS", "16000"))
+WEB_FOCUS_READ_CHARS = int(os.getenv("WEB_FOCUS_READ_CHARS", "120000"))
+
 
 def _crawl4ai_configured() -> bool:
     return bool(CRAWL4AI_URL.strip())
@@ -908,7 +917,7 @@ async def perplexity_search(credentials: dict[str, str],
 # REVIEWED: readOnlyHint corrected to True - fetches a URL; reading a page changes no state.
 @server.tool(
     name='scrape_url',
-    description="Fetch a URL and extract its full text content. Use this after search_web or search_news to read the full content of a specific result. Pass return_full=true for KB-style ingestion (full markdown, link graph, title, status).",
+    description="Fetch a URL and extract its text content. Use this after search_web or search_news to read a specific result. Pass `focus` (what you need from the page, in a few words) to get only the matching sections of a long page or PDF instead of its first pages. Pass return_full=true for KB-style ingestion (full markdown, link graph, title, status).",
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -917,10 +926,18 @@ async def perplexity_search(credentials: dict[str, str],
 )
 @declare_schema({'type': 'object',
      'properties': {'url': {'type': 'string', 'description': 'The URL to scrape'},
+                    'focus': {'type': 'string',
+                              'description': 'What you need from the page, in a few '
+                                             'words (for example the entity and the '
+                                             'fact). The whole page is read and only '
+                                             'the sections that match are returned, '
+                                             'in page order. Ignored when '
+                                             'return_full=true.'},
                     'max_chars': {'type': 'integer',
                                   'description': 'Max characters to return, stopping at '
-                                                 'the last full stop (default 8000). '
-                                                 'Ignored when return_full=true.',
+                                                 'the last full stop (default 8000, '
+                                                 'capped by the deployment). Ignored when '
+                                                 'return_full=true.',
                                   'default': 8000},
                     'return_full': {'type': 'boolean',
                                     'description': 'When true, return the full markdown '
@@ -945,7 +962,11 @@ async def perplexity_search(credentials: dict[str, str],
                                        'content_type': {'type': 'string'},
                                        'error_code': {'type': 'string'},
                                        'final_url': {'type': 'string'},
+                                       'focused': {'type': 'boolean'},
+                                       'source_char_count': {'type': 'integer'},
                                        'links': {'items': {'type': 'string'}, 'type': 'array'},
+                                       'matched_terms': {'items': {'type': 'string'},
+                                                         'type': 'array'},
                                        'markdown': {'type': 'string'},
                                        'status_code': {'type': 'integer'},
                                        'title': {'type': 'string'},
@@ -956,6 +977,7 @@ async def scrape_url(credentials: dict[str, str],
     max_chars: int = 8000,
     return_full: bool = False,
     extra_args: list[str] | None = None,
+    focus: str | None = None,
 ) -> dict[str, Any]:
     # The URL comes from the model, so it is the connector's job to refuse an
     # address inside the trust boundary. Without this, a prompt injection in
@@ -1009,7 +1031,13 @@ async def scrape_url(credentials: dict[str, str],
     # "content_type" key is additive. A failure carries an "error_code" the
     # agent can act on (tls_error, http_403, timeout, pdf_no_text, ...).
     try:
-        content, kind = await _fetch_page_content(url, max_chars)
+        limit = max(1, min(int(max_chars or 8000), WEB_RESULT_MAX_CHARS))
+    except (TypeError, ValueError):
+        limit = min(8000, WEB_RESULT_MAX_CHARS)
+    focus = (focus or "").strip()
+    read_chars = max(limit, WEB_FOCUS_READ_CHARS) if focus else limit
+    try:
+        content, kind = await _fetch_page_content(url, read_chars)
     except RedirectBlocked as exc:
         return {
             "error": f"Refused to scrape URL: redirected to a blocked address ({exc})",
@@ -1023,11 +1051,22 @@ async def scrape_url(credentials: dict[str, str],
             }
         return {"error": f"Failed to scrape URL ({e.code}): {e.message}", "error_code": e.code}
 
+    if not focus:
+        return {
+            "url": url,
+            "content": content,
+            "char_count": len(content),
+            "content_type": kind,
+        }
+    selected, focused, matched_terms = _research.focus_text(content, focus, limit)
     return {
         "url": url,
-        "content": content,
-        "char_count": len(content),
+        "content": selected,
+        "char_count": len(selected),
         "content_type": kind,
+        "focused": focused,
+        "matched_terms": matched_terms,
+        "source_char_count": len(content),
     }
 
 
