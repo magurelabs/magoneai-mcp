@@ -139,9 +139,9 @@ class TestAPublicUrlStillWorks:
         fetch, without making a network call."""
         called = {}
 
-        async def fake_fetch(client, url, max_chars=8000):
+        async def fake_fetch(url, max_chars=8000):
             called["url"] = url
-            return "some page text that is long enough to clear the minimum"
+            return "some page text that is long enough to clear the minimum", "html"
 
         monkeypatch.setattr(web_search, "_fetch_page_content", fake_fetch)
 
@@ -155,10 +155,14 @@ class TestRedirectsCannotEscape:
     def test_the_text_path_does_not_follow_redirects_transparently(self):
         """A public URL that 302s to 169.254.169.254 defeats a check that only
         runs on the URL the model supplied. httpx must not follow the hop by
-        itself; the fetch helper re-validates and follows deliberately."""
+        itself; the fetch loop re-validates and follows deliberately."""
         import inspect
 
-        source = inspect.getsource(web_search._fetch_via_trafilatura)
+        from connectors.web_search import _scrape
+
+        source = inspect.getsource(_scrape._stream_get) + inspect.getsource(
+            _scrape._download_issuer
+        )
 
         assert "follow_redirects=True" not in source, (
             "transparent redirects are back; a validated public URL can hop to "
@@ -166,47 +170,35 @@ class TestRedirectsCannotEscape:
         )
 
     @pytest.mark.asyncio
-    async def test_a_redirect_to_an_internal_address_is_refused(self, monkeypatch):
-        """End to end through the helper: hop one is public, hop two is
+    async def test_a_redirect_to_an_internal_address_is_refused(self, monkeypatch, offline_dns):
+        """End to end through the fetch loop: hop one is public, hop two is
         metadata, and the second hop must be refused rather than followed."""
-        hops = iter(
-            [
-                ("https://example.com/start", 302, "http://169.254.169.254/latest/"),
-            ]
-        )
+        import ssl
+
+        import httpx
+
+        from connectors.web_search import _scrape
+
         fetched = []
 
-        class FakeResponse:
-            def __init__(self, status, location):
-                self.status_code = status
-                self.headers = {"location": location} if location else {}
-                self.text = ""
+        def handler(request):
+            fetched.append(str(request.url))
+            return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/"})
 
-        class TransparentRedirectsAreBack(BaseException):
-            """Deliberately NOT an Exception.
+        real = httpx.AsyncClient
 
-            `_fetch_via_trafilatura` ends in `except Exception: return ""`, so a
-            plain assert inside the fake client would be swallowed and this test
-            would pass whether or not the fix were present. Raising outside the
-            Exception hierarchy is what makes the failure reach pytest.
-            """
+        class Client(real):
+            def __init__(self, **kw):
+                kw.pop("transport", None)
+                super().__init__(transport=httpx.MockTransport(handler), **kw)
 
-        class FakeClient:
-            async def get(self, url, **kwargs):
-                fetched.append(url)
-                if kwargs.get("follow_redirects") is True:
-                    raise TransparentRedirectsAreBack(url)
-                _, status, location = next(hops)
-                return FakeResponse(status, location)
+        monkeypatch.setattr(_scrape.httpx, "AsyncClient", Client)
 
-        # Raised, not "": an empty body is what sent the ORIGINAL url to the
-        # headless-browser fallback, which then followed the redirect itself.
-        with pytest.raises(web_search.RedirectBlocked):
-            await web_search._fetch_via_trafilatura(FakeClient(), "https://example.com/start", 8000)
+        with pytest.raises(_scrape.ScrapeError) as ei:
+            await _scrape._stream_get("https://example.com/start", ssl.create_default_context())
 
-        assert fetched == ["https://example.com/start"], (
-            "the internal address was requested: " + repr(fetched)
-        )
+        assert ei.value.code == _scrape.BLOCKED_URL
+        assert len(fetched) == 1, "the internal address was requested: " + repr(fetched)
 
 
 class TestTheSharedCheckIsTheOneUsed:
@@ -223,6 +215,19 @@ class TestTheSharedCheckIsTheOneUsed:
             "web_search has grown a private copy of the blocklist"
         )
 
+    def test_the_fetch_pipeline_uses_the_framework_blocklist(self):
+        """The hardened fetch path resolves and pins every hop itself, so it
+        must judge each address with the framework's `is_blocked_address`
+        rather than a list of its own."""
+        import inspect
+
+        from connectors.web_search import _scrape
+
+        source = inspect.getsource(_scrape)
+
+        assert "is_blocked_address" in source
+        assert "_PRIVATE_NETWORKS" not in source
+
     def test_the_guard_raises_the_frameworks_error(self):
         """So a caller can catch one exception type across connectors."""
         from magone_mcp_core import validate_url
@@ -236,20 +241,22 @@ class TestTheFallbackCannotUndoTheBlock:
         """Found by running it: hop two was refused, the fast path returned
         an empty body, and the short-content fallback POSTed the original URL
         to Crawl4AI, whose Chromium followed the redirect to metadata."""
+        from connectors.web_search import _scrape
+
         crawled = []
 
-        async def blocked(client, url, max_chars):
-            raise web_search.RedirectBlocked("169.254.169.254 is link-local")
+        async def blocked(url):
+            raise _scrape.ScrapeError(_scrape.BLOCKED_URL, "169.254.169.254 is link-local")
 
         async def fallback(url, max_chars):
             crawled.append(url)
             return "metadata body"
 
-        monkeypatch.setattr(web_search, "_fetch_via_trafilatura", blocked)
+        monkeypatch.setattr(web_search, "fetch_url", blocked)
         monkeypatch.setattr(web_search, "_fetch_via_crawl4ai", fallback)
 
-        with pytest.raises(web_search.RedirectBlocked):
-            await web_search._fetch_page_content(object(), "https://example.com/x", 8000)
+        with pytest.raises(_scrape.ScrapeError):
+            await web_search._fetch_page_content("https://example.com/x", 8000)
         assert crawled == []
 
     def test_a_crawl_that_ended_on_a_blocked_address_is_refused(self):

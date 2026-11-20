@@ -54,6 +54,7 @@ Not environment variables, but configuration a caller sends per request.
 | `Authorization: Bearer ...` | An access token, when the server has a token verifier. |
 | `X-MCP-Enabled-Tools` | Comma-separated tool names this connection may use. Wins over groups. A caller-supplied hint: it restricts anything only when a trusted host or gateway sets it (see [architecture.md](architecture.md#per-connection-tool-selection)). |
 | `X-MCP-Enabled-Groups` | Comma-separated permission groups this connection may use. Same caveat; and most connectors have only the `default` group. |
+| `X-Execution-Id` | `playwright` only: the caller's run id. Each run gets its own browser session and its artifacts are scoped to it. In `platform`/`hosted` mode a browser call with neither this header nor a verified identity is refused. |
 | a tool's credential headers | For example `X-Linear-Api-Key`. Each tool declares the ones it may receive; [TOOLS.md](TOOLS.md) shows how many each tool takes and `credential_headers=` in `connectors/<name>/server.py` names them. |
 
 ## Connectors
@@ -86,7 +87,18 @@ instance queries).
 | `SERPER_API_KEY` | empty | Serper key fallback. When a Serper key is available (per call or here), Serper is used instead of SearXNG. |
 | `WEB_SEARCH_PROVIDER` | auto | Overrides the automatic choice. `serper` uses Serper (a key is still required); any other value, such as `searxng`, uses SearXNG even when a Serper key is present. |
 | `PERPLEXITY_API_KEY` | empty | Perplexity key fallback, for the tool that uses it. |
-| `CRAWL4AI_URL` | `http://localhost:11235` | Crawl4AI service used for page extraction. |
+| `CRAWL4AI_URL` | empty | Crawl4AI service used as the fallback for pages the direct fetch cannot read (JavaScript-rendered pages) and for `scrape_url` with `return_full`. Unset, the fallback is skipped. |
+| `WEB_SEARCH_EXTRACT_THREADS` | `4` | Threads that turn fetched pages into text (HTML, PDF). Kept apart from the threads DNS lookups use, so slow parses cannot hold up fetches. |
+| `WEB_RESEARCH_PAGE_TIMEOUT_S` | `5` | `web_research`: how long one page may take to read, in seconds. |
+| `WEB_RESEARCH_DEADLINE_S` | `8` | `web_research`: the budget for the whole call, in seconds. Pages not read by then are listed in `unread_pages` with reason `deadline`. |
+| `WEB_RESEARCH_OUTPUT_CHARS` | `24000` | `web_research`: the most passage text one call returns. A page read but left with no passage inside this budget is listed in `unread_pages` with reason `budget`. |
+| `WEB_RESEARCH_CACHE_TTL_S` | `900` | `web_research`: how long a read page is cached, in seconds. |
+| `WEB_RESEARCH_CACHE_MAX` | `256` | `web_research`: how many read pages the cache holds. |
+| `WEB_RESEARCH_LOGIN_WALLED_HOSTS` | built-in list | `web_research`: comma-separated hosts whose pages sit behind a sign-in, so only their search snippet is used (subdomains match too). Replaces the built-in list of common social sites; `-` reads every host. |
+
+Each `web_research` call logs one `web_research.pages` event with the number
+of sources returned and `unread_reasons`, a count per reason a page went
+unread, so a rise in `deadline` or `timeout` can be watched as a metric.
 
 ### `cloudflare_r2`
 
@@ -148,11 +160,41 @@ Fallbacks for the per-call credentials of the same name:
 | `LINKEDIN_API_BASE` | `https://api.linkedin.com` | API base URL; override for testing or a proxy. |
 | `LINKEDIN_TOKEN_URL` | `https://www.linkedin.com/oauth/v2/accessToken` | OAuth token endpoint; override for testing or a proxy. |
 
+### `onedrive`
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ONEDRIVE_MAX_UPLOAD_MB` | `250` | Largest single file accepted for upload, in megabytes (floor 1 MB). Checked before any bytes are decoded or sent. |
+
+The connector also declares a 75 MiB request-body cap (the framework default is
+10 MiB), so an inline upload above about 55 MB of file bytes needs
+`MCP_MAX_BODY_BYTES` (above) raised as well.
+
 ### `outlook_email`
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `MAX_ATTACHMENT_DOWNLOAD_SIZE_MB` | `25` | Largest attachment downloaded, in megabytes. |
+
+### `playwright`
+
+Relays an operator-run Playwright MCP server (see
+[`connectors/playwright/README.md`](../connectors/playwright/README.md)) and
+returns the browser's files in the tool result. Needs a **single replica** (or
+routing that keeps an `X-Execution-Id` on one replica).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PLAYWRIGHT_UPSTREAM_URL` | `http://playwright:8931/mcp` | The upstream Playwright MCP server. |
+| `PLAYWRIGHT_SESSION_IDLE_MINUTES` | `15` | End a browser session, and forget its run's artifact record, idle this long. |
+| `PLAYWRIGHT_MAX_SESSIONS` | `64` | Sessions kept at once; the least recently used idle one is ended first. |
+| `PLAYWRIGHT_MAX_SESSIONS_PER_CALLER` | a quarter of `PLAYWRIGHT_MAX_SESSIONS` | Most sessions one caller may hold. |
+| `PLAYWRIGHT_CALL_TIMEOUT_SECONDS` | `100` | Per relayed call. |
+| `PLAYWRIGHT_MANIFEST_REFRESH_MINUTES` | `10` | How often the upstream tool list is re-read. |
+| `PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS` | `false` | Expose the code-running tools (`browser_evaluate`, `browser_run_code`). |
+| `ARTIFACTS_ROOT` | `/artifacts` | Mount point of the volume shared with the browser. |
+| `ARTIFACTS_MAX_BYTES` | `26214400` (25 MB) | Largest file `publish_artifact` returns, and the most image bytes one relayed browser result may carry. |
+| `ARTIFACTS_DELETE_AFTER_PUBLISH` | `true` | Remove a returned file from the volume, and the unfetched files of a run that went idle. |
 
 ### `twitter_intel`
 
