@@ -200,3 +200,78 @@ async def test_long_reason_is_cut_to_one_short_line(monkeypatch):
     assert "Trace ID" not in error
     assert error.endswith("...")
     assert len(error) < 300
+
+
+# Tools that loop over IDs, or that read the user first, must not turn the
+# credential error into a per-ID failure or a misleading message.
+
+
+async def call(tool: str, arguments: dict):
+    async with Client(module.server.mcp) as client:
+        return await client.call_tool(tool, arguments)
+
+
+async def test_mark_emails_without_a_token_is_not_a_success(monkeypatch):
+    install(monkeypatch, graph_says(200), headers={})
+
+    result = await call("mark_emails", {"email_ids": ["a-1", "b-2"], "is_read": True})
+
+    assert payload(result) == {
+        "success": False,
+        "error": "Failed to mark emails: Missing X-Microsoft-Refresh-Token header",
+    }
+
+
+async def test_get_email_bodies_without_a_token_is_not_a_success(monkeypatch):
+    install(monkeypatch, graph_says(200), headers={})
+
+    result = await call("get_email_bodies", {"email_ids": ["a-1", "b-2"]})
+
+    assert payload(result) == {
+        "success": False,
+        "error": "Failed to fetch email bodies: Missing X-Microsoft-Refresh-Token header",
+    }
+
+
+async def test_per_id_failures_other_than_auth_stay_per_id(monkeypatch):
+    install(monkeypatch, graph_says(404, {"error": {"message": "gone"}}))
+
+    data = payload(await call("mark_emails", {"email_ids": ["a-1"], "is_read": True}))
+    assert data["success"] is True and data["marked_count"] == 0
+    assert data["failed"] == [{"id": "a-1", "error": "Operation failed"}]
+
+    data = payload(await call("get_email_bodies", {"email_ids": ["a-1"]}))
+    assert data["success"] is True and data["failed"] == [{"id": "a-1", "error": "Failed to fetch"}]
+
+
+async def test_get_my_manager_without_a_token_says_not_connected(monkeypatch):
+    install(monkeypatch, graph_says(200), headers={})
+
+    result = await call("get_my_manager", {})
+
+    assert payload(result) == {
+        "success": False,
+        "error": "Failed to get manager: Missing X-Microsoft-Refresh-Token header",
+    }
+
+
+async def test_get_my_manager_with_no_manager_is_unchanged(monkeypatch):
+    install(monkeypatch, graph_says(404, {"error": {"message": "Resource 'manager' does not exist"}}))
+
+    result = await call("get_my_manager", {})
+
+    assert payload(result) == {
+        "success": False,
+        "error": "No manager is set for your account in the directory.",
+    }
+
+
+async def test_search_from_me_without_a_token_says_not_connected(monkeypatch):
+    install(monkeypatch, graph_says(200), headers={})
+
+    result = await search({"query": "from:me invoice"})
+
+    assert payload(result) == {
+        "success": False,
+        "error": "Failed to search emails: Missing X-Microsoft-Refresh-Token header",
+    }
