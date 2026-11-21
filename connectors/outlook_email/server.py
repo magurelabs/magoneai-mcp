@@ -3569,6 +3569,13 @@ async def reply_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("reply_email_error", error=str(e))
+        # The Graph helpers raise ValueError (GraphNotFoundError is one) with a message written
+        # for the caller ("Resource not found.", "Graph API error (403): ..."). Surface it: a bare
+        # "Failed to reply to email" left the cause readable only in this pod's log, so a failed
+        # customer acknowledgment could not be diagnosed from the workflow run. Anything else
+        # stays generic - an unexpected exception's text is not vetted.
+        if isinstance(e, ValueError) and str(e).strip():
+            return {"success": False, "error": f"Failed to reply to email: {str(e).strip()[:300]}"}
         return {"success": False, "error": "Failed to reply to email"}
 
 
