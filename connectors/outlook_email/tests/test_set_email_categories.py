@@ -42,9 +42,7 @@ async def test_the_tool_is_listed_as_a_destructive_write():
 async def test_add_and_remove_merge_with_the_existing_list(monkeypatch):
     graph = install(monkeypatch, graph_with(["Unassigned", "VIP"]))
 
-    result = await call(
-        {"email_id": "m-1", "add": ["Assigned to Jane"], "remove": ["unassigned"]}
-    )
+    result = await call({"email_id": "m-1", "add": ["Assigned to Jane"], "remove": ["unassigned"]})
 
     assert result.is_error is False, result.content[0].text
     assert result.structured_content == {

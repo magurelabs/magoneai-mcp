@@ -22,7 +22,9 @@ def test_text_with_no_quote_marker_is_unchanged():
 
 
 def test_truncates_at_a_gmail_style_on_wrote_header():
-    body = "My answer is yes.\n\nOn Mon, 1 Sep 2026 at 10:00, Jane <j@x.com> wrote:\n> the question\n"
+    body = (
+        "My answer is yes.\n\nOn Mon, 1 Sep 2026 at 10:00, Jane <j@x.com> wrote:\n> the question\n"
+    )
     assert _strip_quoted_reply(body) == "My answer is yes."
 
 
