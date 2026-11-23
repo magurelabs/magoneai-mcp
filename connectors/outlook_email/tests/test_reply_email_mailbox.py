@@ -38,8 +38,10 @@ def draft_flow(fail_send: bool = False):
         if request.url.host == "upload.example.com":
             return httpx.Response(201)
         if path.endswith("/send"):
-            return httpx.Response(500, json={"error": {"message": "boom"}}) if fail_send else (
-                httpx.Response(202)
+            return (
+                httpx.Response(500, json={"error": {"message": "boom"}})
+                if fail_send
+                else (httpx.Response(202))
             )
         return httpx.Response(200, json={})
 
