@@ -209,7 +209,7 @@ def _pin(url: str, ip: str) -> tuple[str, dict[str, str], dict[str, str]]:
     port = u.port or default
     hostport = host if port == default else f"{host}:{port}"
     ip_lit = f"[{ip}]" if ":" in ip else ip
-    path = u.path or "/"
+    path = (u.path or "/") + (f";{u.params}" if u.params else "")
     target = f"{u.scheme}://{ip_lit}:{port}{path}" + (f"?{u.query}" if u.query else "")
     ext = {"sni_hostname": host} if u.scheme == "https" else {}
     return target, {"Host": hostport}, ext

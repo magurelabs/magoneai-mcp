@@ -130,8 +130,48 @@ PAGE_CACHE = _PageCache()
 # --------------------------------------------------------------------------- #
 
 
+# Arabic harakat, Quranic marks and tatweel carry no meaning for matching.
+_AR_MARKS = re.compile("[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u0640]")
+_AR_FOLD = str.maketrans(
+    {
+        "\u0623": "\u0627",  # alef with hamza above
+        "\u0625": "\u0627",  # alef with hamza below
+        "\u0622": "\u0627",  # alef with madda
+        "\u0671": "\u0627",  # alef wasla
+        "\u0649": "\u064a",  # alef maksura to yeh
+        "\u0629": "\u0647",  # teh marbuta to heh
+        **{chr(0x0660 + i): str(i) for i in range(10)},  # Arabic-Indic digits
+        **{chr(0x06F0 + i): str(i) for i in range(10)},  # Persian digits
+    }
+)
+# The definite article, alone or after "and" or "with".
+_AR_ARTICLES = ("\u0648\u0627\u0644", "\u0628\u0627\u0644", "\u0627\u0644")
+
+
+def _norm(word: str) -> str:
+    """Fold a lowercased word to a matching key: Arabic spelling variants and
+    the definite article, English plurals."""
+    if word.isascii():
+        if len(word) > 3 and not word.isdigit():
+            if word.endswith("ies"):
+                return word[:-3] + "y"
+            if word.endswith(("ches", "shes", "sses", "xes")):
+                return word[:-2]
+            if word.endswith("s") and not word.endswith(("ss", "us", "is")):
+                return word[:-1]
+        return word
+    word = word.translate(_AR_FOLD)
+    if len(word) > 3:
+        for art in _AR_ARTICLES:
+            if word.startswith(art) and len(word) - len(art) >= 2:
+                return word[len(art) :]
+    return word
+
+
 def _terms(text: str) -> list[str]:
-    return [t for t in (w.lower() for w in _WORD.findall(text)) if t not in _STOP and len(t) > 1]
+    words = _WORD.findall(_AR_MARKS.sub("", text).lower())
+    # Single digits stay: "Year 3" or "Grade 9" depend on them.
+    return [_norm(w) for w in words if w not in _STOP and (len(w) > 1 or w.isdigit())]
 
 
 def _host(url: str) -> str:
@@ -199,13 +239,68 @@ def pick_pages(fused: list[dict], max_pages: int) -> list[dict]:
     return picked
 
 
+_TABLE_RULE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
+
+
+def _split_table(para: str) -> tuple[str, str, list[str], str] | None:
+    """Find a markdown table in a paragraph: (text before, header and rule
+    rows, body rows, text after), or None when there is no table."""
+    lines = para.split("\n")
+    for j in range(1, len(lines)):
+        if "|" in lines[j - 1] and "|" in lines[j] and _TABLE_RULE.match(lines[j]):
+            end = j + 1
+            while end < len(lines) and "|" in lines[end]:
+                end += 1
+            return (
+                "\n".join(lines[: j - 1]).strip(),
+                "\n".join(lines[j - 1 : j + 1]),
+                lines[j + 1 : end],
+                "\n".join(lines[end:]).strip(),
+            )
+    return None
+
+
+def _table_passages(header: str, rows: list[str], size: int) -> list[str]:
+    """Cut a table on row boundaries, each piece starting with the header."""
+    out: list[str] = []
+    buf = header
+    for row in rows:
+        if buf != header and len(buf) + len(row) + 1 > size:
+            out.append(buf)
+            buf = header
+        buf = f"{buf}\n{row}"
+    if buf != header or not out:
+        out.append(buf)
+    return out
+
+
 def split_passages(text: str, size: int = PASSAGE_CHARS) -> list[str]:
     """Split page text into passages of about `size` chars on paragraph and
-    sentence boundaries, so a passage never starts mid-sentence."""
+    sentence boundaries, so a passage never starts mid-sentence. A markdown
+    table too long for one passage is cut between rows, and every piece
+    repeats the header row so each one reads on its own."""
     paras = [p.strip() for p in re.split(r"\n\s*\n|\n(?=#)", text) if p.strip()]
     out: list[str] = []
+    tables: set[int] = set()
     buf = ""
-    for para in paras:
+    i = 0
+    while i < len(paras):
+        para = paras[i]
+        i += 1
+        table = _split_table(para) if len(para) > size * 1.5 else None
+        if table:
+            before, header, rows, after = table
+            if before or after:
+                # Text around the table is handled as paragraphs of its own.
+                paras[i:i] = [p for p in (before, "\n".join([header, *rows]), after) if p]
+                continue
+            if buf:
+                out.append(buf)
+                buf = ""
+            for piece in _table_passages(header, rows, size):
+                tables.add(len(out))
+                out.append(piece)
+            continue
         if len(para) > size * 1.5:
             # Long paragraph: break on sentence ends.
             sentences = re.split(r"(?<=[.!?])\s+", para)
@@ -221,10 +316,11 @@ def split_passages(text: str, size: int = PASSAGE_CHARS) -> list[str]:
         buf = f"{buf}\n\n{para}" if buf else para
     if buf:
         out.append(buf)
-    # A single huge sentence still gets cut, at a word boundary.
+    # A single huge sentence still gets cut, at a word boundary. Table pieces
+    # already end on a row.
     final: list[str] = []
-    for p in out:
-        while len(p) > size * 2:
+    for n, p in enumerate(out):
+        while n not in tables and len(p) > size * 2:
             cut = p.rfind(" ", 0, size * 2)
             cut = cut if cut > 0 else size * 2
             final.append(p[:cut])
@@ -298,6 +394,62 @@ def rank_passages(
         page["passages"] = [p for _, _, p in sorted(cands, key=lambda x: x[1])]
         page["_best"] = cands[0][0] if cands else 0.0
     return pages
+
+
+def focus_text(text: str, focus: str, max_chars: int) -> tuple[str, bool, list[str]]:
+    """Keep the passages of `text` that match `focus`, within `max_chars`.
+
+    Passages are ranked with BM25 against the focus terms, the best ones are
+    kept until the budget is spent, and they are returned in document order
+    joined by a blank line, so the result still reads top to bottom. Returns
+    (text, focused, matched_terms): matched_terms are the focus words found in
+    the kept passages, and focused is True only when they are at least half of
+    the focus words. When no passage shares a term with the focus, the head of
+    the page is returned instead.
+    """
+    words = _WORD.findall(_AR_MARKS.sub("", focus or "").lower())
+    keys = {w: _terms(w) for w in dict.fromkeys(words)}
+    keys = {w: k[0] for w, k in keys.items() if k}
+    terms = list(dict.fromkeys(keys.values()))
+    # Passages smaller than the budget, so several matches can fit.
+    passages = split_passages(text, size=max(200, min(PASSAGE_CHARS, max_chars // 3)))
+    if not terms or not passages:
+        return _head(text, max_chars), False, []
+    bm = BM25([_terms(p) for p in passages])
+    ranked = sorted(
+        ((bm.score(terms, i), i) for i in range(len(passages))), key=lambda x: x[0], reverse=True
+    )
+    chosen: list[int] = []
+    used = 0
+    out = ""
+    for score, i in ranked:
+        if score <= 0:
+            break
+        size = len(passages[i]) + (2 if chosen else 0)
+        if used + size > max_chars:
+            if not chosen:
+                # The best match alone is over budget: keep its head.
+                out = _head(passages[i], max_chars)
+                break
+            continue
+        chosen.append(i)
+        used += size
+    if chosen:
+        out = "\n\n".join(passages[i] for i in sorted(chosen))
+    if not out:
+        return _head(text, max_chars), False, []
+    found = set(_terms(out))
+    matched = [w for w, k in keys.items() if k in found]
+    hit = {keys[w] for w in matched}
+    return out, len(hit) * 2 >= len(terms), matched
+
+
+def _head(text: str, max_chars: int) -> str:
+    """The first max_chars of text, cut at the last full stop when one is near."""
+    if len(text) <= max_chars:
+        return text
+    cut = text.rfind(".", 0, max_chars)
+    return text[: cut + 1] if cut > max_chars // 2 else text[:max_chars]
 
 
 def budget(pages: list[dict], max_chars: int) -> list[dict]:
