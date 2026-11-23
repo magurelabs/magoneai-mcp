@@ -89,6 +89,8 @@ instance queries).
 | `PERPLEXITY_API_KEY` | empty | Perplexity key fallback, for the tool that uses it. |
 | `CRAWL4AI_URL` | empty | Crawl4AI service used as the fallback for pages the direct fetch cannot read (JavaScript-rendered pages) and for `scrape_url` with `return_full`. Unset, the fallback is skipped. |
 | `WEB_SEARCH_EXTRACT_THREADS` | `4` | Threads that turn fetched pages into text (HTML, PDF). Kept apart from the threads DNS lookups use, so slow parses cannot hold up fetches. |
+| `WEB_RESULT_MAX_CHARS` | `16000` | `scrape_url`: the most text one call returns, whatever `max_chars` the model asks for (`return_full` is not affected). |
+| `WEB_FOCUS_READ_CHARS` | `120000` | `scrape_url` with `focus`: how much of the page is read to find the matching passages. |
 | `WEB_RESEARCH_PAGE_TIMEOUT_S` | `5` | `web_research`: how long one page may take to read, in seconds. |
 | `WEB_RESEARCH_DEADLINE_S` | `8` | `web_research`: the budget for the whole call, in seconds. Pages not read by then are listed in `unread_pages` with reason `deadline`. |
 | `WEB_RESEARCH_OUTPUT_CHARS` | `24000` | `web_research`: the most passage text one call returns. A page read but left with no passage inside this budget is listed in `unread_pages` with reason `budget`. |
