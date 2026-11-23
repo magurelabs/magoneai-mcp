@@ -97,7 +97,7 @@ vanna = ["asyncpg>=0.29.0", "openai>=2.15.0,<3", "vanna==2.0.2"]
 # are transitive today but imported directly, so they are declared.
 web_search = [
   "trafilatura>=1.8.0",
-  "pypdf>=6.0.0,<7",
+  "pypdf>=6.0.0,<8",
   "cryptography>=43.0.0",
   "certifi>=2024.2.2",
   "lxml>=5.0.0",
