@@ -21,7 +21,7 @@ QUOTED = '<html><head></head><body><div id="divRplyFwdMsg">From: A</div></body><
 WEB_LINK = "https://outlook.example.com/draft-1"
 
 
-def reply_flow(created_cc: list | None = None):
+def reply_flow(created_cc: list | None = None, created_to: list | None = None):
     def router(request: httpx.Request) -> httpx.Response:
         path = request.url.path
         if path.endswith("/createReply") or path.endswith("/createReplyAll"):
@@ -32,6 +32,7 @@ def reply_flow(created_cc: list | None = None):
                     "webLink": WEB_LINK,
                     "body": {"contentType": "html", "content": QUOTED},
                     "ccRecipients": created_cc or [],
+                    "toRecipients": created_to or [],
                 },
             )
         if path.endswith("/send"):
@@ -143,6 +144,24 @@ async def test_create_draft_reply_all_uses_create_reply_all(monkeypatch):
     )
 
     assert graph[0].url.path == "/v1.0/me/messages/m-1/createReplyAll"
+
+
+async def test_create_draft_reply_all_keeps_everyone_on_to(monkeypatch):
+    graph = install(monkeypatch, reply_flow(created_to=[address("alice@example.com")]))
+
+    await call(
+        "create_draft",
+        {
+            "to": "bob@example.com, ALICE@example.com",
+            "subject": "RE: Hi",
+            "body": "b",
+            "reply_to_id": "m-1",
+            "reply_all": True,
+        },
+    )
+
+    to = [r["emailAddress"]["address"] for r in patch_of(graph)["toRecipients"]]
+    assert to == ["alice@example.com", "bob@example.com"]
 
 
 async def test_create_draft_rejects_a_bad_reply_to_id(monkeypatch):

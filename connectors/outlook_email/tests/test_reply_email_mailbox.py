@@ -39,7 +39,8 @@ def draft_flow(fail_send: bool = False):
             return httpx.Response(201)
         if path.endswith("/send"):
             return (
-                httpx.Response(500, json={"error": {"message": "boom"}})
+                # A 4xx is a refusal; a 5xx leaves the send unconfirmed.
+                httpx.Response(400, json={"error": {"message": "boom"}})
                 if fail_send
                 else (httpx.Response(202))
             )

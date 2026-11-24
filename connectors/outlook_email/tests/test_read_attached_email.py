@@ -114,6 +114,18 @@ def test_an_html_only_eml_is_stripped_to_text():
     assert module.extract_text("m.eml", eml).endswith("A&B")
 
 
+def test_an_eml_in_an_unknown_charset_still_reads():
+    eml = (
+        b"From: x@example.com\r\nTo: y@example.com\r\nSubject: s\r\n"
+        b"Content-Type: text/plain; charset=x-no-such-charset\r\n\r\nHello caf\xc3\xa9"
+    )
+
+    text = module.extract_text("m.eml", eml)
+
+    assert "To: y@example.com" in text
+    assert text.endswith("Hello caf\u00e9")
+
+
 async def test_a_file_attachment_is_unchanged(monkeypatch):
     meta = {
         "@odata.type": "#microsoft.graph.fileAttachment",

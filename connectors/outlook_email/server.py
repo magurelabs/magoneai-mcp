@@ -97,8 +97,10 @@ from datetime import datetime, timedelta, timezone
 from datetime import timezone as _dt_timezone
 from ._shared.microsoft_graph import (
     SEND_UNCONFIRMED,
+    SEND_UNCONFIRMED_UNSAVED,
     GraphAuthError,
     GraphNotFoundError,
+    GraphServerError,
     SendUnconfirmed,
     auth_reason,
     graph_failure,
@@ -563,7 +565,13 @@ def _extract_eml(content_bytes: bytes) -> str:
     part = msg.get_body(preferencelist=("plain", "html"))
     if part is None:
         return message_text(headers, "", False)
-    return message_text(headers, part.get_content(), part.get_content_subtype() == "html")
+    try:
+        content = part.get_content()
+    except LookupError:
+        # A charset Python does not know: read it as UTF-8 rather than lose
+        # the whole email to one unknown label.
+        content = (part.get_payload(decode=True) or b"").decode("utf-8", errors="replace")
+    return message_text(headers, content, part.get_content_subtype() == "html")
 
 
 def _item_text(item: Dict[str, Any]) -> str:
@@ -735,9 +743,10 @@ async def reply_via_draft(
     plain-text `comment`, and Outlook drops its line breaks when it lands in an
     HTML thread, so a five-paragraph reply arrived as one block. Here `body`
     goes into the draft as HTML, above the quoted thread createReply already
-    put there, so paragraphs survive and the thread stays. cc/bcc in
+    put there, so paragraphs survive and the thread stays. to/cc/bcc in
     `message_patch` are added to the ones createReply(All) set rather than
-    replacing them; anything else in it (to, subject, importance) overrides.
+    replacing them, so a reply-all keeps everyone; anything else in it
+    (subject, importance) overrides.
 
     Attachments are POSTed to the draft one at a time rather than PATCHed onto
     it: Graph does not accept an `attachments` collection on a message PATCH,
@@ -782,7 +791,7 @@ async def reply_via_draft(
             raise ValueError("createReply returned no draft id")
 
         patch: Dict[str, Any] = dict(message_patch or {})
-        for key in ("ccRecipients", "bccRecipients"):
+        for key in ("toRecipients", "ccRecipients", "bccRecipients"):
             if key in patch:
                 patch[key] = _union_recipients(created.get(key), patch[key])
         if body is not None:
@@ -915,13 +924,18 @@ async def send_via_sendmail(
     """Send via /me/sendMail (used when save_to_sent is False).
 
     Graph returns 202 with no body, so no message id is available; returns
-    None. saveToSentItems is False here by construction.
+    None. saveToSentItems is False here by construction. A send whose outcome
+    is unknown raises SendUnconfirmed like the draft path, with no draft to
+    keep and no Sent Items copy to check.
     """
-    await graph._graph_request(
-        credentials,
-        "POST",
-        "/me/sendMail",
-        json_data={"message": message_body, "saveToSentItems": False},
+    await _post_send(
+        lambda: graph._graph_request(
+            credentials,
+            "POST",
+            "/me/sendMail",
+            json_data={"message": message_body, "saveToSentItems": False},
+        ),
+        unconfirmed=SEND_UNCONFIRMED_UNSAVED,
     )
     return None
 
@@ -980,14 +994,21 @@ async def send_via_draft(
         raise
 
 
-async def _post_send(send: Callable[[], Awaitable[Any]]) -> None:
-    """Run a draft's /send. A timeout or dropped connection leaves the outcome
-    unknown (Graph may have sent it), so it is raised as SendUnconfirmed: the
-    caller must not delete the draft, whose id may now be the sent message."""
+async def _post_send(
+    send: Callable[[], Awaitable[Any]], unconfirmed: str = SEND_UNCONFIRMED
+) -> None:
+    """Run a send (a draft's /send, or /sendMail). A timeout or dropped
+    connection after the request went out, or a 5xx, leaves the outcome
+    unknown (Graph may have sent it), so it is raised as SendUnconfirmed with
+    `unconfirmed` as its message: the caller must not delete the draft, whose
+    id may now be the sent message. A failure to connect never reached Graph,
+    and a 4xx is a refusal, so both stay plain failures."""
     try:
         await send()
-    except httpx.TransportError as exc:
-        raise SendUnconfirmed(SEND_UNCONFIRMED) from exc
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+        raise
+    except (httpx.TransportError, GraphServerError) as exc:
+        raise SendUnconfirmed(unconfirmed) from exc
 
 _SCRIPT_STYLE_RE = re.compile(r"<(script|style)[^>]*>.*?</\1>", re.DOTALL | re.IGNORECASE)
 
@@ -1323,7 +1344,8 @@ async def _graph_request(credentials: Dict[str, str],
             except Exception:
                 error_data = {}
             error_msg = graph_reason(error_data)
-            raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
+            error_cls = GraphServerError if response.status_code >= 500 else ValueError
+            raise error_cls(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
             return {}
@@ -1572,7 +1594,8 @@ async def _graph_request_app_only(credentials: Dict[str, str],
             except Exception:
                 error_data = {}
             error_msg = graph_reason(error_data)
-            raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
+            error_cls = GraphServerError if response.status_code >= 500 else ValueError
+            raise error_cls(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
             return {}
@@ -3581,7 +3604,7 @@ async def renew_mailbox_subscription(credentials: Dict[str, str],
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
 # permission_group: 'default'  required_scopes: []
 # REVIEWED: readOnlyHint=False, destructiveHint=False, traced to the handler.
-# Evidence: POST {base}/messages/{email_id}/{action}, base /me or /users/{mailbox}
+# Evidence: POST {base}/messages/{email_id}/createReply(All), PATCH the draft, POST its attachments, then POST {base}/messages/{draft_id}/send (via reply_via_draft()); base /me or /users/{mailbox}
 @server.tool(
     name='reply_email',
     description="Reply to an email, keeping the thread. Pass `email_id` (from list_emails or search_emails) and `body` (reply content). Optional: `reply_all` (true to reply to all recipients), `cc` (comma-separated extra CC recipients), `bcc` (comma-separated extra BCC recipients), `is_html` (true for HTML body), `attachments` (same three forms as send_email: a platform file_id/storage-key string, {\"file_id\": ...}, or a pre-fetched {filename, content_base64, content_type} - never encode content_base64 yourself), `attachment_urls`, and `mailbox` (see its own description). Returns `attachments` listing what was actually attached; if that list is absent or empty, nothing was attached and you must not claim otherwise.",
