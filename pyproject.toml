@@ -82,13 +82,26 @@ outlook_email = [
   "pypdf>=6.0.0",
   "rapidfuzz>=3.0.0",
 ]
+# The test report: Jinja2 renders the HTML (autoescape on), fpdf2 the PDF with
+# the DejaVu fonts vendored in connectors/playwright/fonts. The browser itself
+# is the operator's Playwright MCP container, so nothing here installs one.
+playwright = ["jinja2>=3.1.0", "fpdf2>=2.8.0"]
 trino = ["trino>=0.328.0"]
 # `vanna` is pinned exactly, not floored: the connector builds on
 # `vanna.legacy`, the pre-2.0 API that 2.x keeps under a new name, and a
 # module named legacy is the first thing a release is entitled to move. 2.0.1
 # is the version the v1 image ran.
 vanna = ["asyncpg>=0.29.0", "openai>=2.15.0,<3", "vanna==2.0.2"]
-web_search = ["trafilatura>=1.8.0"]
+# pypdf reads PDFs in scrape_url and web_research; cryptography validates an
+# AIA-recovered certificate chain before anything is trusted; certifi and lxml
+# are transitive today but imported directly, so they are declared.
+web_search = [
+  "trafilatura>=1.8.0",
+  "pypdf>=6.0.0,<7",
+  "cryptography>=43.0.0",
+  "certifi>=2024.2.2",
+  "lxml>=5.0.0",
+]
 
 # Every connector dependency at once. Not for users - a deployment installs
 # the one connector it runs - but CI needs it, because the import gate and the
@@ -96,7 +109,7 @@ web_search = ["trafilatura>=1.8.0"]
 # failures shipped: eleven connectors that would not import, and twenty-five
 # tools that raised NameError on call while importing perfectly.
 all = [
-  "magone-mcp-core[cloudflare_r2,csv_to_sql,database,otp_verification,outlook_calendar,outlook_email,trino,vanna,web_search]",
+  "magone-mcp-core[cloudflare_r2,csv_to_sql,database,otp_verification,outlook_calendar,outlook_email,playwright,trino,vanna,web_search]",
 ]
 
 [project.urls]

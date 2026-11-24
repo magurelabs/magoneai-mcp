@@ -101,6 +101,38 @@ pod IP, and outside the service-token check. It reveals nothing a
 `ConnectorServer.on_shutdown` registers hooks (for example closing a
 connection pool) that run once when the process shuts down.
 
+### Relaying another MCP server
+
+A connector that fronts an upstream MCP server (the `playwright` connector
+relays Microsoft's Playwright MCP) registers the upstream's tools at runtime,
+once it has fetched their list. `ConnectorServer.register_relayed_tool` (and
+`unregister_relayed_tool`) add such a tool with a handler supplied by the
+connector; the server applies read-only mode, per-connection selection and the
+outbound budget around that handler in `_run_relayed`, so a relayed call is held
+to the same guarantees as a local one. It also wraps every text item of the
+result in the provenance envelope (`<<<UNTRUSTED_CONTENT source=...>>>`, the
+`source` defaulting to the server's name), as `untrusted_fields=` does for a
+local tool's vendor text; image, audio and resource items pass unchanged.
+`register_relayed_tool` refuses (`ValueError`) a name that is already a local
+tool, and `unregister_relayed_tool` removes only tools it registered, so a relay
+can never replace or remove a tool the connector defines itself.
+
+`before_list_tools` and `before_call_tool` register hooks that run before a
+listing and before a call (for refreshing the upstream's tool list and for
+refusing a name), and `tool_names()` reads the registered set. `/healthz`
+counts tools without running the before-list hooks, so a probe never waits on
+the upstream.
+
+`request_header(ctx, name)` reads one named request header, for keying an
+upstream session off a routing header such as `X-Execution-Id`. It returns
+None for any credential header, whether or not it was sent: `Authorization`,
+`Cookie`, `Proxy-Authorization`, the service-token header, any name
+`redact.is_secret_key` treats as secret, and any header a tool declared in
+`credential_headers=` (`is_credential_header`). A tool's credentials still come
+only through its own declaration. These keep the connector out of the SDK's
+tool table and request context, so an SDK change lands in one place in the
+framework rather than in every relaying connector.
+
 ## Authentication modes
 
 `server.py`, `auth.py`

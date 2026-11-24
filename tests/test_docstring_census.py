@@ -62,8 +62,8 @@ def test_a_stale_read_only_count_fails():
     _assert_tamper_fails(
         connector="web_search",
         stale="5 tools, 1 of them proposed read-only.",
-        current="4 tools, 4 of them proposed read-only.",
-        expected="the module defines 4 tools, 4 read-only",
+        current="5 tools, 5 of them proposed read-only.",
+        expected="the module defines 5 tools, 5 read-only",
     )
 
 

@@ -89,17 +89,33 @@ class TestTheUserAgentIsHonest:
         assert "github.com/magurelabs/magoneai-mcp" in web_search.USER_AGENT
 
     @pytest.mark.asyncio
-    async def test_the_text_path_sends_it(self):
+    async def test_the_text_path_sends_it(self, monkeypatch):
+        """The direct page fetch lives in _scrape; it must say the same thing."""
+        import ssl
+
+        _scrape = importlib.import_module("connectors.web_search._scrape")
         sent = {}
 
-        class FakeClient:
-            async def get(self, url, headers=None, **kwargs):
-                sent.update(headers or {})
-                return httpx.Response(404)
+        def handler(request):
+            sent.update(request.headers)
+            return httpx.Response(200, text="<html><body>hi</body></html>")
 
-        await web_search._fetch_via_trafilatura(FakeClient(), "https://example.com/", 8000)
+        real = httpx.AsyncClient
 
-        assert sent["User-Agent"] == web_search.USER_AGENT
+        class Client(real):
+            def __init__(self, **kw):
+                kw.pop("transport", None)
+                super().__init__(transport=httpx.MockTransport(handler), **kw)
+
+        async def resolve(host, port):
+            return ["93.184.216.34"]
+
+        monkeypatch.setattr(_scrape.httpx, "AsyncClient", Client)
+        monkeypatch.setattr(_scrape, "_resolve", resolve)
+
+        await _scrape._stream_get("https://example.com/", ssl.create_default_context())
+
+        assert sent["user-agent"] == web_search.USER_AGENT
 
 
 class TestACrawlAsksRobotsTxt:

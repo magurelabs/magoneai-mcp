@@ -93,7 +93,13 @@ from .tools._constants import CREDENTIAL_HEADERS, MAX_BODY_SIZE
 from .tools._constants import CREDENTIAL_HEADERS, INLINE_ATTACHMENT_LIMIT, MAX_ATTACHMENTS, VALID_IMPORTANCE_LIST
 from datetime import datetime, timedelta, timezone
 from datetime import timezone as _dt_timezone
-from ._shared.microsoft_graph import GraphNotFoundError
+from ._shared.microsoft_graph import (
+    GraphAuthError,
+    GraphNotFoundError,
+    auth_reason,
+    graph_failure,
+    graph_reason,
+)
 from .tools._constants import CREDENTIAL_HEADERS, EMAIL_RE
 import time
 
@@ -1083,14 +1089,14 @@ async def _get_access_token(credentials: Dict[str, str]) -> str:
     """Exchange refresh token for access token."""
     refresh_token = credentials.get("microsoft_refresh_token")
     if not refresh_token:
-        raise ValueError("Missing X-Microsoft-Refresh-Token header")
+        raise GraphAuthError("Missing X-Microsoft-Refresh-Token header")
 
     client_id = credentials.get("microsoft_client_id")
     client_secret = credentials.get("microsoft_client_secret")
     tenant_id = credentials.get("microsoft_tenant_id") or "common"
 
     if not client_id or not client_secret:
-        raise ValueError(
+        raise GraphAuthError(
             "Missing OAuth credentials. Pass client_id and client_secret via headers."
         )
 
@@ -1111,8 +1117,8 @@ async def _get_access_token(credentials: Dict[str, str]) -> str:
                 error_data = response.json()
             except Exception:
                 error_data = {}
-            error_desc = error_data.get("error_description", response.text[:500])
-            raise ValueError(f"Token refresh failed ({response.status_code}): {error_desc}")
+            error_desc = auth_reason(error_data.get("error_description"))
+            raise GraphAuthError(f"Token refresh failed ({response.status_code}): {error_desc}")
 
         token_data = response.json()
         if "access_token" not in token_data:
@@ -1162,9 +1168,12 @@ async def _graph_request(credentials: Dict[str, str],
         )
 
         if response.status_code == 401:
-            raise ValueError("Authentication failed. Please re-authenticate.")
+            raise GraphAuthError("Authentication failed. Please re-authenticate.")
         elif response.status_code == 403:
-            raise ValueError("Access denied. Check permissions.")
+            raise GraphAuthError(
+                "Access denied. The connected account lacks the permission or "
+                "consent this operation needs (e.g. Mail.Read or Mail.Send)."
+            )
         elif response.status_code == 404:
             raise GraphNotFoundError("Resource not found.")
         elif response.status_code == 429:
@@ -1174,7 +1183,7 @@ async def _graph_request(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            error_msg = error_data.get("error", {}).get("message", response.text[:500])
+            error_msg = graph_reason(error_data)
             raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
@@ -1266,11 +1275,11 @@ async def _get_app_only_token(credentials: Dict[str, str]) -> str:
     tenant_id = credentials.get("microsoft_tenant_id")
 
     if not client_id or not client_secret:
-        raise ValueError(
+        raise GraphAuthError(
             "Missing app-only credentials. Pass client_id and client_secret via headers."
         )
     if not tenant_id:
-        raise ValueError("Missing tenant_id. App-only OAuth requires an explicit tenant id.")
+        raise GraphAuthError("Missing tenant_id. App-only OAuth requires an explicit tenant id.")
 
     cache_key = (tenant_id, client_id)
     now = time.monotonic()
@@ -1303,10 +1312,8 @@ async def _get_app_only_token(credentials: Dict[str, str]) -> str:
                     error_data = response.json()
                 except Exception:
                     error_data = {}
-                error_desc = error_data.get(
-                    "error_description", response.text[:500] or "Token acquisition failed"
-                )
-                raise ValueError(
+                error_desc = auth_reason(error_data.get("error_description"))
+                raise GraphAuthError(
                     f"App-only token acquisition failed ({response.status_code}): {error_desc}"
                 )
 
@@ -1394,12 +1401,13 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            detail = error_data.get("error", {}).get("message", response.text[:500])
+            error_obj = error_data.get("error") if isinstance(error_data, dict) else None
+            detail = auth_reason(error_obj.get("message") if isinstance(error_obj, dict) else None)
             if response.status_code == 401:
-                raise ValueError(
+                raise GraphAuthError(
                     f"Authentication failed. Check app credentials and admin consent. ({detail})"
                 )
-            raise ValueError(
+            raise GraphAuthError(
                 "Access denied. Verify the app has the required admin-consented "
                 "application permission for this resource (e.g. Mail.Read for mailbox "
                 "access, or a Sites.Selected per-site grant for SharePoint). "
@@ -1410,10 +1418,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            detail = error_data.get("error", {}).get("message", response.text[:500])
-            raise GraphNotFoundError(
-                f"Resource not found. ({detail})" if detail else "Resource not found."
-            )
+            raise GraphNotFoundError(f"Resource not found. ({graph_reason(error_data)})")
         elif response.status_code == 410:
             # deltaLink expired — caller should reset and re-list.
             return {"_error": "delta_expired", "_status": 410}
@@ -1427,7 +1432,7 @@ async def _graph_request_app_only(credentials: Dict[str, str],
                 error_data = response.json() if response.content else {}
             except Exception:
                 error_data = {}
-            error_msg = error_data.get("error", {}).get("message", response.text[:500])
+            error_msg = graph_reason(error_data)
             raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
 
         if response.status_code in (204, 202):
@@ -1620,7 +1625,7 @@ async def create_draft(credentials: Dict[str, str],
         return draft_result
     except Exception as e:
         logger.exception("create_draft_error", error=str(e))
-        return {"success": False, "error": "Failed to create draft"}
+        return graph_failure("Failed to create draft", e)
 
 
 
@@ -1661,7 +1666,7 @@ async def delete_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("delete_email_error", error=str(e))
-        return {"success": False, "error": "Failed to delete email"}
+        return graph_failure("Failed to delete email", e)
 
 
 
@@ -1761,7 +1766,7 @@ async def download_attachment(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("download_attachment_error", error=str(e))
-        return {"success": False, "error": "Failed to download attachment"}
+        return graph_failure("Failed to download attachment", e)
 
 
 
@@ -1829,7 +1834,7 @@ async def forward_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("forward_email_error", error=str(e))
-        return {"success": False, "error": "Failed to forward email"}
+        return graph_failure("Failed to forward email", e)
 
 
 
@@ -1977,7 +1982,7 @@ async def get_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("get_email_error", error=str(e))
-        return {"success": False, "error": "Failed to get email"}
+        return graph_failure("Failed to get email", e)
 
 
 
@@ -2060,6 +2065,8 @@ async def get_email_bodies(credentials: Dict[str, str],
                         "body": body_text,
                     }
                 )
+            except GraphAuthError:
+                raise  # not connected: the whole call fails, never a per-ID entry
             except Exception:
                 failed.append({"id": eid, "error": "Failed to fetch"})
 
@@ -2073,7 +2080,7 @@ async def get_email_bodies(credentials: Dict[str, str],
         return response
     except Exception as e:
         logger.exception("get_email_bodies_error", error=str(e))
-        return {"success": False, "error": "Failed to fetch email bodies"}
+        return graph_failure("Failed to fetch email bodies", e)
 
 
 
@@ -2222,7 +2229,7 @@ async def get_email_thread(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("get_email_thread_error", error=str(e))
-        return {"success": False, "error": "Failed to get email thread"}
+        return graph_failure("Failed to get email thread", e)
 
 
 
@@ -2277,6 +2284,8 @@ async def get_my_manager(credentials: Dict[str, str]) -> Dict[str, Any]:
             "email": email,
             "job_title": r.get("jobTitle"),
         }
+    except GraphAuthError as e:
+        return graph_failure("Failed to get manager", e)
     except Exception:
         return {
             "success": False,
@@ -2378,7 +2387,7 @@ async def get_unread_count(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("get_unread_count_error", error=str(e))
-        return {"success": False, "error": "Failed to get unread count"}
+        return graph_failure("Failed to get unread count", e)
 
 
 
@@ -2447,7 +2456,7 @@ async def list_attachments(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_attachments_error", error=str(e))
-        return {"success": False, "error": "Failed to list attachments"}
+        return graph_failure("Failed to list attachments", e)
 
 
 
@@ -2520,7 +2529,7 @@ async def list_drafts(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_drafts_error", error=str(e))
-        return {"success": False, "error": "Failed to list drafts"}
+        return graph_failure("Failed to list drafts", e)
 
 
 
@@ -2612,7 +2621,7 @@ async def list_email_headers(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_email_headers_error", error=str(e))
-        return {"success": False, "error": "Failed to list email headers"}
+        return graph_failure("Failed to list email headers", e)
 
 
 
@@ -2743,7 +2752,7 @@ async def list_emails(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to list emails"}
+        return graph_failure("Failed to list emails", e)
 
 
 
@@ -2812,7 +2821,7 @@ async def list_folders(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("list_folders_error", error=str(e))
-        return {"success": False, "error": "Failed to list folders"}
+        return graph_failure("Failed to list folders", e)
 
 
 
@@ -2913,6 +2922,8 @@ async def mark_emails(credentials: Dict[str, str],
                     json_data={"isRead": is_read},
                 )
                 marked += 1
+            except GraphAuthError:
+                raise  # not connected: the whole call fails, never a per-ID entry
             except ValueError as e:
                 if "Rate limit" in str(e):
                     rate_limited = True
@@ -2933,7 +2944,7 @@ async def mark_emails(credentials: Dict[str, str],
         return result
     except Exception as e:
         logger.exception("mark_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to mark emails"}
+        return graph_failure("Failed to mark emails", e)
 
 
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id', 'X-Allowed-Mailboxes']
@@ -3029,7 +3040,7 @@ async def set_email_categories(credentials: Dict[str, str],
         return {"success": True, "email_id": email_id, "categories": new_categories}
     except Exception as e:
         logger.exception("set_email_categories_error", error=str(e))
-        return {"success": False, "error": "Failed to update email categories"}
+        return graph_failure("Failed to update email categories", e)
 
 
 
@@ -3161,7 +3172,7 @@ async def match_emails(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("match_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to match emails"}
+        return graph_failure("Failed to match emails", e)
 
 
 
@@ -3220,7 +3231,7 @@ async def move_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("move_email_error", error=str(e))
-        return {"success": False, "error": "Failed to move email"}
+        return graph_failure("Failed to move email", e)
 
 
 
@@ -3311,7 +3322,7 @@ async def read_attachment(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("read_attachment_error", error=str(e))
-        return {"success": False, "error": "Failed to read attachment"}
+        return graph_failure("Failed to read attachment", e)
 
 
 
@@ -3569,7 +3580,7 @@ async def reply_email(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("reply_email_error", error=str(e))
-        return {"success": False, "error": "Failed to reply to email"}
+        return graph_failure("Failed to reply to email", e)
 
 
 
@@ -3647,6 +3658,8 @@ async def search_emails(credentials: Dict[str, str],
                     credentials, "GET", "/me", params={"$select": "mail,userPrincipalName"}
                 )
                 my_address = (me.get("mail") or me.get("userPrincipalName") or "").strip()
+            except GraphAuthError:
+                raise  # not connected, not a 'me' problem: graph_failure below says so
             except Exception:
                 pass
             if my_address:
@@ -3715,7 +3728,7 @@ async def search_emails(credentials: Dict[str, str],
         return response
     except Exception as e:
         logger.exception("search_emails_error", error=str(e))
-        return {"success": False, "error": "Failed to search emails"}
+        return graph_failure("Failed to search emails", e)
 
 
 
@@ -3760,7 +3773,7 @@ async def send_draft(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("send_draft_error", error=str(e))
-        return {"success": False, "error": "Failed to send draft"}
+        return graph_failure("Failed to send draft", e)
 
 
 
@@ -3931,7 +3944,7 @@ async def send_email(credentials: Dict[str, str],
         return result
     except Exception as e:
         logger.exception("send_email_error", error=str(e))
-        return {"success": False, "error": "Failed to send email"}
+        return graph_failure("Failed to send email", e)
 
 
 
