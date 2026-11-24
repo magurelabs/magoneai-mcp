@@ -32,6 +32,32 @@ class GraphAuthError(ValueError):
     surface its message so the caller can tell "not connected" from a failure."""
 
 
+class GraphServerError(ValueError):
+    """Graph answered with a 5xx. Unlike a 4xx, the request may have been
+    carried out before the error (a gateway timeout is the common case)."""
+
+
+class SendUnconfirmed(ValueError):
+    """A send whose outcome is unknown: a timeout or dropped connection after
+    the request went out, or a 5xx from Graph.
+
+    Graph may have sent the message anyway, and the draft id is then the id of
+    the sent message, so the caller must keep the draft rather than delete it,
+    and the person is told to check before sending again."""
+
+
+SEND_UNCONFIRMED = (
+    "Outlook did not confirm the send in time; it may have gone out. "
+    "Check Sent Items before sending it again."
+)
+
+# /sendMail with saveToSentItems=false leaves no copy in Sent Items to check.
+SEND_UNCONFIRMED_UNSAVED = (
+    "Outlook did not confirm the send in time; it may have gone out. "
+    "It was not saved to Sent Items, so check with the recipient before sending it again."
+)
+
+
 _AUTH_REASON_MAX_CHARS = 200
 
 
@@ -61,9 +87,10 @@ def graph_failure(action: str, exc: Exception) -> Dict[str, Any]:
 
     A credential problem keeps its message, in the "<action>: <reason>" shape the
     calendar connector uses, so the caller sees the mailbox is not connected
-    instead of an opaque failure it would retry. Anything else stays a bare
-    `action`, so Graph internals do not leak."""
-    if isinstance(exc, GraphAuthError):
+    instead of an opaque failure it would retry. A send that may have gone out
+    (SendUnconfirmed) keeps its message too, so nobody resends blindly.
+    Anything else stays a bare `action`, so Graph internals do not leak."""
+    if isinstance(exc, (GraphAuthError, SendUnconfirmed)):
         return {"success": False, "error": f"{action}: {exc}"}
     return {"success": False, "error": action}
 
@@ -187,7 +214,8 @@ class MicrosoftGraph:
                 except Exception:
                     error_data = {}
                 error_msg = graph_reason(error_data)
-                raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
+                error_cls = GraphServerError if response.status_code >= 500 else ValueError
+                raise error_cls(f"Graph API error ({response.status_code}): {error_msg}")
 
             if response.status_code in (204, 202):
                 return {}
@@ -431,7 +459,8 @@ class MicrosoftGraph:
                 except Exception:
                     error_data = {}
                 error_msg = graph_reason(error_data)
-                raise ValueError(f"Graph API error ({response.status_code}): {error_msg}")
+                error_cls = GraphServerError if response.status_code >= 500 else ValueError
+                raise error_cls(f"Graph API error ({response.status_code}): {error_msg}")
 
             if response.status_code in (204, 202):
                 return {}

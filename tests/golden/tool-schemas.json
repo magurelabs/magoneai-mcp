@@ -5215,6 +5215,15 @@
           "description": "Body is HTML",
           "type": "boolean"
         },
+        "reply_all": {
+          "default": false,
+          "description": "With reply_to_id: reply to all recipients",
+          "type": "boolean"
+        },
+        "reply_to_id": {
+          "description": "Message id to reply to; makes this a reply draft in that thread",
+          "type": "string"
+        },
         "subject": {
           "description": "Email subject",
           "type": "string"
