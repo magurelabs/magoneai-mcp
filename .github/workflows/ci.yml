@@ -222,7 +222,7 @@ jobs:
       # day it releases, for a change nobody in this repository made.
       - name: Install ruff
         if: ${{ !cancelled() }}
-        run: pip install ruff==0.16.1
+        run: pip install ruff==0.17.5
 
       - name: Lint
         if: ${{ !cancelled() }}
