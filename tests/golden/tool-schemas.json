@@ -4134,6 +4134,93 @@
       "type": "object"
     }
   },
+  "microsoft_teams/list_channel_message_replies": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "channel_id": {
+          "description": "Channel ID from list_channels",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "replies_cursor from list_channel_messages, or next_cursor from this tool. Its settings carry over.",
+          "type": "string"
+        },
+        "include_system_messages": {
+          "default": false,
+          "description": "Also return system events (default: false)",
+          "type": "boolean"
+        },
+        "message_id": {
+          "description": "Root message ID from list_channel_messages or read_channel_messages",
+          "type": "string"
+        },
+        "page_size": {
+          "default": 20,
+          "description": "Replies per page (default: 20, max: 50)",
+          "type": "integer"
+        },
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "channel_id",
+        "message_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/list_channel_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "channel_id": {
+          "description": "Channel ID from list_channels",
+          "type": "string"
+        },
+        "created_after": {
+          "description": "ISO 8601 datetime (no offset means UTC). Only messages created at or after it.",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "ISO 8601 datetime (no offset means UTC). Only messages created before it.",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "next_cursor from a previous call for the same channel. Its settings carry over.",
+          "type": "string"
+        },
+        "include_system_messages": {
+          "default": false,
+          "description": "Also return system events (default: false)",
+          "type": "boolean"
+        },
+        "page_size": {
+          "default": 20,
+          "description": "Threads per page (default: 20, max: 50)",
+          "type": "integer"
+        },
+        "team_id": {
+          "description": "Team ID from list_teams",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team_id",
+        "channel_id"
+      ],
+      "type": "object"
+    }
+  },
   "microsoft_teams/list_channels": {
     "annotations": {
       "destructiveHint": false,
@@ -4148,6 +4235,46 @@
       },
       "required": [
         "team_id"
+      ],
+      "type": "object"
+    }
+  },
+  "microsoft_teams/list_chat_messages": {
+    "annotations": {
+      "destructiveHint": false,
+      "readOnlyHint": true
+    },
+    "schema": {
+      "properties": {
+        "chat_id": {
+          "description": "Chat ID from list_chats",
+          "type": "string"
+        },
+        "created_after": {
+          "description": "ISO 8601 datetime (no offset means UTC). Only messages created at or after it.",
+          "type": "string"
+        },
+        "created_before": {
+          "description": "ISO 8601 datetime (no offset means UTC). Only messages created before it.",
+          "type": "string"
+        },
+        "cursor": {
+          "description": "next_cursor from a previous call for the same chat. Its dates and settings carry over.",
+          "type": "string"
+        },
+        "include_system_messages": {
+          "default": false,
+          "description": "Also return system events (default: false)",
+          "type": "boolean"
+        },
+        "page_size": {
+          "default": 20,
+          "description": "Messages per page (default: 20, max: 50)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "chat_id"
       ],
       "type": "object"
     }
