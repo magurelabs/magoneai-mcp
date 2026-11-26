@@ -12,6 +12,7 @@ the SDK has no opinion about:
 - `selection`       - the tools one connection selected, and nothing else
 - `provenance`      - a marker for text from outside the trust boundary
 - `content`         - move bytes without holding storage credentials
+- `errors`          - why a call failed, as a code a host can act on
 """
 
 from .auth import (
@@ -35,6 +36,7 @@ from .content import (
     PresignedUrlSigner,
     safe_display_name,
 )
+from .errors import UpstreamError, code_for_status, error_fields, refusal, retry_after_seconds
 from .net import InvalidURL, SSRFBlocked, is_blocked_address, validate_url
 from .provenance import mark_result, wrap
 from .readonly import ReadOnlyViolation, is_read_tool, read_only_enabled
@@ -77,6 +79,11 @@ __all__ = [
     "PresignedMinter",
     "PresignedUrlSigner",
     "safe_display_name",
+    "UpstreamError",
+    "code_for_status",
+    "error_fields",
+    "refusal",
+    "retry_after_seconds",
     "InvalidURL",
     "LocalAuthContextFactory",
     "PlatformTokenVerifier",

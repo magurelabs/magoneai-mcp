@@ -58,6 +58,20 @@ ahead of the first release.
     `/healthz` counts the registered tools without running the before-list
     hooks, so a probe never waits on a relayed upstream. Used by the
     `playwright` connector; see [docs/architecture.md](docs/architecture.md).
+- `magone_mcp_core.errors`: a shared vocabulary for why a call failed, so a
+  host calling a tool on its own (paging a history, retrying on a schedule)
+  can tell "wait and retry" from "stop" without parsing the message. The
+  codes are `throttled`, `unavailable`, `network_error` and `timeout`
+  (worth retrying, `RETRYABLE`) and `auth_expired`, `forbidden`,
+  `not_found`, `invalid_argument` and `upstream_error`. `UpstreamError` is
+  a `ValueError` that carries the code and the vendor's `Retry-After`, so
+  existing `except ValueError` handlers keep working; `error_fields(exc)`
+  keeps the code in a refusal a tool builds itself. An `UpstreamError` that
+  escapes a tool, and a request that never got an answer
+  (`httpx.TransportError`), now reach the caller as a refusal with
+  `error_code` and, when the vendor sent one, `retry_after_seconds`. A
+  transport failure's message is fixed, so the URL it was sending to is not
+  echoed. Every other exception is still masked.
 - Connectors for third-party APIs under `connectors/`, each with its own
   tests and an optional dependency extra. [docs/TOOLS.md](docs/TOOLS.md) lists
   every tool, and `connectors/publication.json` records which connectors are
