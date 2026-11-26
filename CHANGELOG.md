@@ -72,6 +72,10 @@ ahead of the first release.
   `error_code` and, when the vendor sent one, `retry_after_seconds`. A
   transport failure's message is fixed, so the URL it was sending to is not
   echoed. Every other exception is still masked.
+  The request helpers of `onedrive`, `outlook_calendar`, `google_drive`,
+  `google_gmail` and `google_calendar` raise it, with their messages
+  unchanged; Google's 403 with a `rateLimitExceeded` reason is reported as
+  `throttled`.
 - Connectors for third-party APIs under `connectors/`, each with its own
   tests and an optional dependency extra. [docs/TOOLS.md](docs/TOOLS.md) lists
   every tool, and `connectors/publication.json` records which connectors are

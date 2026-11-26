@@ -50,7 +50,7 @@ import httpx
 import structlog
 from mcp.types import ToolAnnotations
 
-from magone_mcp_core import ConnectorServer, declare_output_schema, declare_schema
+from magone_mcp_core import ConnectorServer, declare_output_schema, declare_schema, error_fields
 from magone_mcp_core.redact import scrub_text, upstream_error
 
 from ._shared import get_access_token, graph_request
@@ -108,7 +108,7 @@ _NULLABLE_STR = {"type": ["string", "null"]}
 def _failed(tool: str, exc: Exception) -> dict[str, Any]:
     """A refusal for the model, and a log line that carries no credential."""
     logger.warning(f"{tool}_error", error_type=type(exc).__name__, error=upstream_error(exc))
-    return {"success": False, "error": scrub_text(str(exc))}
+    return {"success": False, "error": scrub_text(str(exc)), **error_fields(exc)}
 
 
 def _skip_token(next_link: Any) -> str | None:

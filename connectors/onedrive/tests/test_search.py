@@ -99,4 +99,8 @@ async def test_search_returns_the_error_when_graph_fails(monkeypatch):
     error = {"error": {"message": "search unavailable"}}
     graph = graph_answering("GET", SEARCH, error, status=503)
     result = await run(monkeypatch, "onedrive_search_files", graph, query="x")
-    assert result == {"success": False, "error": "Graph API error (503): search unavailable"}
+    assert result == {
+        "success": False,
+        "error": "Graph API error (503): search unavailable",
+        "error_code": "unavailable",
+    }

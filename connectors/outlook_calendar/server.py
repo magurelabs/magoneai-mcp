@@ -19,7 +19,7 @@ from typing import Any
 import structlog
 from mcp.types import ToolAnnotations
 
-from magone_mcp_core import ConnectorServer, declare_schema
+from magone_mcp_core import ConnectorServer, declare_schema, error_fields
 
 from ._shared import GRAPH_API_URL, GraphNotFoundError, _get_access_token, _graph_request
 
@@ -453,7 +453,7 @@ async def create_event(credentials: Dict[str, str],
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.exception("create_event_error", error=str(e))
-        return {"success": False, "error": f"Failed to create event: {str(e)}"}
+        return {"success": False, "error": f"Failed to create event: {str(e)}", **error_fields(e)}
 
 
 
@@ -481,7 +481,7 @@ async def delete_event(credentials: Dict[str, str], event_id: str) -> Dict[str, 
         return {"success": True, "deleted_event_id": event_id}
     except Exception as e:
         logger.exception("delete_event_error", error=str(e))
-        return {"success": False, "error": f"Failed to delete event: {str(e)}"}
+        return {"success": False, "error": f"Failed to delete event: {str(e)}", **error_fields(e)}
 
 
 
@@ -575,7 +575,7 @@ async def get_free_busy(credentials: Dict[str, str],
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.exception("get_free_busy_error", error=str(e))
-        return {"success": False, "error": f"Failed to get free/busy: {str(e)}"}
+        return {"success": False, "error": f"Failed to get free/busy: {str(e)}", **error_fields(e)}
 
 
 
@@ -653,7 +653,7 @@ async def list_events(credentials: Dict[str, str],
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.exception("list_events_error", error=str(e))
-        return {"success": False, "error": f"Failed to list events: {str(e)}"}
+        return {"success": False, "error": f"Failed to list events: {str(e)}", **error_fields(e)}
 
 
 
@@ -768,7 +768,7 @@ async def update_event_details(credentials: Dict[str, str],
         }
     except Exception as e:
         logger.exception("update_event_details_error", error=str(e))
-        return {"success": False, "error": f"Failed to update event: {str(e)}"}
+        return {"success": False, "error": f"Failed to update event: {str(e)}", **error_fields(e)}
 
 
 
@@ -882,7 +882,7 @@ async def update_event_time(credentials: Dict[str, str],
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.exception("update_event_time_error", error=str(e))
-        return {"success": False, "error": f"Failed to update event time: {str(e)}"}
+        return {"success": False, "error": f"Failed to update event time: {str(e)}", **error_fields(e)}
 
 
 # -- compatibility: the tool name saved configurations still point at --------

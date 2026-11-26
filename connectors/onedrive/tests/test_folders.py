@@ -81,7 +81,11 @@ async def test_create_folder_reports_a_name_conflict(monkeypatch):
     result = await run(
         monkeypatch, "onedrive_create_folder", graph, name="New", conflict_behavior="fail"
     )
-    assert result == {"success": False, "error": "Graph API error (409): Name already exists"}
+    assert result == {
+        "success": False,
+        "error": "Graph API error (409): Name already exists",
+        "error_code": "invalid_argument",
+    }
 
 
 @pytest.mark.parametrize("name", ["", "   "])
@@ -215,7 +219,7 @@ async def test_copy_body_names_the_destination_and_any_new_name(monkeypatch, kwa
 async def test_copy_reports_a_failed_root_lookup_and_sends_no_copy(monkeypatch):
     graph = FakeGraph().on("GET", ROOT_LOOKUP, respond(status=403))
     result = await run(monkeypatch, "onedrive_copy_item", graph, item_id="S1")
-    assert result == {"success": False, "error": "Access denied. Check permissions."}
+    assert result == {"success": False, "error": "Access denied. Check permissions.", "error_code": "forbidden"}
     assert graph.matching("POST") == []
 
 
@@ -298,7 +302,7 @@ async def test_move_reports_a_failed_root_lookup_and_moves_nothing(monkeypatch):
     result = await run(
         monkeypatch, "onedrive_move_item", graph, item_id="S1", destination_folder_id="root"
     )
-    assert result == {"success": False, "error": "Access denied. Check permissions."}
+    assert result == {"success": False, "error": "Access denied. Check permissions.", "error_code": "forbidden"}
     assert graph.matching("PATCH") == []
 
 
@@ -338,4 +342,8 @@ async def test_move_returns_the_error_when_graph_fails(monkeypatch):
     result = await run(
         monkeypatch, "onedrive_move_item", graph, item_id="S1", destination_folder_id="D1"
     )
-    assert result == {"success": False, "error": "Graph API error (409): conflict"}
+    assert result == {
+        "success": False,
+        "error": "Graph API error (409): conflict",
+        "error_code": "invalid_argument",
+    }
