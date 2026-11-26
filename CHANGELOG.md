@@ -111,6 +111,12 @@ ahead of the first release.
   `graph.microsoft.com` and the same chat, channel or message as the call.
   Failures carry a stable `error_code` (`throttled` and `unavailable` with
   `retry_after_seconds`). No new Graph permissions are needed.
+- [docs/writing-a-connector.md](docs/writing-a-connector.md) describes the
+  shape a tool that pages through a whole history should follow (`cursor`,
+  an array of items with an `id`, `next_cursor`, `complete`, `error_code`,
+  `retry_after_seconds`), so a host can page any such tool the same way.
+  `tests/test_paging_contract.py` holds every tool that takes `cursor` to
+  it: read-only, and an output schema with `next_cursor` and an array.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
   on a message, in the signed-in user's mailbox or an allowed shared mailbox,
   and `get_email` returns a message's `categories`.
