@@ -95,6 +95,28 @@ ahead of the first release.
   `docker.io/magureai/mcp-<name>:<version>`, as an `oci` package, so a
   registry entry can be installed. The publish workflow builds and pushes
   exactly that tag.
+- `microsoft_teams`: three read-only tools that page through a complete
+  history, one Microsoft Graph page per call, returning Graph's own
+  `chatMessage` objects (HTML body, attachments, mentions, reactions, edit and
+  delete times; deleted messages kept) and an opaque `next_cursor`.
+  `list_chat_messages` and `list_channel_messages` take `created_after` /
+  `created_before` and return a flat `messages` list. Channel messages cannot
+  be filtered by date in Graph, so `list_channel_messages` walks the channel
+  behind one cursor: pages of threads until a page has no activity since
+  `created_after`, the rest of any long thread's replies, then the threads
+  active since the first call again, so a thread that gained a reply while
+  paging is not missed. A message can therefore come back twice; the later
+  copy is the newer. `list_channel_message_replies` reads one thread's
+  replies. Every Graph link a cursor carries is refused unless it names
+  `graph.microsoft.com` and the same chat, channel or message as the call.
+  Failures carry a stable `error_code` (`throttled` and `unavailable` with
+  `retry_after_seconds`). No new Graph permissions are needed.
+- [docs/writing-a-connector.md](docs/writing-a-connector.md) describes the
+  shape a tool that pages through a whole history should follow (`cursor`,
+  an array of items with an `id`, `next_cursor`, `complete`, `error_code`,
+  `retry_after_seconds`), so a host can page any such tool the same way.
+  `tests/test_paging_contract.py` holds every tool that takes `cursor` to
+  it: read-only, and an output schema with `next_cursor` and an array.
 - `outlook_email`: `set_email_categories` adds and removes Outlook categories
   on a message, in the signed-in user's mailbox or an allowed shared mailbox,
   and `get_email` returns a message's `categories`.
@@ -137,6 +159,13 @@ ahead of the first release.
   Chrome string, on both the direct fetch and Crawl4AI. `scrape_url` with
   `return_full=true` checks the site's robots.txt first, per RFC 9309, and
   refuses a page it disallows; a single-page fetch does not.
+- `microsoft_teams`: every tool now waits out Microsoft Graph throttling. A
+  429 is retried after Graph's `Retry-After` (an exponential backoff when it
+  sends none), up to three retries within 30 seconds; a longer `Retry-After`
+  ends the call at once rather than retrying early. Reads also retry 503 and
+  504. Writes do not, since a 504 can come back for a write Graph applied, and
+  resending it could post a message twice. Before, a 429 failed the call
+  immediately. Error messages are unchanged.
 - `outlook_email`: `reply_email` takes an optional `mailbox`, so a reply to a
   message in an allowed shared mailbox is sent from that mailbox, with or
   without attachments. Existing properties are unchanged.

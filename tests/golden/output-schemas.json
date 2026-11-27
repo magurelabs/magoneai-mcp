@@ -1065,6 +1065,136 @@
     ],
     "type": "object"
   },
+  "microsoft_teams/list_channel_message_replies": {
+    "properties": {
+      "complete": {
+        "description": "True when there are no more pages.",
+        "type": "boolean"
+      },
+      "count": {
+        "description": "Items on this page.",
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "error_code": {
+        "description": "On failure: invalid_argument, invalid_cursor, auth_expired, forbidden, not_found, throttled, unavailable, network_error or upstream_error.",
+        "type": "string"
+      },
+      "next_cursor": {
+        "description": "Pass as `cursor` for the next page; null when there is none.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "replies": {
+        "description": "Microsoft Graph chatMessage objects as Graph returned them.",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "retry_after_seconds": {
+        "description": "On throttled or unavailable: seconds Microsoft Graph asked to wait.",
+        "type": "number"
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
+  "microsoft_teams/list_channel_messages": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "count": {
+        "type": "integer",
+        "description": "Items on this page."
+      },
+      "next_cursor": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Pass as `cursor` for the next page; null when there is none."
+      },
+      "complete": {
+        "type": "boolean",
+        "description": "True when there are no more pages."
+      },
+      "error": {
+        "type": "string"
+      },
+      "error_code": {
+        "type": "string",
+        "description": "On failure: invalid_argument, invalid_cursor, auth_expired, forbidden, not_found, throttled, unavailable, network_error or upstream_error."
+      },
+      "retry_after_seconds": {
+        "type": "number",
+        "description": "On throttled or unavailable: seconds Microsoft Graph asked to wait."
+      },
+      "messages": {
+        "type": "array",
+        "items": {
+          "type": "object"
+        },
+        "description": "Thread roots and replies created in the window, as Microsoft Graph returned them. The same id can appear again on a later page; keep the last copy."
+      }
+    }
+  },
+  "microsoft_teams/list_chat_messages": {
+    "properties": {
+      "complete": {
+        "description": "True when there are no more pages.",
+        "type": "boolean"
+      },
+      "count": {
+        "description": "Items on this page.",
+        "type": "integer"
+      },
+      "error": {
+        "type": "string"
+      },
+      "error_code": {
+        "description": "On failure: invalid_argument, invalid_cursor, auth_expired, forbidden, not_found, throttled, unavailable, network_error or upstream_error.",
+        "type": "string"
+      },
+      "messages": {
+        "description": "Microsoft Graph chatMessage objects as Graph returned them.",
+        "items": {
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "next_cursor": {
+        "description": "Pass as `cursor` for the next page; null when there is none.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "retry_after_seconds": {
+        "description": "On throttled or unavailable: seconds Microsoft Graph asked to wait.",
+        "type": "number"
+      },
+      "stopped_reason": {
+        "description": "end_of_data, or reached_created_after when created_after ended the paging.",
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "success": {
+        "type": "boolean"
+      }
+    },
+    "type": "object"
+  },
   "onedrive/onedrive_copy_item": {
     "properties": {
       "error": {

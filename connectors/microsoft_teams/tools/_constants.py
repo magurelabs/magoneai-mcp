@@ -1,8 +1,13 @@
 """Shared constants and helpers for Microsoft Teams tools."""
 
+import base64
 import html as html_lib
+import json
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+
+from .._shared import graph_link_matches
 
 CREDENTIAL_HEADERS = [
     "X-Microsoft-Refresh-Token",
@@ -215,6 +220,94 @@ def simplify_message(msg: Dict[str, Any]) -> Dict[str, Any]:
 def is_user_message(msg: Dict[str, Any]) -> bool:
     """True for real user/app messages; False for system events (member added, etc.)."""
     return msg.get("messageType") == "message" and not msg.get("deletedDateTime")
+
+
+def is_listed(msg: Dict[str, Any], include_system: bool) -> bool:
+    """Whether a paged tool returns `msg`.
+
+    Unlike `is_user_message`, a deleted message is kept: a full history wants
+    the tombstone (`deletedDateTime` set) rather than a silent gap. System
+    events are kept only on request.
+    """
+    return include_system or msg.get("messageType") == "message"
+
+
+# -- paging -------------------------------------------------------------
+
+# Graph's own default page size for channel messages; its maximum is 50.
+DEFAULT_PAGE_SIZE = 20
+# A cursor wraps a Graph nextLink, which carries a $skiptoken of a few hundred
+# characters. Anything far past that is not a cursor this server issued.
+MAX_CURSOR_LENGTH = 8192
+# Graph returns system events only when asked to include evolvable enum members:
+# https://learn.microsoft.com/en-us/graph/api/resources/chatmessage
+INCLUDE_SYSTEM_PREFER = "include-unknown-enum-members"
+
+
+def encode_cursor(link: str, **state: Any) -> str:
+    """Wrap a Graph `@odata.nextLink` (and any paging state) as an opaque cursor.
+
+    Graph says to use the whole nextLink rather than lift its $skiptoken out
+    (https://learn.microsoft.com/en-us/graph/paging), so the link itself is the
+    cursor. The state rides along so a later page applies the same stop bound
+    as the first without the caller having to resend it.
+    """
+    raw = json.dumps({"link": link, **state}, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def decode_cursor(cursor: str, resource_path: str) -> Dict[str, Any]:
+    """Unwrap a cursor, refusing one that is not for `resource_path`.
+
+    The link is sent with the bearer token, so it must be a Graph URL, and it
+    must name the resource the rest of the call names (a cursor from one chat
+    cannot page another). Raises ValueError for anything else.
+    """
+    if not isinstance(cursor, str) or not cursor or len(cursor) > MAX_CURSOR_LENGTH:
+        raise ValueError("cursor is not a cursor this tool returned")
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        state = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+    except (ValueError, UnicodeError):
+        raise ValueError("cursor is not a cursor this tool returned") from None
+    link = state.get("link") if isinstance(state, dict) else None
+    if not isinstance(link, str) or not graph_link_matches(link, resource_path):
+        raise ValueError(
+            "cursor does not belong to this chat, channel or message; "
+            "start again without a cursor"
+        )
+    return state
+
+
+def parse_utc(value: str, label: str) -> datetime:
+    """An ISO 8601 instant as an aware UTC datetime. No offset means UTC."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{label} must be an ISO 8601 datetime, e.g. 2025-11-01T00:00:00Z")
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(
+            f"{label} must be an ISO 8601 datetime, e.g. 2025-11-01T00:00:00Z"
+        ) from None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def graph_utc(value: datetime) -> str:
+    """The literal Graph's $filter takes for a dateTimeOffset."""
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def message_time(msg: Dict[str, Any], field: str) -> Optional[datetime]:
+    """A message's `createdDateTime` / `lastModifiedDateTime` as UTC, or None."""
+    value = msg.get(field)
+    if not value:
+        return None
+    try:
+        return parse_utc(value, field)
+    except ValueError:
+        return None
 
 
 def parse_attendees(raw: str) -> Tuple[Optional[str], List[Dict[str, Any]]]:

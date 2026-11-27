@@ -2,24 +2,49 @@
 
 Ported from the v1 mixin form by a codemod.
 
-12 tools, 8 of them proposed read-only. Every input schema
-is carried across verbatim via `declare_schema` rather than derived from type
-hints, so the wire contract is byte-identical to v1 and no live agent sees a
-changed parameter schema.
+15 tools, 11 of them read-only. The 12 ported tools carry their input schema
+across verbatim via `declare_schema` rather than derived from type hints, so
+the wire contract is byte-identical to v1 and no live agent sees a changed
+parameter schema. The three paged read tools added since
+(`list_chat_messages`, `list_channel_messages`, `list_channel_message_replies`)
+declare theirs the same way, so the golden gate covers them too.
 
 Every `annotations=` below is a **proposal from the tool's name** and needs a
 human to confirm it. `readOnlyHint` in particular is trusted by MCP_READ_ONLY,
 so a wrong one is worse than a missing one.
 """
 
+import base64
+import json
+from datetime import timedelta, timezone
 from typing import Any
 
 import structlog
 from mcp.types import ToolAnnotations
 
-from magone_mcp_core import ConnectorServer, declare_schema
+from magone_mcp_core import ConnectorServer, declare_output_schema, declare_schema
 
-from ._shared import GRAPH_API_URL, GraphNotFoundError, _get_access_token, _graph_request
+from ._shared import (
+    GRAPH_API_URL,
+    GraphAuthError,
+    GraphForbiddenError,
+    GraphNotFoundError,
+    GraphRetryLaterError,
+    _get_access_token,
+    _graph_request,
+    graph_link_matches,
+)
+from .tools._constants import (
+    DEFAULT_PAGE_SIZE,
+    INCLUDE_SYSTEM_PREFER,
+    MAX_CURSOR_LENGTH,
+    decode_cursor,
+    encode_cursor,
+    graph_utc,
+    is_listed,
+    message_time,
+    parse_utc,
+)
 
 SERVER_NAME = "microsoft-teams"
 SERVER_VERSION = "2.0.0"
@@ -335,6 +360,82 @@ def _validate_datetime(value: str, label: str) -> str:
         return f"{label} must be an ISO 8601 datetime (e.g. 2026-07-24T15:00:00)"
 
 
+def _paged_refusal(action: str, exc: Exception) -> Dict[str, Any]:
+    """The refusal a paged read tool returns, with a stable `error_code`.
+
+    A caller paging a whole history has to tell "wait and retry this page"
+    from "stop, the token is dead" without parsing prose, and the code is how.
+    """
+    if isinstance(exc, GraphRetryLaterError):
+        code = "throttled" if exc.status == 429 else "unavailable"
+        out: Dict[str, Any] = {"success": False, "error": f"{action}: {exc}", "error_code": code}
+        if exc.retry_after is not None:
+            out["retry_after_seconds"] = exc.retry_after
+        return out
+    if isinstance(exc, GraphAuthError):
+        code = "auth_expired"
+    elif isinstance(exc, GraphForbiddenError):
+        code = "forbidden"
+    elif isinstance(exc, GraphNotFoundError):
+        code = "not_found"
+    elif isinstance(exc, httpx.HTTPError):
+        code = "network_error"
+    else:
+        code = "upstream_error"
+    return {"success": False, "error": f"{action}: {exc}", "error_code": code}
+
+
+def _invalid(message: str, code: str = "invalid_argument") -> Dict[str, Any]:
+    return {"success": False, "error": message, "error_code": code}
+
+
+def _page_size(value: int) -> int:
+    return min(max(int(value), 1), MAX_RESULTS_CAP)
+
+
+def _next_cursor(result: Dict[str, Any], resource: str, **state: Any) -> Optional[str]:
+    """The cursor for Graph's next page, or None on the last one.
+
+    A link Graph returns for some other path is refused rather than dropped:
+    dropping it would end the history early and report it complete.
+    """
+    link = result.get("@odata.nextLink")
+    if not link:
+        return None
+    if not graph_link_matches(link, resource):
+        raise ValueError("Graph returned a next-page link for a different resource")
+    return encode_cursor(link, **state)
+
+
+# Shared output-schema fragments for the paged read tools.
+_PAGED_COMMON_OUTPUT = {
+    "success": {"type": "boolean"},
+    "count": {"type": "integer", "description": "Items on this page."},
+    "next_cursor": {
+        "type": ["string", "null"],
+        "description": "Pass as `cursor` for the next page; null when there is none.",
+    },
+    "complete": {"type": "boolean", "description": "True when there are no more pages."},
+    "error": {"type": "string"},
+    "error_code": {
+        "type": "string",
+        "description": (
+            "On failure: invalid_argument, invalid_cursor, auth_expired, forbidden, "
+            "not_found, throttled, unavailable, network_error or upstream_error."
+        ),
+    },
+    "retry_after_seconds": {
+        "type": "number",
+        "description": "On throttled or unavailable: seconds Microsoft Graph asked to wait.",
+    },
+}
+_GRAPH_MESSAGE_ITEMS = {
+    "type": "array",
+    "items": {"type": "object"},
+    "description": "Microsoft Graph chatMessage objects as Graph returned them.",
+}
+
+
 
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id']
 # permission_group: 'default'  required_scopes: []
@@ -634,6 +735,356 @@ async def list_channel_members(credentials: Dict[str, str],
 # credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id']
 # permission_group: 'default'  required_scopes: []
 # REVIEWED: readOnlyHint=True, destructiveHint=False, traced to the handler.
+# Evidence: GET /teams/{team_id}/channels/{channel_id}/messages/{message_id}/replies
+@server.tool(
+    name='list_channel_message_replies',
+    description="Page through every reply to one Teams channel message, one page per call. Use it for a thread whose replies list_channel_messages could not return inline (it then gives a `replies_cursor`), or to read a whole thread. Pass `team_id`, `channel_id` and `message_id` (the root message id, required). Optional: `page_size` (default: 20, max: 50), `include_system_messages` (default: false), `cursor` (a `replies_cursor` from list_channel_messages or a `next_cursor` from this tool). Returns raw Microsoft Graph chatMessage objects in the order Graph returns them; deleted replies are kept with deletedDateTime set. Pass `next_cursor` back as `cursor` until `complete` is true.",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+    ),
+    credential_headers=['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id'],
+    permission_group='default',
+)
+@declare_output_schema({'type': 'object',
+     'properties': {**_PAGED_COMMON_OUTPUT, 'replies': _GRAPH_MESSAGE_ITEMS}})
+@declare_schema({'type': 'object',
+     'properties': {'team_id': {'type': 'string', 'description': 'Team ID from list_teams'},
+                    'channel_id': {'type': 'string',
+                                   'description': 'Channel ID from list_channels'},
+                    'message_id': {'type': 'string',
+                                   'description': 'Root message ID from list_channel_messages '
+                                                  'or read_channel_messages'},
+                    'page_size': {'type': 'integer',
+                                  'description': 'Replies per page (default: 20, max: 50)',
+                                  'default': 20},
+                    'include_system_messages': {'type': 'boolean',
+                                                'description': 'Also return system events '
+                                                               '(default: false)',
+                                                'default': False},
+                    'cursor': {'type': 'string',
+                               'description': 'replies_cursor from list_channel_messages, or '
+                                              'next_cursor from this tool. Its settings carry '
+                                              'over.'}},
+     'required': ['team_id', 'channel_id', 'message_id']})
+async def list_channel_message_replies(credentials: Dict[str, str],
+    team_id: str,
+    channel_id: str,
+    message_id: str,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    include_system_messages: bool = False,
+    cursor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """One page of a channel message's replies."""
+    for value, label in ((team_id, "team_id"), (channel_id, "channel_id"), (message_id, "message_id")):
+        error = validate_id(value, label)
+        if error:
+            return _invalid(error)
+    resource = f"/teams/{team_id}/channels/{channel_id}/messages/{message_id}/replies"
+    include_system = include_system_messages
+    link = None
+    if cursor:
+        try:
+            state = decode_cursor(cursor, resource)
+        except ValueError as e:
+            return _invalid(str(e), "invalid_cursor")
+        link = state["link"]
+        include_system = bool(state.get("system", include_system))
+
+    try:
+        prefer = INCLUDE_SYSTEM_PREFER if include_system else None
+        if link:
+            result = await _graph_request(credentials, "GET", "", url=link, prefer=prefer)
+        else:
+            # Replies support ONLY $top (max 50): no $filter/$orderby/$select.
+            result = await _graph_request(
+                credentials, "GET", resource,
+                params={"$top": _page_size(page_size)}, prefer=prefer,
+            )
+        replies = [m for m in result.get("value", []) if is_listed(m, include_system)]
+        next_cursor = _next_cursor(result, resource, system=include_system)
+        return {
+            "success": True,
+            "count": len(replies),
+            "replies": replies,
+            "next_cursor": next_cursor,
+            "complete": next_cursor is None,
+        }
+    except (ValueError, httpx.HTTPError) as e:
+        return _paged_refusal("Failed to list message replies", e)
+    except Exception as e:
+        logger.exception("list_channel_message_replies_error", error=str(e))
+        return {"success": False, "error": "Failed to list message replies", "error_code": "upstream_error"}
+
+
+
+# credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id']
+# permission_group: 'default'  required_scopes: []
+# REVIEWED: readOnlyHint=True, destructiveHint=False, traced to the handler.
+# Evidence: GET /teams/{team_id}/channels/{channel_id}/messages
+@server.tool(
+    name='list_channel_messages',
+    description="Page through the complete history of a Teams channel, one Microsoft Graph request per call. For a quick look at recent messages use read_channel_messages instead. Pass `team_id` and `channel_id` (required). Optional: `created_after` and `created_before` (ISO 8601; only messages created in [created_after, created_before) are returned, thread roots and replies alike), `page_size` (threads per Graph page, default: 20, max: 50), `include_system_messages` (default: false). Returns `messages`, a flat list of raw Microsoft Graph chatMessage objects (deleted messages kept with deletedDateTime set; a reply's replyToId names its thread root). One cursor walks every thread and every long thread's remaining replies, then re-reads the threads that changed after the first call, so a message can be returned more than once: the later copy is the newer, so keep the last copy of each `id`. Pass `next_cursor` back as `cursor` until `complete` is true; the settings of the first call carry over.",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+    ),
+    credential_headers=['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id'],
+    permission_group='default',
+)
+@declare_output_schema({'type': 'object',
+     'properties': {**_PAGED_COMMON_OUTPUT,
+                    'messages': {**_GRAPH_MESSAGE_ITEMS,
+                                 'description': 'Thread roots and replies created in the '
+                                                'window, as Microsoft Graph returned them. '
+                                                'The same id can appear again on a later '
+                                                'page; keep the last copy.'}}})
+@declare_schema({'type': 'object',
+     'properties': {'team_id': {'type': 'string', 'description': 'Team ID from list_teams'},
+                    'channel_id': {'type': 'string',
+                                   'description': 'Channel ID from list_channels'},
+                    'created_after': {'type': 'string',
+                                      'description': 'ISO 8601 datetime (no offset means '
+                                                     'UTC). Only messages created at or '
+                                                     'after it.'},
+                    'created_before': {'type': 'string',
+                                       'description': 'ISO 8601 datetime (no offset means '
+                                                      'UTC). Only messages created before '
+                                                      'it.'},
+                    'page_size': {'type': 'integer',
+                                  'description': 'Threads per page (default: 20, max: 50)',
+                                  'default': 20},
+                    'include_system_messages': {'type': 'boolean',
+                                                'description': 'Also return system events '
+                                                               '(default: false)',
+                                                'default': False},
+                    'cursor': {'type': 'string',
+                               'description': 'next_cursor from a previous call for the same '
+                                              'channel. Its settings carry over.'}},
+     'required': ['team_id', 'channel_id']})
+async def list_channel_messages(credentials: Dict[str, str],
+    team_id: str,
+    channel_id: str,
+    created_after: Optional[str] = None,
+    created_before: Optional[str] = None,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    include_system_messages: bool = False,
+    cursor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """One Graph page of a channel's history: a page of threads, or one thread's replies."""
+    for value, label in ((team_id, "team_id"), (channel_id, "channel_id")):
+        error = validate_id(value, label)
+        if error:
+            return _invalid(error)
+    resource = f"/teams/{team_id}/channels/{channel_id}/messages"
+    if cursor:
+        try:
+            state = decode_channel_cursor(cursor, resource)
+        except ValueError as e:
+            return _invalid(str(e), "invalid_cursor")
+    else:
+        state = {
+            "phase": CHANNEL_MAIN, "link": None, "pending": [], "reply": None,
+            "after": created_after, "before": created_before,
+            # Threads changed after this are read again in the catch-up pass.
+            # A minute early, so a clock a little ahead of Graph's misses none.
+            "since": graph_utc(datetime.now(timezone.utc) - CATCHUP_MARGIN),
+            "size": _page_size(page_size), "system": include_system_messages,
+        }
+    try:
+        after = parse_utc(state["after"], "created_after") if state.get("after") else None
+        before = parse_utc(state["before"], "created_before") if state.get("before") else None
+        since = parse_utc(state["since"], "cursor")
+    except (KeyError, ValueError) as e:
+        return _invalid(str(e), "invalid_cursor" if cursor else "invalid_argument")
+    if after is not None and before is not None and after >= before:
+        return _invalid("created_after must be earlier than created_before")
+    include_system = bool(state.get("system"))
+
+    def wanted(msg: Dict[str, Any]) -> bool:
+        if not is_listed(msg, include_system):
+            return False
+        created = message_time(msg, "createdDateTime")
+        if created is None:
+            return True  # Graph always sends it; never drop a message silently
+        return (after is None or created >= after) and (before is None or created < before)
+
+    try:
+        prefer = INCLUDE_SYSTEM_PREFER if include_system else None
+        if state["reply"] is not None or state["pending"]:
+            messages = await _channel_replies_page(credentials, resource, state, prefer, wanted)
+        else:
+            messages = await _channel_threads_page(
+                credentials, resource, state, prefer, wanted,
+                bound=after if state["phase"] == CHANNEL_MAIN else since,
+            )
+        complete = state["phase"] == CHANNEL_DONE and not state["pending"] and state["reply"] is None
+        next_cursor = None if complete else encode_channel_cursor(state)
+        return {
+            "success": True,
+            "count": len(messages),
+            "messages": messages,
+            "next_cursor": next_cursor,
+            "complete": complete,
+        }
+    except (ValueError, httpx.HTTPError) as e:
+        return _paged_refusal("Failed to list channel messages", e)
+    except Exception as e:
+        logger.exception("list_channel_messages_error", error=str(e))
+        return {"success": False, "error": "Failed to list channel messages", "error_code": "upstream_error"}
+
+
+# -- list_channel_messages: one cursor over a whole channel ---------------------
+#
+# Graph cannot filter channel messages by date. It lists threads by the latest
+# activity of their reply chain, with at most a page of replies inline, so a
+# full window takes three kinds of request, all behind one cursor:
+#   main     pages of threads, until a whole page has had no activity since
+#            created_after;
+#   replies  the rest of any thread whose replies did not fit inline, read
+#            before the next page of threads;
+#   catchup  the threads active since the first call, read again: a thread
+#            that gained a reply while paging moved to the front, behind the
+#            main pass, which would otherwise miss it.
+
+CHANNEL_MAIN = "main"
+CHANNEL_CATCHUP = "catchup"
+CHANNEL_DONE = "done"
+CATCHUP_MARGIN = timedelta(minutes=1)
+# Graph's own maximum for replies.
+_REPLIES_PAGE_SIZE = 50
+
+
+def encode_channel_cursor(state: Dict[str, Any]) -> str:
+    raw = json.dumps(state, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def decode_channel_cursor(cursor: str, resource: str) -> Dict[str, Any]:
+    """Unwrap a channel cursor, refusing any Graph link in it for another resource.
+
+    Every link is sent with the bearer token, so each one is checked, not
+    just the first, and a queued thread id is held to the id rules.
+    """
+    refused = ValueError(
+        "cursor does not belong to this channel; start again without a cursor"
+    )
+    if not isinstance(cursor, str) or not cursor or len(cursor) > MAX_CURSOR_LENGTH:
+        raise ValueError("cursor is not a cursor this tool returned")
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        state = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")))
+    except (ValueError, UnicodeError):
+        raise ValueError("cursor is not a cursor this tool returned") from None
+    if not isinstance(state, dict) or state.get("phase") not in (CHANNEL_MAIN, CHANNEL_CATCHUP, CHANNEL_DONE):
+        raise ValueError("cursor is not a cursor this tool returned")
+    link = state.get("link")
+    if link is not None and (not isinstance(link, str) or not graph_link_matches(link, resource)):
+        raise refused
+    pending = state.get("pending")
+    if not isinstance(pending, list) or any(
+        not isinstance(i, str) or validate_id(i, "message_id") for i in pending
+    ):
+        raise refused
+    reply = state.get("reply")
+    if reply is not None:
+        if not isinstance(reply, dict) or not isinstance(reply.get("id"), str) or validate_id(reply["id"], "message_id"):
+            raise refused
+        reply_link = reply.get("link")
+        if reply_link is not None and (
+            not isinstance(reply_link, str)
+            or not graph_link_matches(reply_link, f"{resource}/{reply['id']}/replies")
+        ):
+            raise refused
+    state["size"] = _page_size(state.get("size") or DEFAULT_PAGE_SIZE)
+    return state
+
+
+async def _channel_threads_page(
+    credentials: Dict[str, str],
+    resource: str,
+    state: Dict[str, Any],
+    prefer: Optional[str],
+    wanted: Any,
+    bound: Optional[datetime],
+) -> List[Dict[str, Any]]:
+    """Read one page of threads; queue long threads; advance the pass."""
+    if state["link"]:
+        result = await _graph_request(credentials, "GET", "", url=state["link"], prefer=prefer)
+    else:
+        # Channel messages support ONLY $top (max 50) and $expand=replies.
+        result = await _graph_request(
+            credentials, "GET", resource,
+            params={"$top": state["size"], "$expand": "replies"}, prefer=prefer,
+        )
+
+    roots = result.get("value", [])
+    messages: List[Dict[str, Any]] = []
+    any_active = False
+    for root in roots:
+        root = dict(root)
+        inline = root.pop("replies", None) or []
+        replies_link = root.pop("replies@odata.nextLink", None)
+        root.pop("replies@odata.context", None)
+        times = [t for t in (message_time(m, "lastModifiedDateTime") for m in [root, *inline]) if t]
+        last = max(times) if times else None
+        if bound is None or last is None or last >= bound:
+            any_active = True
+        messages.extend(m for m in [root, *inline] if wanted(m))
+        if replies_link:
+            root_id = str(root.get("id") or "")
+            if validate_id(root_id, "message_id") or not graph_link_matches(
+                replies_link, f"{resource}/{root_id}/replies"
+            ):
+                raise ValueError("Graph returned a replies link for a different message")
+            # Read from the start: the inline replies are not always the
+            # oldest ones, and a copy read twice is kept once by the caller.
+            state["pending"].append(root_id)
+
+    # Stop only on a page where no thread is active since the bound, not at
+    # the first old thread: the documented order is by reply-chain activity
+    # but its direction is not, so one page of margin costs one request.
+    reached = bound is not None and bool(roots) and not any_active
+    link = None if reached else result.get("@odata.nextLink")
+    if link and not graph_link_matches(link, resource):
+        raise ValueError("Graph returned a next-page link for a different resource")
+    if link:
+        state["link"] = link
+    else:
+        state["link"] = None
+        state["phase"] = CHANNEL_CATCHUP if state["phase"] == CHANNEL_MAIN else CHANNEL_DONE
+    return messages
+
+
+async def _channel_replies_page(
+    credentials: Dict[str, str],
+    resource: str,
+    state: Dict[str, Any],
+    prefer: Optional[str],
+    wanted: Any,
+) -> List[Dict[str, Any]]:
+    """Read one page of the current long thread's replies."""
+    reply = state["reply"] or {"id": state["pending"].pop(0), "link": None}
+    replies_resource = f"{resource}/{reply['id']}/replies"
+    if reply["link"]:
+        result = await _graph_request(credentials, "GET", "", url=reply["link"], prefer=prefer)
+    else:
+        # Replies support ONLY $top (max 50): no $filter/$orderby/$select.
+        result = await _graph_request(
+            credentials, "GET", replies_resource,
+            params={"$top": _REPLIES_PAGE_SIZE}, prefer=prefer,
+        )
+    link = result.get("@odata.nextLink")
+    if link and not graph_link_matches(link, replies_resource):
+        raise ValueError("Graph returned a next-page link for a different resource")
+    state["reply"] = {"id": reply["id"], "link": link} if link else None
+    return [m for m in result.get("value", []) if wanted(m)]
+
+
+
+# credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id']
+# permission_group: 'default'  required_scopes: []
+# REVIEWED: readOnlyHint=True, destructiveHint=False, traced to the handler.
 # Evidence: GET /teams/{team_id}/channels
 @server.tool(
     name='list_channels',
@@ -683,6 +1134,134 @@ async def list_channels(credentials: Dict[str, str],
     except Exception as e:
         logger.exception("list_channels_error", error=str(e))
         return {"success": False, "error": "Failed to list channels"}
+
+
+
+# credential_headers: ['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id']
+# permission_group: 'default'  required_scopes: []
+# REVIEWED: readOnlyHint=True, destructiveHint=False, traced to the handler.
+# Evidence: GET /chats/{chat_id}/messages
+@server.tool(
+    name='list_chat_messages',
+    description="Page through the complete message history of a Teams chat, newest first, one page per call. For a quick look at recent messages use read_chat_messages instead. Pass `chat_id` (required, from list_chats). Optional: `created_after` and `created_before` (ISO 8601, no offset means UTC; messages created at or after / before them), `page_size` (default: 20, max: 50), `include_system_messages` (default: false). Returns raw Microsoft Graph chatMessage objects (HTML body, attachments, mentions, reactions, edit and delete times; deleted messages are kept with deletedDateTime set). Pass `next_cursor` back as `cursor` until `complete` is true; the dates of the first call carry over.",
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+    ),
+    credential_headers=['X-Microsoft-Refresh-Token', 'X-Microsoft-Client-Id', 'X-Microsoft-Client-Secret', 'X-Microsoft-Tenant-Id'],
+    permission_group='default',
+)
+@declare_output_schema({'type': 'object',
+     'properties': {**_PAGED_COMMON_OUTPUT,
+                    'messages': _GRAPH_MESSAGE_ITEMS,
+                    'stopped_reason': {'type': ['string', 'null'],
+                                       'description': 'end_of_data, or reached_created_after '
+                                                      'when created_after ended the paging.'}}})
+@declare_schema({'type': 'object',
+     'properties': {'chat_id': {'type': 'string', 'description': 'Chat ID from list_chats'},
+                    'created_after': {'type': 'string',
+                                      'description': 'ISO 8601 datetime (no offset means UTC). '
+                                                     'Only messages created at or after it.'},
+                    'created_before': {'type': 'string',
+                                       'description': 'ISO 8601 datetime (no offset means UTC). '
+                                                      'Only messages created before it.'},
+                    'page_size': {'type': 'integer',
+                                  'description': 'Messages per page (default: 20, max: 50)',
+                                  'default': 20},
+                    'include_system_messages': {'type': 'boolean',
+                                                'description': 'Also return system events '
+                                                               '(default: false)',
+                                                'default': False},
+                    'cursor': {'type': 'string',
+                               'description': 'next_cursor from a previous call for the same '
+                                              'chat. Its dates and settings carry over.'}},
+     'required': ['chat_id']})
+async def list_chat_messages(credentials: Dict[str, str],
+    chat_id: str,
+    created_after: Optional[str] = None,
+    created_before: Optional[str] = None,
+    page_size: int = DEFAULT_PAGE_SIZE,
+    include_system_messages: bool = False,
+    cursor: Optional[str] = None,
+) -> Dict[str, Any]:
+    """One page of a chat's messages, newest first by creation time."""
+    error = validate_id(chat_id, "chat_id")
+    if error:
+        return _invalid(error)
+    resource = f"/chats/{chat_id}/messages"
+    link = None
+    if cursor:
+        try:
+            state = decode_cursor(cursor, resource)
+        except ValueError as e:
+            return _invalid(str(e), "invalid_cursor")
+        link = state["link"]
+        after_raw, before_raw = state.get("after"), state.get("before")
+        include_system = bool(state.get("system", include_system_messages))
+    else:
+        after_raw, before_raw = created_after, created_before
+        include_system = include_system_messages
+    try:
+        after = parse_utc(after_raw, "created_after") if after_raw else None
+        before = parse_utc(before_raw, "created_before") if before_raw else None
+    except ValueError as e:
+        return _invalid(str(e), "invalid_cursor" if cursor else "invalid_argument")
+    if after is not None and before is not None and after >= before:
+        return _invalid("created_after must be earlier than created_before")
+
+    try:
+        prefer = INCLUDE_SYSTEM_PREFER if include_system else None
+        if link:
+            result = await _graph_request(credentials, "GET", "", url=link, prefer=prefer)
+        else:
+            # Chat messages: $orderby createdDateTime supports desc only, and
+            # $filter on createdDateTime supports only `lt`, and only with
+            # $orderby on the same property (otherwise Graph ignores it). So the
+            # upper bound is applied by Graph and the lower bound by stopping.
+            params: Dict[str, Any] = {
+                "$top": _page_size(page_size),
+                "$orderby": "createdDateTime desc",
+            }
+            if before is not None:
+                params["$filter"] = f"createdDateTime lt {graph_utc(before)}"
+            result = await _graph_request(credentials, "GET", resource, params=params, prefer=prefer)
+
+        messages: List[Dict[str, Any]] = []
+        reached = False
+        for msg in result.get("value", []):
+            created = message_time(msg, "createdDateTime")
+            if after is not None and created is not None and created < after:
+                reached = True  # newest first, so every later message is older too
+                break
+            # Checked here as well, in case Graph ignored the filter.
+            if before is not None and created is not None and created >= before:
+                continue
+            if is_listed(msg, include_system):
+                messages.append(msg)
+
+        next_cursor = None if reached else _next_cursor(
+            result, resource,
+            after=graph_utc(after) if after else None,
+            before=graph_utc(before) if before else None,
+            system=include_system,
+        )
+        return {
+            "success": True,
+            "count": len(messages),
+            "messages": messages,
+            "next_cursor": next_cursor,
+            "complete": next_cursor is None,
+            "stopped_reason": (
+                "reached_created_after" if reached
+                else "end_of_data" if next_cursor is None
+                else None
+            ),
+        }
+    except (ValueError, httpx.HTTPError) as e:
+        return _paged_refusal("Failed to list chat messages", e)
+    except Exception as e:
+        logger.exception("list_chat_messages_error", error=str(e))
+        return {"success": False, "error": "Failed to list chat messages", "error_code": "upstream_error"}
 
 
 

@@ -153,6 +153,38 @@ If a tool takes a URL from the caller and fetches it, pass it through
 `magone_mcp_core.validate_url` first. The linter fails a tool with a
 `url`-like parameter that never calls it.
 
+### Tools that page through a whole history
+
+A tool meant to be called again and again until it has returned everything
+(every message in a chat, every row in a log) should follow one shape, so a
+host can page any such tool the same way without knowing the vendor:
+
+| On | Field | Meaning |
+|---|---|---|
+| the call | `cursor` | optional; `next_cursor` from the previous call. Every other argument is still accepted, and the cursor's own settings win |
+| success | one array of items, each with a stable `id` | this page's items. Name the array for what it holds (`messages`, `rows`); the host is told which field to read |
+| success | `next_cursor` | an opaque string, or null on the last page |
+| success | `complete` | true when there is nothing more to read |
+| failure | `success: false`, `error`, `error_code` | a stable code a caller can branch on without parsing prose |
+| failure | `retry_after_seconds` | with `throttled` or `unavailable`: how long the vendor asked to wait |
+
+Mark the tool read-only (`readOnlyHint`) and declare its output schema with
+`next_cursor` and the items array: `tests/test_paging_contract.py` checks both
+for every tool that takes `cursor`.
+
+Keep the connector stateless: everything the next call needs goes in the
+cursor, and every vendor URL inside it is checked against the resource the
+call names before it is sent with a token. A caller can hand back a cursor
+it wrote itself, so treat one as untrusted input. Never put anything secret
+in a cursor, such as a signed URL: the caller stores it, and may log it.
+
+One call makes one vendor request, so the caller paces the paging and waits
+out throttling, not the tool. If the same item can come back twice (a
+re-read to catch changes made while paging), say so in the description: the
+later copy is the newer one, and a caller keeps the last copy of each `id`.
+`microsoft_teams`'s `list_chat_messages` and `list_channel_messages` are
+worked examples.
+
 ## 3. Test it without credentials or network
 
 `tests/test_widgets.py`:
