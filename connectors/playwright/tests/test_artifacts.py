@@ -95,13 +95,13 @@ async def test_too_large_is_refused_and_the_file_kept(root, monkeypatch):
     assert len(result.content) == 1 and (root / "big.png").exists()
 
 
-def test_the_size_limit_defaults_to_25_mb_and_ignores_junk(monkeypatch):
+def test_the_size_limit_defaults_to_55_mb_and_ignores_junk(monkeypatch):
     from connectors.playwright import config
 
     monkeypatch.setenv("ARTIFACTS_MAX_BYTES", "junk")
-    assert config.max_bytes() == 25 * 1024 * 1024
+    assert config.max_bytes() == 55 * 1024 * 1024
     monkeypatch.setenv("ARTIFACTS_MAX_BYTES", "-1")
-    assert config.max_bytes() == 25 * 1024 * 1024
+    assert config.max_bytes() == 55 * 1024 * 1024
     monkeypatch.setenv("ARTIFACTS_MAX_BYTES", "2048")
     assert config.max_bytes() == 2048
 

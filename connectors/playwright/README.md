@@ -287,7 +287,7 @@ session at shutdown. Only `Accept`, `Content-Type`, `Mcp-Session-Id` and
 | `PLAYWRIGHT_MANIFEST_REFRESH_MINUTES` | `10` | How often the upstream tool list is re-read. A failed read backs off from 5 seconds to a minute. |
 | `PLAYWRIGHT_EXPOSE_UNSAFE_TOOLS` | `false` | Expose the code-running tools. |
 | `ARTIFACTS_ROOT` | `/artifacts` | Mount point of the shared volume. |
-| `ARTIFACTS_MAX_BYTES` | `26214400` (25 MB) | Largest file `publish_artifact` returns, and the most image bytes one relayed browser result may carry; can only lower the report budget. Raise it to return a larger recording. |
+| `ARTIFACTS_MAX_BYTES` | `57671680` (55 MB) | Largest file `publish_artifact` returns, and the most image bytes one relayed browser result may carry; can only lower the report budget. 55 MB fits a platform that uploads it onward (e.g. OneDrive's 75 MiB body cap). Raise or lower it as needed. |
 | `ARTIFACTS_DELETE_AFTER_PUBLISH` | `true` | Remove a returned file from the volume, and the unfetched files of a run that went idle. `false`, `0`, `no` or `off` keeps both. |
 | `MCP_MAX_RESULT_CHARS` | `1000000` | The framework's result budget; sets the report budget. |
 
