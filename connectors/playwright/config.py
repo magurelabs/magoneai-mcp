@@ -12,12 +12,14 @@ from pathlib import Path
 DEFAULT_ROOT = "/artifacts"
 MIB = 1024 * 1024
 # What one tool result may carry in files, before base64. A result is sent in
-# one HTTP response, and base64 grows it by a third, so 25 MB of file becomes
-# about 33 MB on the wire that a client must hold in memory for one call. Kept
-# low on purpose: the result-character budget only measures text, so this is
-# the only bound on a returned binary. An operator who needs to return a larger
-# recording raises ARTIFACTS_MAX_BYTES.
-DEFAULT_MAX_BYTES = 25 * MIB
+# one HTTP response, and base64 grows it by a third, so 55 MB of file becomes
+# about 73 MB on the wire that a client must hold in memory for one call. Set
+# to 55 MB so a QA screen recording can be returned and handed to a platform
+# that uploads it onward (e.g. MagOneAI -> OneDrive, whose 75 MiB request-body
+# cap this fits). The result-character budget only measures text, so this is
+# the only bound on a returned binary. A deployment that wants a different
+# ceiling sets ARTIFACTS_MAX_BYTES.
+DEFAULT_MAX_BYTES = 55 * MIB
 
 # Extension -> content type. Anything else Playwright writes is not returned.
 CONTENT_TYPES: dict[str, str] = {
