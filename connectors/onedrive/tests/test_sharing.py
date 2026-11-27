@@ -140,6 +140,7 @@ async def test_create_share_link_returns_the_error_when_graph_fails(monkeypatch)
     assert result == {
         "success": False,
         "error": "Graph API error (400): sharing disabled by policy",
+        "error_code": "invalid_argument",
     }
 
 

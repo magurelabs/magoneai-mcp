@@ -149,6 +149,37 @@ the result size, log arguments by key only, redact secrets in logs, enforce
 read-only mode and tool selection, check the Host header, authenticate the
 caller.
 
+### Errors a caller can act on
+
+A refusal's `error` is written for the model. A host calling a tool without
+a model in the loop (paging through a history, retrying on a schedule) also
+needs to know whether trying again can help, so a refusal may carry an
+`error_code` from the shared vocabulary in `magone_mcp_core.errors`:
+
+| Code | Retry? | Typical vendor answer |
+|---|---|---|
+| `throttled` | yes, after `retry_after_seconds` when present | 429 |
+| `unavailable` | yes, after `retry_after_seconds` when present | 502, 503, 504 |
+| `network_error`, `timeout` | yes | no answer at all |
+| `auth_expired` | no | 401 |
+| `forbidden` | no | 403 |
+| `not_found` | no | 404, 410 |
+| `invalid_argument` | no | 400, 409, 422 |
+| `upstream_error` | no | anything else |
+
+In a request helper, raise `UpstreamError.from_status(message, status,
+response.headers)` where you would have raised a bare `ValueError`. It is a
+`ValueError`, so existing handlers still catch it and the message is
+unchanged. One that escapes the tool reaches the caller as a refusal with its
+code and the vendor's `Retry-After`; a request that never got an answer is
+reported as `network_error` or `timeout` without you doing anything. A tool
+that catches the error and returns its own `{"success": False, "error": ...}`
+keeps the code by spreading `error_fields(exc)` into it.
+
+Which vendor answers count as throttling belongs in the helper, since vendors
+differ: Google, for one, also signals a rate limit with a 403 whose reason is
+`rateLimitExceeded`. Build the `UpstreamError` with `code="throttled"` there.
+
 If a tool takes a URL from the caller and fetches it, pass it through
 `magone_mcp_core.validate_url` first. The linter fails a tool with a
 `url`-like parameter that never calls it.

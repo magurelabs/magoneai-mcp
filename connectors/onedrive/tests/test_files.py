@@ -95,22 +95,35 @@ async def test_list_files_returns_graphs_error(monkeypatch):
     error = {"error": {"message": "graph exploded"}}
     graph = graph_answering("GET", CHILDREN, error, status=500)
     result = await run(monkeypatch, "onedrive_list_files", graph)
-    assert result == {"success": False, "error": "Graph API error (500): graph exploded"}
+    assert result == {
+        "success": False,
+        "error": "Graph API error (500): graph exploded",
+        "error_code": "upstream_error",
+    }
 
 
 @pytest.mark.parametrize(
-    "status,message",
+    "status,message,code",
     [
-        (401, "Authentication failed. Please re-authenticate."),
-        (403, "Access denied. Check permissions."),
-        (404, "Resource not found."),
-        (429, "Rate limit exceeded. Try again later."),
+        (401, "Authentication failed. Please re-authenticate.", "auth_expired"),
+        (403, "Access denied. Check permissions.", "forbidden"),
+        (404, "Resource not found.", "not_found"),
+        (429, "Rate limit exceeded. Try again later.", "throttled"),
     ],
 )
-async def test_graph_statuses_become_messages_for_the_model(monkeypatch, status, message):
+async def test_graph_statuses_become_messages_for_the_model(monkeypatch, status, message, code):
+    """The message is for the model; the code is for a host deciding whether to retry."""
     graph = graph_answering("GET", CHILDREN, {}, status=status)
     result = await run(monkeypatch, "onedrive_list_files", graph)
-    assert result == {"success": False, "error": message}
+    assert result == {"success": False, "error": message, "error_code": code}
+
+
+async def test_a_throttle_carries_graphs_retry_after(monkeypatch):
+    graph = FakeGraph().on(
+        "GET", CHILDREN, respond({}, status=429, headers={"Retry-After": "17"})
+    )
+    result = await run(monkeypatch, "onedrive_list_files", graph)
+    assert (result["error_code"], result["retry_after_seconds"]) == ("throttled", 17.0)
 
 
 # ====== get_file ======
@@ -185,4 +198,4 @@ async def test_delete_issues_a_delete_against_the_item(monkeypatch):
 async def test_delete_reports_a_missing_item(monkeypatch):
     graph = FakeGraph().on("DELETE", "/items/X1", respond(status=404))
     result = await run(monkeypatch, "onedrive_delete_item", graph, item_id="X1")
-    assert result == {"success": False, "error": "Resource not found."}
+    assert result == {"success": False, "error": "Resource not found.", "error_code": "not_found"}

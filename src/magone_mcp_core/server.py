@@ -477,6 +477,7 @@ class ConnectorServer:
         from mcp.server.mcpserver.exceptions import ToolError
 
         from .credentials import build as build_credentials
+        from .errors import UpstreamError, refusal, transport_refusal
         from .provenance import mark_result
         from .redact import argument_keys
         from .results import PASS_THROUGH_EXCEPTIONS, client_message, to_call_result
@@ -536,6 +537,13 @@ class ConnectorServer:
                 kwargs["ctx"] = ctx
             try:
                 result = await fn(*args, **kwargs)
+            except UpstreamError as exc:
+                # A vendor's error response: a refusal that carries its code,
+                # so a host can tell "wait and retry" from "stop" (errors.py).
+                logger.warning(
+                    "tool_execution_failed", tool=tool_name, error_type=type(exc).__name__
+                )
+                result = refusal(client_message(exc), exc.code, exc.retry_after)
             except PASS_THROUGH_EXCEPTIONS as exc:
                 # The SDK reports any exception that is not a ToolError as a
                 # bare "Error executing tool X", so the message a handler wrote
@@ -547,6 +555,17 @@ class ConnectorServer:
                     "tool_execution_failed", tool=tool_name, error_type=type(exc).__name__
                 )
                 raise ToolError(client_message(exc)) from exc
+            except Exception as exc:
+                # A request that never got an answer is worth retrying, and
+                # saying so beats the SDK's bare "Error executing tool".
+                # Anything else stays masked, as before.
+                unreached = transport_refusal(exc)
+                if unreached is None:
+                    raise
+                logger.warning(
+                    "tool_execution_failed", tool=tool_name, error_type=type(exc).__name__
+                )
+                result = unreached
             if untrusted_fields:
                 result = mark_result(result, source=source, fields=untrusted_fields)
             # Shape first, then budget what will actually be sent. A refusal

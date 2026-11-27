@@ -28,6 +28,7 @@ declares the one Graph scope it needs as `required_scopes`.
 from typing import Any
 
 import httpx
+from magone_mcp_core import UpstreamError
 
 GRAPH_API_URL = "https://graph.microsoft.com/v1.0"
 TOKEN_URL = "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"  # noqa: S105 (a URL)
@@ -55,8 +56,11 @@ _GRAPH_TIMEOUT = 30.0
 _MAX_ERROR_DETAIL = 500
 
 
-class GraphNotFoundError(ValueError):
+class GraphNotFoundError(UpstreamError):
     """An actual Graph 404, as distinct from any error that mentions "not found"."""
+
+    def __init__(self, message: str):
+        super().__init__(message, code="not_found", status=404)
 
 
 async def get_access_token(credentials: dict[str, str]) -> str:
@@ -101,19 +105,25 @@ def _json(response: httpx.Response) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def graph_error(response: httpx.Response) -> ValueError:
-    """The exception for a failed Graph response, with a message for the model."""
+def graph_error(response: httpx.Response) -> UpstreamError:
+    """The exception for a failed Graph response, with a message for the model.
+
+    An `UpstreamError` (a `ValueError`) carrying the code a host acts on, and
+    Graph's `Retry-After` on a throttle (magone_mcp_core.errors).
+    """
     status = response.status_code
-    if status == 401:
-        return ValueError("Authentication failed. Please re-authenticate.")
-    if status == 403:
-        return ValueError("Access denied. Check permissions.")
     if status == 404:
         return GraphNotFoundError("Resource not found.")
-    if status == 429:
-        return ValueError("Rate limit exceeded. Try again later.")
-    message = (_json(response).get("error") or {}).get("message") or response.text[:300]
-    return ValueError(f"Graph API error ({status}): {message}")
+    if status == 401:
+        message = "Authentication failed. Please re-authenticate."
+    elif status == 403:
+        message = "Access denied. Check permissions."
+    elif status == 429:
+        message = "Rate limit exceeded. Try again later."
+    else:
+        detail = (_json(response).get("error") or {}).get("message") or response.text[:300]
+        message = f"Graph API error ({status}): {detail}"
+    return UpstreamError.from_status(message, status, response.headers)
 
 
 async def graph_request(

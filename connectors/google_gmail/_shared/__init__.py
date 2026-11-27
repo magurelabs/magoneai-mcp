@@ -19,6 +19,7 @@ ported call sites already expect.
 from typing import Any, Dict, Optional
 
 import httpx
+from magone_mcp_core import UpstreamError, retry_after_seconds
 
 # Declared on each tool so the framework merges these request headers into the
 # `credentials` dict a handler receives. The names are the wire contract with
@@ -88,6 +89,50 @@ async def google_get_access_token(
     return access_token
 
 
+
+# Google answers a rate limit with 403 as often as 429, telling the two
+# apart only by the error's `reason`.
+_RATE_LIMIT_REASONS = frozenset({"rateLimitExceeded", "userRateLimitExceeded"})
+
+
+def _error_body(response: httpx.Response) -> Dict[str, Any]:
+    try:
+        data = response.json() if response.content else {}
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _google_error(response: httpx.Response, detail: Any) -> UpstreamError:
+    """The error for a failed Google response, with a message for the model.
+
+    An `UpstreamError` (a `ValueError`) carrying the code a host acts on:
+    whether to wait and retry, and for how long (magone_mcp_core.errors).
+    """
+    status = response.status_code
+    error = _error_body(response).get("error")
+    reasons = {
+        str(item.get("reason"))
+        for item in (error.get("errors") or [] if isinstance(error, dict) else [])
+        if isinstance(item, dict)
+    }
+    if status == 401:
+        message = "Authentication failed. Please re-authenticate."
+    elif status == 429 or (status == 403 and reasons & _RATE_LIMIT_REASONS):
+        return UpstreamError(
+            "Rate limit exceeded. Try again later.",
+            code="throttled",
+            status=status,
+            retry_after=retry_after_seconds(response.headers),
+        )
+    elif status == 403:
+        message = "Access denied. Check permissions and scopes."
+    elif status == 404:
+        message = "Resource not found."
+    else:
+        message = f"Google API error ({status}): {detail}"
+    return UpstreamError.from_status(message, status, response.headers)
+
 async def _google_request(
     credentials: Dict[str, str],
     method: str,
@@ -114,21 +159,9 @@ async def _google_request(
             params=params,
         )
 
-    if response.status_code == 401:
-        raise ValueError("Authentication failed. Please re-authenticate.")
-    if response.status_code == 403:
-        raise ValueError("Access denied. Check permissions and scopes.")
-    if response.status_code == 404:
-        raise ValueError("Resource not found.")
-    if response.status_code == 429:
-        raise ValueError("Rate limit exceeded. Try again later.")
     if response.status_code >= 400:
-        try:
-            error_data = response.json() if response.content else {}
-        except ValueError:
-            error_data = {}
-        error_msg = error_data.get("error", response.text[:500])
-        raise ValueError(f"Google API error ({response.status_code}): {error_msg}")
+        error_msg = _error_body(response).get("error", response.text[:500])
+        raise _google_error(response, error_msg)
 
     if response.status_code in (204, 202):
         return {}
